@@ -1,12 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, AppState, Keyboard, KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { randomUUID } from 'expo-crypto';
-import {
-  NestableDraggableFlatList,
-  NestableScrollContainer,
-  ScaleDecorator,
-} from 'react-native-draggable-flatlist';
+import RouteStopSorter from '../components/RouteStopSorter';
+import RouteRecommendationPicker from '../components/RouteRecommendationPicker';
+import RouteDayTabs from '../components/RouteDayTabs';
+import RtlHorizontalScrollView from '../../../components/RtlHorizontalScrollView';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -32,7 +31,7 @@ import { NOYA_CREATOR_TARGETS } from '../../noya/NoyaTourDefinitions';
 import StopEditorModal from '../components/StopEditorModal';
 import { extractRoutePublishMedia } from '../utils/routeMedia';
 import { normalizeRouteTimeInput } from '../utils/routeTime';
-import { validateRouteComposer } from '../utils/routeComposerValidation';
+import { validateRouteComposer, validateRouteStop } from '../utils/routeComposerValidation';
 import {
   flattenRouteStops, getStopCoordinates, getStopMediaUrls, markUnchangedRouteLocations,
 } from '../utils/routeStops';
@@ -279,7 +278,7 @@ function FocusClearingFormInput({ placeholder, onFocus, onBlur, ...props }) {
 
 export default function AddRoutesScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
-  const { requestCreatorStep } = useNoyaTour();
+  const { requestCreatorStep, setTourSuspended } = useNoyaTour();
   const routeToEdit = route?.params?.routeToEdit || null;
   const sourceRouteId = routeToEdit?.id || routeToEdit?.routeId || null;
   const publishJobId = route?.params?.publishJobId || null;
@@ -297,6 +296,13 @@ export default function AddRoutesScreen({ navigation, route }) {
     moveStopMedia,
   } = useRouteDraftMedia();
   const [mode, setMode] = useState('loading');
+  const [workspaceMode, setWorkspaceMode] = useState('edit');
+  const recommendationSelectionRef = useRef(null);
+  const scrollOffsetRef = useRef(0);
+  const returnOffsetRef = useRef(null);
+  const anchorStopRef = useRef(null);
+  const currentWorkspaceRef = useRef('edit');
+  currentWorkspaceRef.current = workspaceMode;
   const [existingDraft, setExistingDraft] = useState(null);
   const [startBusy, setStartBusy] = useState(false);
   const [startError, setStartError] = useState('');
@@ -329,6 +335,7 @@ export default function AddRoutesScreen({ navigation, route }) {
   const titleInputRef = useRef(null);
   const descriptionInputRef = useRef(null);
   const areaInputRef = useRef(null);
+  const optionalToggleRef = useRef(null);
   const [saveStatus, setSaveStatus] = useState('saved');
   const [saveError, setSaveError] = useState('');
   const [missingLocalMediaCount, setMissingLocalMediaCount] = useState(0);
@@ -349,7 +356,46 @@ export default function AddRoutesScreen({ navigation, route }) {
   const latestDraftPayloadRef = useRef(null);
   const latestDraftComparableRef = useRef('');
   const builderScrollRef = useRef(null);
-  const publishGuideScrolledRef = useRef(false);
+
+  const restoreEditorPosition = useCallback(() => {
+    requestAnimationFrame(() => {
+      if (currentWorkspaceRef.current !== 'edit') return;
+      const stopId = anchorStopRef.current;
+      if (stopId && sectionYRef.current[stopId] != null) {
+        builderScrollRef.current?.scrollTo?.({ y: Math.max(0, (sectionYRef.current.day || 0) + (sectionYRef.current.stops || 0) + sectionYRef.current[stopId] - 110), animated: false });
+        anchorStopRef.current = null;
+      } else if (returnOffsetRef.current != null) {
+        builderScrollRef.current?.scrollTo?.({ y: returnOffsetRef.current, animated: false });
+        returnOffsetRef.current = null;
+      }
+    });
+  }, []);
+  const enterWorkspace = (nextMode) => {
+    returnOffsetRef.current = scrollOffsetRef.current;
+    Keyboard.dismiss();
+    setWorkspaceMode(nextMode);
+  };
+  const finishWorkspace = useCallback(() => {
+    Keyboard.dismiss();
+    recommendationSelectionRef.current = null;
+    setWorkspaceMode('edit');
+  }, []);
+  const revealEditorField = useCallback((node) => {
+    if (currentWorkspaceRef.current !== 'edit') return;
+    const content = builderScrollRef.current?.getInnerViewRef?.();
+    if (node && content) node.measureLayout?.(content, (_x, y) => {
+      if (currentWorkspaceRef.current === 'edit') builderScrollRef.current?.scrollTo?.({ y: Math.max(0, y - 110), animated: true });
+    }, () => {});
+  }, []);
+  useEffect(() => {
+    setTourSuspended('route-workspace-mode', workspaceMode !== 'edit');
+    return () => setTourSuspended('route-workspace-mode', false);
+  }, [setTourSuspended, workspaceMode]);
+  useEffect(() => {
+    if (workspaceMode !== 'sort') return undefined;
+    const subscription = AppState.addEventListener('change', (state) => { if (state !== 'active') finishWorkspace(); });
+    return () => subscription.remove();
+  }, [finishWorkspace, workspaceMode]);
 
   useEffect(() => () => {
     if (publishJobId && !publishHandoffRef.current && typeof endReview === 'function') {
@@ -359,21 +405,15 @@ export default function AddRoutesScreen({ navigation, route }) {
   const isEditingRoute = Boolean(sourceRouteId || sourceRouteIdRef.current);
 
   useEffect(() => {
-    if (mode !== 'editor' || draftId || isEditingRoute || publishJobId) return;
+    if (workspaceMode !== 'edit' || mode !== 'editor' || draftId || isEditingRoute || publishJobId) return;
     requestCreatorStep('route', 0);
-  }, [draftId, isEditingRoute, mode, publishJobId, requestCreatorStep]);
+  }, [draftId, isEditingRoute, mode, publishJobId, requestCreatorStep, workspaceMode]);
 
   useEffect(() => {
-    if (mode !== 'editor' || isEditingRoute || publishJobId || stopEditorIntent ||
+    if (workspaceMode !== 'edit' || mode !== 'editor' || isEditingRoute || publishJobId || stopEditorIntent ||
       !flattenRouteStops(days).some((stop) => stop.title && !stop.editorState?.locationIncomplete)) return;
-    const shown = requestCreatorStep('route', 2);
-    if (!shown || publishGuideScrolledRef.current) return;
-    publishGuideScrolledRef.current = true;
-    const timer = setTimeout(() => {
-      builderScrollRef.current?.scrollToEnd?.({ animated: true });
-    }, 120);
-    return () => clearTimeout(timer);
-  }, [days, isEditingRoute, mode, publishJobId, requestCreatorStep, stopEditorIntent]);
+    requestCreatorStep('route', 2);
+  }, [days, isEditingRoute, mode, publishJobId, requestCreatorStep, stopEditorIntent, workspaceMode]);
 
   const hydrateDraft = useCallback((draft, { localSourceRouteId = null } = {}) => {
     const normalized = routeAsDraft(draft);
@@ -709,6 +749,7 @@ export default function AddRoutesScreen({ navigation, route }) {
   }, [discardCurrentDraftAndLeave, finishLeave, persistSnapshot]);
 
   const requestLeave = useCallback(async (action = null) => {
+    if (workspaceMode !== 'edit') { finishWorkspace(); return; }
     if (publishHandoffRef.current) {
       if (leavePromptOpenRef.current) return;
       leavePromptOpenRef.current = true;
@@ -740,7 +781,7 @@ export default function AddRoutesScreen({ navigation, route }) {
       ],
       { cancelable: true, onDismiss: resumeEditing }
     );
-  }, [discardCurrentDraftAndLeave, finishLeave, hasUnpublishedEdit, isEditingRoute, keepDraftAndLeave, mode, resumeEditing]);
+  }, [discardCurrentDraftAndLeave, finishLeave, hasUnpublishedEdit, isEditingRoute, keepDraftAndLeave, mode, resumeEditing, workspaceMode, finishWorkspace]);
 
   useBackButton(navigation, {
     title: isEditingRoute ? 'עריכת מסלול' : 'מסלול חדש',
@@ -791,7 +832,7 @@ export default function AddRoutesScreen({ navigation, route }) {
     if (!day?.id || !['edit', 'insert'].includes(intentMode)) return;
     if (editorBusy || moveBusy || publishBusy) return;
     if (intentMode === 'edit' && stopEditorIntent?.stopId === stopId && stopEditorIntent?.dayId === day.id) {
-      setStopEditorIntent(null);
+      closeStopEditor();
       return;
     }
     if (intentMode === 'edit' && !day.stops?.some((stop) => stop.id === stopId)) {
@@ -814,13 +855,20 @@ export default function AddRoutesScreen({ navigation, route }) {
     }
     setValidationTarget(null);
     setTransferStopId(null);
+    anchorStopRef.current = nextStopId;
     setStopEditorIntent({
       dayId: day.id,
       stopId: nextStopId,
       mode: 'edit',
     });
   };
-  const closeStopEditor = () => setStopEditorIntent(null);
+  const closeStopEditor = () => {
+    anchorStopRef.current = stopEditorIntent?.stopId;
+    Keyboard.dismiss();
+    setStopEditorIntent(null);
+    setTransferStopId(null);
+    setValidationTarget(null); setValidationMessage('');
+  };
   const saveStop = (stopData) => {
     const intent = stopEditorIntent;
     if (!intent?.dayId || !intent?.stopId) return;
@@ -869,7 +917,11 @@ export default function AddRoutesScreen({ navigation, route }) {
     dayIndex === activeDayIndex ? { ...day, description: value } : day));
   const selectDay = (index) => {
     if (editorBusy || moveBusy) return;
+    Keyboard.dismiss();
+    anchorStopRef.current = null;
+    returnOffsetRef.current = Math.max(0, (sectionYRef.current.day || 0) - 110);
     setActiveDayIndex(index); setStopEditorIntent(null); setTransferStopId(null); setDayDetailsOpen(false);
+    restoreEditorPosition();
   };
   const addDay = () => {
     if (days.length >= 60 || editorBusy || moveBusy) return;
@@ -920,6 +972,7 @@ export default function AddRoutesScreen({ navigation, route }) {
     finally { setMoveBusy(false); }
   };
   const handlePublish = async () => {
+    if (workspaceMode !== 'edit') return;
     if (publishHandoffRef.current || publishBusy || editorBusy || moveBusy) return;
     const issue = validateRouteComposer(draftPayload);
     setValidationMessage(issue?.message || '');
@@ -1023,15 +1076,15 @@ export default function AddRoutesScreen({ navigation, route }) {
     <View style={styles.loading}>
       <Ionicons name="alert-circle-outline" size={34} color={colors.error} />
       <AppText style={styles.loadingText}>{startError}</AppText>
-      <TouchableOpacity style={styles.secondaryButton} onPress={() => { setMode('loading'); setLoadAttempt((value) => value + 1); }} testID="route-draft-load-retry"><AppText style={styles.secondaryButtonText}>ניסיון נוסף</AppText></TouchableOpacity>
+      <TouchableOpacity accessibilityRole="button" style={styles.secondaryButton} onPress={() => { setMode('loading'); setLoadAttempt((value) => value + 1); }} testID="route-draft-load-retry"><AppText style={styles.secondaryButtonText}>ניסיון נוסף</AppText></TouchableOpacity>
     </View>
   );
   if (mode === 'switchChoice') return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <View style={styles.card}>
         <AppText style={styles.startTitle}>{existingDraft?.title || 'שינויים שלא פורסמו'}</AppText>
-        <TouchableOpacity style={styles.secondaryButton} onPress={() => finishLeave()} testID="route-switch-cancel"><AppText style={styles.secondaryButtonText}>ביטול וחזרה</AppText></TouchableOpacity>
-        <TouchableOpacity style={styles.primaryButton} onPress={discardExistingAndContinue} disabled={startBusy} testID="route-switch-discard">{startBusy ? <ActivityIndicator color={colors.white} /> : <AppText style={styles.primaryButtonText}>ויתור על השינויים ופתיחת המסלול</AppText>}</TouchableOpacity>
+        <TouchableOpacity accessibilityRole="button" style={styles.secondaryButton} onPress={() => finishLeave()} testID="route-switch-cancel"><AppText style={styles.secondaryButtonText}>ביטול וחזרה</AppText></TouchableOpacity>
+        <TouchableOpacity accessibilityRole="button" style={styles.primaryButton} onPress={discardExistingAndContinue} disabled={startBusy} testID="route-switch-discard">{startBusy ? <ActivityIndicator color={colors.white} /> : <AppText style={styles.primaryButtonText}>ויתור על השינויים ופתיחת המסלול</AppText>}</TouchableOpacity>
       </View>
     </ScrollView>
   );
@@ -1040,8 +1093,8 @@ export default function AddRoutesScreen({ navigation, route }) {
       <View style={styles.card}>
         <AppText style={styles.startTitle}>{existingDraft?.title || 'מסלול בתהליך'}</AppText>
         <AppText style={styles.body}>{existingDraft?.dayCount || existingDraft?.days?.length || 1} ימים{existingDraft?.area?.cityName ? ` · ${existingDraft.area.cityName}` : ''}</AppText>
-        <TouchableOpacity style={styles.primaryButton} onPress={selectExistingDraft} disabled={startBusy} testID="route-draft-continue">{startBusy ? <ActivityIndicator color={colors.white} /> : <AppText style={styles.primaryButtonText}>המשך המסלול</AppText>}</TouchableOpacity>
-        <TouchableOpacity style={styles.secondaryButton} onPress={discardExistingAndContinue} disabled={startBusy} testID="route-draft-discard">
+        <TouchableOpacity accessibilityRole="button" style={styles.primaryButton} onPress={selectExistingDraft} disabled={startBusy} testID="route-draft-continue">{startBusy ? <ActivityIndicator color={colors.white} /> : <AppText style={styles.primaryButtonText}>המשך המסלול</AppText>}</TouchableOpacity>
+        <TouchableOpacity accessibilityRole="button" style={styles.secondaryButton} onPress={discardExistingAndContinue} disabled={startBusy} testID="route-draft-discard">
           {startBusy ? <ActivityIndicator color={colors.primary} /> : <AppText style={styles.destructiveText}>{existingDraft?.sourceRouteId ? 'ויתור על העריכות' : 'מחיקה והתחלה מחדש'}</AppText>}
         </TouchableOpacity>
       </View>
@@ -1049,7 +1102,7 @@ export default function AddRoutesScreen({ navigation, route }) {
   );
   const activeDay = days[activeDayIndex] || days[0];
   const allStops = flattenRouteStops(days);
-  const locked = editorBusy || moveBusy || publishBusy;
+  const locked = editorBusy || moveBusy || publishBusy || workspaceMode !== 'edit';
   const unsaved = draftComparable !== lastSavedComparableRef.current;
   const usefulSummary = [
     ...TRANSPORT_MODES.filter((item) => transportModes.includes(item.value)),
@@ -1060,12 +1113,13 @@ export default function AddRoutesScreen({ navigation, route }) {
   return (
     <GestureHandlerRootView style={styles.screen}>
       <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={insets.top + 56}>
-      <NestableScrollContainer pointerEvents={moveBusy || publishBusy ? 'none' : 'auto'} ref={builderScrollRef} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" stickyHeaderIndices={[1]}>
+      <View style={[styles.screen, workspaceMode !== 'edit' && styles.hiddenEditor]} pointerEvents={workspaceMode === 'edit' ? 'auto' : 'none'} accessibilityElementsHidden={workspaceMode !== 'edit'} importantForAccessibility={workspaceMode === 'edit' ? 'auto' : 'no-hide-descendants'} onLayout={restoreEditorPosition}>
+      <ScrollView testID="route-editor-scroll" onScroll={(event) => { if (currentWorkspaceRef.current === 'edit') scrollOffsetRef.current = event.nativeEvent.contentOffset.y; }} scrollEventThrottle={16} onContentSizeChange={restoreEditorPosition} keyboardDismissMode={Platform.OS === 'web' ? 'none' : 'on-drag'} pointerEvents={moveBusy || publishBusy ? 'none' : 'auto'} ref={builderScrollRef} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" stickyHeaderIndices={[1]}>
         <View style={styles.headerContent}>
           <View style={styles.statusRow} accessibilityLiveRegion="polite">
             {saveStatus === 'saving' ? <ActivityIndicator size="small" color={colors.primary} /> : <Ionicons name={saveStatus === 'error' ? 'alert-circle-outline' : 'cloud-done-outline'} size={17} color={saveStatus === 'error' ? colors.error : colors.textMuted} />}
             <AppText style={[styles.statusText, saveStatus === 'error' && styles.statusError]}>{saveStatus === 'saving' ? 'שומר טיוטה...' : saveStatus === 'error' ? 'לא הצלחנו לשמור את הטיוטה' : !area ? 'הטיוטה תישמר לאחר בחירת עיר או אזור' : unsaved ? 'השינויים ממתינים לשמירה' : draftId ? 'הטיוטה נשמרה' : isEditingRoute ? 'אין שינויים שלא פורסמו' : ''}</AppText>
-            {saveStatus === 'error' ? <TouchableOpacity style={styles.stopAction} onPress={() => persistSnapshot(draftPayload, draftComparable).catch(() => {})} testID="route-save-retry"><AppText style={styles.retryText}>ניסיון נוסף</AppText></TouchableOpacity> : null}
+            {saveStatus === 'error' ? <TouchableOpacity accessibilityRole="button" style={styles.stopAction} onPress={() => persistSnapshot(draftPayload, draftComparable).catch(() => {})} testID="route-save-retry"><AppText style={styles.retryText}>ניסיון נוסף</AppText></TouchableOpacity> : null}
           </View>
           {saveError ? <AppText style={styles.errorText} testID="route-save-error">{saveError}</AppText> : null}
           {missingLocalMediaCount ? <View style={styles.errorBox} testID="route-missing-local-media"><AppText style={styles.errorText}>לא הצלחנו לשחזר {missingLocalMediaCount} תמונות מהטיוטה. אפשר לבחור אותן מחדש לפני הפרסום.</AppText></View> : null}
@@ -1081,36 +1135,44 @@ export default function AddRoutesScreen({ navigation, route }) {
               <SingleDestinationPicker inputRef={areaInputRef} allowProviderDestinations value={area} onChange={setArea} /></View>
               <View onLayout={(event) => { sectionYRef.current.description = event.nativeEvent.layout.y; }}><FocusClearingFormInput inputRef={descriptionInputRef} label="תיאור" required value={description} onChangeText={setDescription} placeholder="מה מחכה בדרך ולמי המסלול מתאים?" multiline maxLength={5000} rtl testID="route-description-input" /></View>
               <View onLayout={(event) => { sectionYRef.current.budget = event.nativeEvent.layout.y; }}><RtlChoiceGroup label={CONTENT_COMPOSER_COPY.budgetLabel} helper={CONTENT_COMPOSER_COPY.budgetHelper} options={POST_BUDGETS} selectedIds={[budgetLevel]} selectionMode="single" variant="segment" onToggle={(value) => { setBudgetLevel(value); setValidationMessage(''); }} testIDPrefix="route-budget" /></View>
-              <TouchableOpacity style={styles.detailsToggle} onPress={() => setOptionalOpen((current) => !current)} accessibilityRole="button" accessibilityState={{ expanded: optionalOpen }} testID="route-optional-toggle"><View style={styles.flexCopy}><AppText style={styles.detailsToggleText}>{CONTENT_COMPOSER_COPY.optionalDetails}</AppText><AppText style={styles.sectionMeta}>{usefulSummary || 'התניידות, רמת קושי, קצב, עונה ומחיר מדויק'}</AppText></View><Ionicons name={optionalOpen ? 'remove' : 'add'} size={20} color={colors.primary} /></TouchableOpacity>
+              <TouchableOpacity ref={optionalToggleRef} style={styles.detailsToggle} onPress={() => setOptionalOpen((current) => !current)} accessibilityRole="button" accessibilityState={{ expanded: optionalOpen }} testID="route-optional-toggle"><View style={styles.flexCopy}><AppText style={styles.detailsToggleText}>{CONTENT_COMPOSER_COPY.optionalDetails}</AppText><AppText style={styles.sectionMeta}>{usefulSummary || 'התניידות, רמת קושי, קצב, עונה ומחיר מדויק'}</AppText></View><Ionicons name={optionalOpen ? 'remove' : 'add'} size={20} color={colors.primary} /></TouchableOpacity>
               {optionalOpen ? <View style={styles.optionalBox}>
                 <RtlChoiceGroup label="אמצעי התניידות" options={TRANSPORT_MODES} selectedIds={transportModes} onToggle={(value) => setTransportModes((current) => current.includes(value) ? current.filter((id) => id !== value) : [...current, value].slice(0, 4))} maxSelected={4} testIDPrefix="route-transport" />
                 <RtlChoiceGroup label="רמת קושי" options={ROUTE_DIFFICULTIES} selectedIds={[difficulty]} selectionMode="single" onToggle={(value) => setDifficulty((current) => current === value ? '' : value)} testIDPrefix="route-difficulty" />
                 <RtlChoiceGroup label="קצב" options={PACES} selectedIds={[pace]} selectionMode="single" onToggle={(value) => setPace((current) => current === value ? '' : value)} testIDPrefix="route-pace" />
                 <RtlChoiceGroup label="עונה מתאימה" options={SEASONS} selectedIds={seasons} onToggle={(value) => setSeasons((current) => current.includes(value) ? current.filter((id) => id !== value) : [...current, value])} testIDPrefix="route-season" />
                 <FocusClearingFormInput label="מחיר" value={priceNote} onChangeText={setPriceNote} placeholder="למשל: כ־600 ש״ח לאדם לכל המסלול, ללא טיסות" maxLength={120} rtl testID="route-price-note" />
+                <TouchableOpacity accessibilityRole="button" style={styles.textButton} onPress={() => { Keyboard.dismiss(); setOptionalOpen(false); requestAnimationFrame(() => revealEditorField(optionalToggleRef.current)); }} testID="route-optional-done"><AppText style={styles.retryText}>סיום פרטים נוספים</AppText></TouchableOpacity>
               </View> : null}
+              <TouchableOpacity accessibilityRole="button" style={styles.secondaryButton} testID="route-details-done" onPress={() => {
+                const issue = validateRouteComposer({ ...draftPayload, days: [] });
+                if (issue && issue.dayIndex == null) {
+                  setValidationMessage(issue.message); setValidationTarget(issue);
+                  ({ title: titleInputRef, description: descriptionInputRef, area: areaInputRef })[issue.field]?.current?.focus?.();
+                  return;
+                }
+                returnOffsetRef.current = 0; Keyboard.dismiss(); setDetailsOpen(false); setOptionalOpen(false); setValidationMessage(''); setValidationTarget(null);
+              }}><AppText style={styles.secondaryButtonText}>סיום פרטי המסלול</AppText></TouchableOpacity>
               {validationMessage && validationTarget?.dayIndex == null ? <AppText style={styles.errorText} accessibilityLiveRegion="assertive">{validationMessage}</AppText> : null}
             </> : null}
           </View>
           </NoyaTourTarget></View>
         </View>
         <View style={styles.dayRail}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabs} contentContainerStyle={styles.tabsContent} keyboardShouldPersistTaps="handled">
-            {days.map((day, index) => <TouchableOpacity key={day.id} style={[styles.tab, activeDayIndex === index && styles.tabSelected]} onPress={() => selectDay(index)} disabled={locked} accessibilityRole="tab" accessibilityState={{ selected: activeDayIndex === index, disabled: locked }} accessibilityLabel={`יום ${index + 1}${day.title ? `, ${day.title}` : ''}`} testID={`route-day-tab-${index}`}><AppText style={[styles.tabText, activeDayIndex === index && styles.tabTextSelected]}>יום {index + 1}</AppText></TouchableOpacity>)}
-            <TouchableOpacity style={styles.tab} onPress={addDay} disabled={locked || days.length >= 60} accessibilityRole="button" accessibilityLabel="הוספת יום" testID="route-add-day"><Ionicons name="add" size={22} color={colors.primary} /></TouchableOpacity>
-          </ScrollView>
+          <RouteDayTabs days={days} activeIndex={activeDayIndex} locked={locked} onSelect={selectDay} onAdd={addDay} />
           <View style={styles.sectionHeader}>
             <TouchableOpacity style={styles.textButton} onPress={() => setDayManagerOpen((current) => !current)} accessibilityRole="button" accessibilityState={{ expanded: dayManagerOpen }} testID="route-manage-days"><Ionicons name="swap-vertical-outline" size={17} color={colors.primary} /><AppText style={styles.retryText}>ניהול ימים</AppText></TouchableOpacity>
             <TouchableOpacity style={styles.textButton} onPress={() => navigation.navigate('RouteMap', { routeData: { title, days } })} accessibilityRole="button" testID="route-map-peek"><Ionicons name="map-outline" size={17} color={colors.primary} /><AppText style={styles.retryText}>מפת המסלול</AppText></TouchableOpacity>
           </View>
-          {dayManagerOpen ? <ScrollView style={styles.dayManager} nestedScrollEnabled keyboardShouldPersistTaps="handled">{days.map((day, index) => <View key={day.id} style={styles.managerRow}>
-            <AppText style={styles.flexCopy}>יום {index + 1}{day.title ? ` · ${day.title}` : ''}</AppText>
-            <TouchableOpacity style={styles.stopAction} disabled={locked || index === 0} onPress={() => moveDay(index, index - 1)} accessibilityLabel={`העברת יום ${index + 1} מוקדם יותר`} testID={`route-day-up-${day.id}`}><Ionicons name="arrow-up" size={20} color={index ? colors.primary : colors.textMuted} /></TouchableOpacity>
-            <TouchableOpacity style={styles.stopAction} disabled={locked || index === days.length - 1} onPress={() => moveDay(index, index + 1)} accessibilityLabel={`העברת יום ${index + 1} מאוחר יותר`} testID={`route-day-down-${day.id}`}><Ionicons name="arrow-down" size={20} color={colors.primary} /></TouchableOpacity>
-            <TouchableOpacity style={styles.stopAction} disabled={locked || days.length === 1} onPress={() => removeDay(day.id)} accessibilityLabel={`מחיקת יום ${index + 1}`} testID={`route-day-remove-${day.id}`}><Ionicons name="trash-outline" size={20} color={days.length === 1 ? colors.textMuted : colors.error} /></TouchableOpacity>
-          </View>)}</ScrollView> : null}
+
         </View>
         <View style={styles.dayContent} onLayout={(event) => { sectionYRef.current.day = event.nativeEvent.layout.y; }}>
+          {dayManagerOpen ? <View style={styles.dayManager}>{days.map((day, index) => <View key={day.id} style={styles.managerRow}>
+            <AppText style={styles.flexCopy}>יום {index + 1}{day.title ? ` · ${day.title}` : ''}</AppText>
+            <TouchableOpacity accessibilityRole="button" style={styles.stopAction} disabled={locked || index === 0} onPress={() => moveDay(index, index - 1)} accessibilityLabel={`העברת יום ${index + 1} מוקדם יותר`} testID={`route-day-up-${day.id}`}><Ionicons name="arrow-up" size={20} color={index ? colors.primary : colors.textMuted} /></TouchableOpacity>
+            <TouchableOpacity accessibilityRole="button" style={styles.stopAction} disabled={locked || index === days.length - 1} onPress={() => moveDay(index, index + 1)} accessibilityLabel={`העברת יום ${index + 1} מאוחר יותר`} testID={`route-day-down-${day.id}`}><Ionicons name="arrow-down" size={20} color={colors.primary} /></TouchableOpacity>
+            <TouchableOpacity accessibilityRole="button" style={styles.stopAction} disabled={locked || days.length === 1} onPress={() => removeDay(day.id)} accessibilityLabel={`מחיקת יום ${index + 1}`} testID={`route-day-remove-${day.id}`}><Ionicons name="trash-outline" size={20} color={days.length === 1 ? colors.textMuted : colors.error} /></TouchableOpacity>
+          </View>)}<TouchableOpacity accessibilityRole="button" style={styles.textButton} onPress={() => setDayManagerOpen(false)} testID="route-days-done"><AppText style={styles.retryText}>סיום ניהול ימים</AppText></TouchableOpacity></View> : null}
           <View style={styles.sectionHeader}>
             <View style={styles.flexCopy}><AppText style={styles.sectionTitle}>יום {activeDayIndex + 1}{activeDay?.title ? ` · ${activeDay.title}` : ''}</AppText><AppText style={styles.sectionMeta}>{activeDay?.stops?.length || 0} עצירות</AppText></View>
             <TouchableOpacity style={styles.stopAction} onPress={() => setDayDetailsOpen((current) => !current)} accessibilityLabel="עריכת שם היום והערה" accessibilityRole="button" accessibilityState={{ expanded: dayDetailsOpen }} testID="route-day-details-toggle"><Ionicons name="create-outline" size={22} color={colors.primary} /></TouchableOpacity>
@@ -1118,62 +1180,56 @@ export default function AddRoutesScreen({ navigation, route }) {
           {dayDetailsOpen ? <View style={styles.card}>
             <FocusClearingFormInput label="שם היום (רשות)" value={activeDay?.title || ''} onChangeText={(value) => setDays((current) => current.map((day) => day.id === activeDay.id ? { ...day, title: value } : day))} placeholder="למשל: כפרים ואגמים" maxLength={120} rtl testID="route-day-title-input" />
             <FocusClearingFormInput label="הערה ליום (רשות)" value={activeDay?.description || ''} onChangeText={updateActiveDayDescription} multiline maxLength={5000} rtl testID="route-day-description-input" />
-          </View> : activeDay?.description ? <AppText style={styles.body}>{activeDay.description}</AppText> : null}
-          {activeDay?.stops?.some((stop) => getStopMediaUrls(stop).length) ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsContent} testID="route-day-photos">{activeDay.stops.flatMap((stop, stopIndex) => getStopMediaUrls(stop, 'thumb').map((uri, photoIndex) => <TouchableOpacity key={`${stop.id}:${photoIndex}`} style={styles.dayPhotoButton} onPress={() => { setStopEditorIntent({ dayId: activeDay.id, stopId: stop.id, mode: 'edit' }); builderScrollRef.current?.scrollTo?.({ y: Math.max(0, (sectionYRef.current.day || 0) + (sectionYRef.current.stops || 0) + (sectionYRef.current[stop.id] || 0) - 70), animated: true }); }} disabled={locked} accessibilityLabel={`תמונה ${photoIndex + 1}, עצירה ${stopIndex + 1}: ${stop.title || 'עצירה חדשה'}`}><CachedImage source={{ uri }} style={styles.dayPhoto} contentFit="cover" /><AppText style={styles.photoCaption}>{stopIndex + 1}</AppText></TouchableOpacity>))}</ScrollView> : null}
-          {!activeDay?.stops?.length ? <View style={styles.emptyDay}><Ionicons name="trail-sign-outline" size={32} color={colors.brandOrange} /><AppText style={styles.sectionTitle}>כאן מתחיל היום שלכם</AppText><AppText style={styles.empty}>מקום שאהבתם, תצפית או קפה בדרך — מוסיפים עצירה וממשיכים משם.</AppText></View> : <NestableDraggableFlatList
-            key={activeDay.id}
-            onLayout={(event) => { sectionYRef.current.stops = event.nativeEvent.layout.y; }}
-            data={activeDay.stops}
-            keyExtractor={(stop) => stop.id}
-            activationDistance={8}
-            onDragEnd={({ data }) => replaceDayStops(activeDay.id, data)}
-            testID="route-stop-draggable-list"
-            renderItem={({ item: stop, getIndex, drag, isActive }) => {
-              const reportedIndex = getIndex?.();
-              const index = Number.isInteger(reportedIndex) ? reportedIndex : activeDay.stops.findIndex((item) => item.id === stop.id);
+            <TouchableOpacity accessibilityRole="button" style={styles.textButton} onPress={() => { returnOffsetRef.current = Math.max(0, (sectionYRef.current.day || 0) - 110); Keyboard.dismiss(); setDayDetailsOpen(false); }} testID="route-day-details-done"><AppText style={styles.retryText}>סיום פרטי היום</AppText></TouchableOpacity>
+          </View> : activeDay?.description ? <AppText style={styles.body} numberOfLines={2}>{activeDay.description}</AppText> : null}
+          {activeDay.stops.length >= 2 && <TouchableOpacity accessibilityRole="button" style={styles.secondaryButton} onPress={() => enterWorkspace('sort')} disabled={locked} testID="route-sort-stops"><AppText style={styles.secondaryButtonText}>סידור עצירות</AppText></TouchableOpacity>}
+          {activeDay?.stops?.some((stop) => getStopMediaUrls(stop).length) ? <RtlHorizontalScrollView contentContainerStyle={styles.tabsContent} testID="route-day-photos">{activeDay.stops.flatMap((stop, stopIndex) => getStopMediaUrls(stop, 'thumb').map((uri, photoIndex) => <TouchableOpacity accessibilityRole="button" key={`${stop.id}:${photoIndex}`} style={styles.dayPhotoButton} onPress={() => { setStopEditorIntent({ dayId: activeDay.id, stopId: stop.id, mode: 'edit' }); builderScrollRef.current?.scrollTo?.({ y: Math.max(0, (sectionYRef.current.day || 0) + (sectionYRef.current.stops || 0) + (sectionYRef.current[stop.id] || 0) - 70), animated: true }); }} disabled={locked} accessibilityLabel={`תמונה ${photoIndex + 1}, עצירה ${stopIndex + 1}: ${stop.title || 'עצירה חדשה'}`}><CachedImage source={{ uri }} style={styles.dayPhoto} contentFit="cover" /><AppText style={styles.photoCaption}>{stopIndex + 1}</AppText></TouchableOpacity>))}</RtlHorizontalScrollView> : null}
+          {!activeDay?.stops?.length ? <View style={styles.emptyDay}><Ionicons name="trail-sign-outline" size={32} color={colors.brandOrange} /><AppText style={styles.sectionTitle}>כאן מתחיל היום שלכם</AppText><AppText style={styles.empty}>מקום שאהבתם, תצפית או קפה בדרך — מוסיפים עצירה וממשיכים משם.</AppText></View> : <View key={activeDay.id} style={styles.stopList} onLayout={(event) => { sectionYRef.current.stops = event.nativeEvent.layout.y; }} testID="route-stop-list">{activeDay.stops.map((stop, index) => {
               const open = stopEditorIntent?.dayId === activeDay.id && stopEditorIntent?.stopId === stop.id;
-              return <View onLayout={(event) => { sectionYRef.current[stop.id] = event.nativeEvent.layout.y; }}>
-                <TouchableOpacity style={styles.insertStop} onPress={() => openStopEditor({ beforeStopId: stop.id, mode: 'insert' })} disabled={locked} accessibilityRole="button" testID={`route-insert-stop-before-${stop.id}`}><Ionicons name="add" size={16} color={colors.brandOrange} /><AppText style={styles.insertStopText}>הוספת עצירה כאן</AppText></TouchableOpacity>
-                <ScaleDecorator activeScale={1.02}>
-                  <View style={[styles.stopShell, open && styles.stopShellOpen, isActive && styles.stopCardDragging]}>
+              return <View key={stop.id} onLayout={(event) => { sectionYRef.current[stop.id] = event.nativeEvent.layout.y; restoreEditorPosition(); }}>
+                {open && <TouchableOpacity style={styles.insertStop} onPress={() => openStopEditor({ beforeStopId: stop.id, mode: 'insert' })} disabled={locked} accessibilityRole="button" testID={`route-insert-stop-before-${stop.id}`}><Ionicons name="add" size={16} color={colors.brandOrange} /><AppText style={styles.insertStopText}>הוספת עצירה כאן</AppText></TouchableOpacity>}
+                  <View style={[styles.stopShell, open && styles.stopShellOpen]}>
                     <View style={styles.stopHeading}>
-                      <TouchableOpacity style={styles.stopMain} onPress={() => openStopEditor({ stopId: stop.id, mode: 'edit' })} accessibilityRole="button" accessibilityState={{ expanded: open }} accessibilityLabel={`עריכת העצירה ${stop.title || index + 1}`} disabled={locked || isActive} testID={`route-stop-edit-${stop.id}`}>
-                        {getStopMediaUrls(stop, 'thumb')[0] ? <CachedImage source={{ uri: getStopMediaUrls(stop, 'thumb')[0] }} style={styles.stopThumb} contentFit="cover" /> : <View style={styles.stopNumber}><AppText style={styles.stopNumberText}>{index + 1}</AppText></View>}
-                        <View style={styles.stopCopy}><AppText style={styles.stopTitle}>{stop.title || 'עצירה חדשה'}</AppText><AppText style={styles.stopMeta}>{stop.editorState?.locationIncomplete ? 'בחירת מקום והוספת פרטים' : stop.location || stop.place?.name || 'מיקום כללי'}</AppText></View>
+                      <TouchableOpacity style={styles.stopMain} onPress={() => openStopEditor({ stopId: stop.id, mode: 'edit' })} accessibilityRole="button" accessibilityState={{ expanded: open }} accessibilityLabel={`עריכת העצירה ${stop.title || index + 1}`} disabled={locked} testID={`route-stop-edit-${stop.id}`}>
+                        <View style={styles.stopNumber}><AppText style={styles.stopNumberText}>{index + 1}</AppText></View>
+                        {getStopMediaUrls(stop, 'thumb')[0] && <CachedImage source={{ uri: getStopMediaUrls(stop, 'thumb')[0] }} style={styles.stopThumb} contentFit="cover" />}
+                        <View style={styles.stopCopy}><AppText style={styles.stopTitle} numberOfLines={2}>{stop.title || 'עצירה חדשה'}</AppText><AppText style={styles.stopMeta} numberOfLines={1}>{validateRouteStop(stop) ? 'להשלמה' : stop.location || stop.place?.name || stop.destination?.cityName || 'מיקום כללי'}</AppText></View>
                         <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={18} color={colors.primary} />
                       </TouchableOpacity>
-                      <TouchableOpacity style={styles.dragHandle} onLongPress={drag} delayLongPress={180} disabled={locked} accessibilityLabel={`שינוי מיקום העצירה ${index + 1}`} accessibilityHint="לחיצה ארוכה וגרירה משנה את הסדר" accessibilityActions={[...(index > 0 ? [{ name: 'moveUp', label: 'העברה למעלה' }] : []), ...(index < activeDay.stops.length - 1 ? [{ name: 'moveDown', label: 'העברה למטה' }] : [])]} onAccessibilityAction={({ nativeEvent }) => { if (nativeEvent.actionName === 'moveUp') moveStop(activeDay.id, index, index - 1); if (nativeEvent.actionName === 'moveDown') moveStop(activeDay.id, index, index + 1); }} testID={`route-stop-drag-handle-${stop.id}`}><Ionicons name="reorder-three-outline" size={27} color={colors.primary} /></TouchableOpacity>
+
                     </View>
                     {open ? <View style={styles.inlineStop}>
-                      <StopEditorModal key={`${activeDay.id}:${stop.id}`} embedded visible initialData={stop} dayIndex={activeDayIndex} stopIndex={index} onClose={closeStopEditor} onSave={saveStop} onDraftChange={saveStop} onBusyChange={setEditorBusy}
+                      <StopEditorModal key={`${activeDay.id}:${stop.id}`} embedded visible initialData={stop} dayIndex={activeDayIndex} stopIndex={index} onClose={closeStopEditor} onSave={saveStop} onDraftChange={saveStop} onBusyChange={setEditorBusy} onRevealField={revealEditorField}
+                        onRequestRecommendations={(onSelect) => { recommendationSelectionRef.current = onSelect; enterWorkspace('recommendations'); }}
                         validationField={validationTarget?.field || ''} validationError={validationTarget?.stopId === stop.id ? validationMessage : ''}
                         onForgetImage={(item) => forgetDurableImage(item, { dayId: activeDay.id, stopId: stop.id })}
                         onPersistImages={(items) => persistDurableMedia(items, { dayId: activeDay.id, stopId: stop.id })}
                         mediaForImage={(item) => durableMediaForItem(item, { dayId: activeDay.id, stopId: stop.id })}
                         maxPhotos={Math.min(3, MAX_ROUTE_MEDIA - countRouteMedia(days) + countRouteMedia([{ stops: [stop] }]))}
-                        routeDestination={area} guideEnabled={!isEditingRoute && !publishJobId} />
+                        routeDestination={area} guideEnabled={!isEditingRoute && !publishJobId && workspaceMode === 'edit'} />
                       <View style={styles.stopTools}>
-                        <TouchableOpacity style={styles.textButton} disabled={locked || index === 0} onPress={() => moveStop(activeDay.id, index, index - 1)} accessibilityLabel="העברת העצירה למעלה" testID={`route-stop-up-${stop.id}`}><Ionicons name="arrow-up" size={18} color={colors.primary} /></TouchableOpacity>
-                        <TouchableOpacity style={styles.textButton} disabled={locked || index === activeDay.stops.length - 1} onPress={() => moveStop(activeDay.id, index, index + 1)} accessibilityLabel="העברת העצירה למטה" testID={`route-stop-down-${stop.id}`}><Ionicons name="arrow-down" size={18} color={colors.primary} /></TouchableOpacity>
-                        {days.length > 1 ? <TouchableOpacity style={styles.textButton} disabled={locked} onPress={() => setTransferStopId((current) => current === stop.id ? null : stop.id)} testID={`route-stop-transfer-${stop.id}`}><AppText style={styles.retryText}>העברה ליום אחר</AppText></TouchableOpacity> : null}
-                        <TouchableOpacity style={styles.stopAction} disabled={locked} onPress={() => removeStop(activeDay.id, stop.id)} accessibilityLabel={`הסרת העצירה ${stop.title || index + 1}`} testID={`route-stop-remove-${stop.id}`}><Ionicons name="trash-outline" size={20} color={colors.error} /></TouchableOpacity>
+                        <TouchableOpacity accessibilityRole="button" style={styles.textButton} disabled={locked || index === 0} onPress={() => moveStop(activeDay.id, index, index - 1)} accessibilityLabel="העברת העצירה למעלה" testID={`route-stop-up-${stop.id}`}><Ionicons name="arrow-up" size={18} color={colors.primary} /></TouchableOpacity>
+                        <TouchableOpacity accessibilityRole="button" style={styles.textButton} disabled={locked || index === activeDay.stops.length - 1} onPress={() => moveStop(activeDay.id, index, index + 1)} accessibilityLabel="העברת העצירה למטה" testID={`route-stop-down-${stop.id}`}><Ionicons name="arrow-down" size={18} color={colors.primary} /></TouchableOpacity>
+                        {days.length > 1 ? <TouchableOpacity accessibilityRole="button" style={styles.textButton} disabled={locked} onPress={() => setTransferStopId((current) => current === stop.id ? null : stop.id)} testID={`route-stop-transfer-${stop.id}`}><AppText style={styles.retryText}>העברה ליום אחר</AppText></TouchableOpacity> : null}
+                        <TouchableOpacity accessibilityRole="button" style={styles.stopAction} disabled={locked} onPress={() => removeStop(activeDay.id, stop.id)} accessibilityLabel={`הסרת העצירה ${stop.title || index + 1}`} testID={`route-stop-remove-${stop.id}`}><Ionicons name="trash-outline" size={20} color={colors.error} /></TouchableOpacity>
                       </View>
-                      {transferStopId === stop.id ? <View style={styles.dayChoices}>{days.map((day, dayIndex) => day.id !== activeDay.id ? <TouchableOpacity key={day.id} style={styles.dayChoice} disabled={locked} onPress={() => transferStop(stop.id, day.id)} testID={`route-transfer-to-${day.id}`}><AppText>יום {dayIndex + 1}{day.title ? ` · ${day.title}` : ''}</AppText></TouchableOpacity> : null)}</View> : null}
+                      {transferStopId === stop.id ? <View style={styles.dayChoices}>{days.map((day, dayIndex) => day.id !== activeDay.id ? <TouchableOpacity accessibilityRole="button" key={day.id} style={styles.dayChoice} disabled={locked} onPress={() => transferStop(stop.id, day.id)} testID={`route-transfer-to-${day.id}`}><AppText>יום {dayIndex + 1}{day.title ? ` · ${day.title}` : ''}</AppText></TouchableOpacity> : null)}</View> : null}
                     </View> : null}
                   </View>
-                </ScaleDecorator>
               </View>;
-            }}
-          />}
-          <TouchableOpacity style={styles.addStop} onPress={() => openStopEditor({ mode: 'insert' })} disabled={locked || allStops.length >= 150} testID="route-add-stop"><Ionicons name="add-circle-outline" size={23} color={colors.brandOrange} /><AppText style={styles.addStopText}>{activeDay?.stops?.length ? 'הוספת עצירה בסוף היום' : 'הוספת העצירה הראשונה'}</AppText></TouchableOpacity>
+            })}</View>}
+          <TouchableOpacity accessibilityRole="button" style={styles.addStop} onPress={() => openStopEditor({ mode: 'insert' })} disabled={locked || allStops.length >= 150} testID="route-add-stop"><Ionicons name="add-circle-outline" size={23} color={colors.brandOrange} /><AppText style={styles.addStopText}>{activeDay?.stops?.length ? 'הוספת עצירה בסוף היום' : 'הוספת העצירה הראשונה'}</AppText></TouchableOpacity>
         </View>
-      </NestableScrollContainer>
+      </ScrollView>
       <NoyaTourTarget targetId={NOYA_CREATOR_TARGETS.routePublish}>
       <View style={[styles.footer, routeFooterInsetsStyle(insets.bottom)]} testID="route-footer">
         {validationMessage ? <AppText style={styles.errorText} accessibilityLiveRegion="assertive">{validationMessage}</AppText> : <AppText style={styles.footerMeta}>{days.length} ימים · {allStops.length} עצירות · התמונות הן לבחירתכם</AppText>}
-        <TouchableOpacity style={[styles.primaryButton, (locked || (isEditingRoute && !hasUnpublishedEdit && !publishJobId)) && styles.primaryButtonDisabled]} onPress={handlePublish} disabled={locked || (isEditingRoute && !hasUnpublishedEdit && !publishJobId)} testID="route-submit">{publishBusy ? <ActivityIndicator color={colors.white} /> : <AppText style={styles.primaryButtonText}>{isEditingRoute ? 'פרסום השינויים' : 'פרסום המסלול'}</AppText>}</TouchableOpacity>
+        <TouchableOpacity accessibilityRole="button" style={[styles.primaryButton, (locked || (isEditingRoute && !hasUnpublishedEdit && !publishJobId)) && styles.primaryButtonDisabled]} onPress={handlePublish} disabled={locked || (isEditingRoute && !hasUnpublishedEdit && !publishJobId)} testID="route-submit">{publishBusy ? <ActivityIndicator color={colors.white} /> : <AppText style={styles.primaryButtonText}>{isEditingRoute ? 'פרסום השינויים' : 'פרסום המסלול'}</AppText>}</TouchableOpacity>
       </View>
       </NoyaTourTarget>
+      </View>
+      {workspaceMode === 'sort' && <RouteStopSorter day={activeDay} dayIndex={activeDayIndex} onReorder={(stops) => replaceDayStops(activeDay.id, stops)} onMove={(from, to) => moveStop(activeDay.id, from, to)} onDone={finishWorkspace} />}
+      {workspaceMode === 'recommendations' && <RouteRecommendationPicker routeDestination={area} onCancel={finishWorkspace} onSelect={(item) => { recommendationSelectionRef.current?.(item); finishWorkspace(); }} />}
       </KeyboardAvoidingView>
     </GestureHandlerRootView>
   );

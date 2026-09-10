@@ -11,6 +11,26 @@ function fieldSignature(index) {
   )).join('|');
 }
 
+test('route recommendation picker has guarded global and city text/ranking indexes', () => {
+  const indexes = JSON.parse(fs.readFileSync(indexesPath, 'utf8')).indexes
+    .filter((index) => index.collectionGroup === 'recommendations' && index.queryScope === 'COLLECTION');
+  const sortedFields = (fields) => fields.filter((field) => field.fieldPath !== '__name__')
+    .map((field) => `${field.fieldPath}:${field.order || field.arrayConfig}`).sort().join('|');
+  for (const scope of [[], ['destination.countryId', 'destination.cityId']]) {
+    for (const suffix of [
+      { fieldPath: 'createdAt', order: 'DESCENDING' },
+      { fieldPath: 'stats.likeCount', order: 'DESCENDING' },
+      { fieldPath: 'search.prefixes', arrayConfig: 'CONTAINS' },
+      { fieldPath: 'facets.interests', arrayConfig: 'CONTAINS' },
+    ]) {
+      const fields = [...scope, 'status', 'publicationGate.destinationApprovalVerified']
+        .map((fieldPath) => ({ fieldPath, order: 'ASCENDING' })).concat(suffix);
+      assert.ok(indexes.some((index) => sortedFields(index.fields) === sortedFields(fields)),
+        `Missing guarded recommendation query index: ${sortedFields(fields)}`);
+    }
+  }
+});
+
 test('destinations.status has a collection-group ascending index', () => {
   const config = JSON.parse(fs.readFileSync(indexesPath, 'utf8'));
   const override = config.fieldOverrides.find((entry) => (

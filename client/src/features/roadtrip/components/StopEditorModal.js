@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Modal, ScrollView, TouchableOpacity, View } from 'react-native';
+import { Alert, Keyboard, Modal, ScrollView, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import AppText from '../../../components/AppText';
@@ -10,7 +10,7 @@ import TravelMediaComposer from '../../../components/TravelMediaComposer';
 import UnsavedChangesModal from '../../../components/UnsavedChangesModal';
 import { UNSAVED_LEAVE_MESSAGE, UNSAVED_LEAVE_TITLE } from '../../../constants/unsavedLeaveStrings';
 import { ROUTE_IMAGE_LONG_EDGE, TRAVEL_IMAGE_COMPRESSION } from '../../../constants/travelMedia';
-import { getPersonalizedRecommendations } from '../../../services/PersonalizationService';
+import RouteRecommendationPicker from './RouteRecommendationPicker';
 import { getMediaVariantUrl } from '../../../utils/mediaAssets';
 import {
   createTravelMediaDescriptor,
@@ -19,6 +19,7 @@ import {
 } from '../../../utils/travelMedia';
 import {
   colors,
+  routeBuilderStyles as builder,
   recommendationComposerStyles as composer,
   stopEditorModalStyles as styles,
 } from '../../../styles';
@@ -114,9 +115,12 @@ function photoItemsForStop(stop) {
   return stop?.image ? [createTravelMediaDescriptor({ asset: null, uri: stop.image })] : [];
 }
 
-function FocusClearingFormInput({ placeholder, onFocus, onBlur, ...props }) {
+function FocusClearingFormInput({ placeholder, onFocus, onBlur, multiline, style, ...props }) {
   const [focused, setFocused] = useState(false);
-  return <FormInput {...props} placeholder={focused ? '' : placeholder} onFocus={(event) => {
+  const [textHeight, setTextHeight] = useState(110);
+  return <FormInput {...props} multiline={multiline} style={[style, multiline && { height: textHeight }]} scrollEnabled={!multiline}
+    onContentSizeChange={multiline ? (event) => setTextHeight(Math.max(110, event.nativeEvent.contentSize.height)) : undefined}
+    placeholder={focused ? '' : placeholder} onFocus={(event) => {
     setFocused(true); onFocus?.(event);
   }} onBlur={(event) => { setFocused(false); onBlur?.(event); }} />;
 }
@@ -126,6 +130,7 @@ export default function StopEditorModal({
   onForgetImage, onPersistImages, mediaForImage, routeDestination, allowImages = true,
   guideEnabled = false,
   embedded = false, onDraftChange, maxPhotos = 3, validationError = '', validationField = '', onBusyChange,
+  onRequestRecommendations, onRevealField,
 }) {
   const { requestCreatorStep, setTourSuspended } = useNoyaTour();
   const safeDayIndex = Number.isInteger(dayIndex) && dayIndex >= 0 ? dayIndex : 0;
@@ -140,10 +145,11 @@ export default function StopEditorModal({
   const [durationMinutes, setDurationMinutes] = useState('');
   const [locationBusy, setLocationBusy] = useState(false);
   const [locationMessage, setLocationMessage] = useState('');
-  const [recommendations, setRecommendations] = useState([]);
-  const [recommendationsLoading, setRecommendationsLoading] = useState(false);
-  const [recommendationsError, setRecommendationsError] = useState('');
-  const recommendationsRequestedRef = useRef(false);
+  const [localPickerOpen, setLocalPickerOpen] = useState(false);
+  const [locationExpanded, setLocationExpanded] = useState(false);
+  const [localIssue, setLocalIssue] = useState(null);
+  const importedCopyRef = useRef(null);
+  const fieldRefs = useRef({});
   const [selectedRecommendation, setSelectedRecommendation] = useState(null);
   const [photoItems, setPhotoItems] = useState([]);
   const [mediaComposerVisible, setMediaComposerVisible] = useState(false);
@@ -191,6 +197,10 @@ export default function StopEditorModal({
     }
     if (embedded && initializedIdRef.current === initialData?.id) return;
     initializedIdRef.current = initialData?.id;
+    importedCopyRef.current = null;
+    setLocationExpanded(false);
+    setLocalIssue(null);
+    setLocalPickerOpen(false);
     const nextMode = initialData?.editorState?.locationMode || initialModeFor(initialData);
     const nextExactValue = nextMode === LOCATION_MODES.exact
       ? initialData?.editorState?.locationIncomplete
@@ -225,24 +235,14 @@ export default function StopEditorModal({
     }));
   }, [embedded, initialData, routeDestination, visible]);
 
-  useEffect(() => {
-    if (!visible || mode !== LOCATION_MODES.planli || recommendationsRequestedRef.current || recommendationsError) return;
-    recommendationsRequestedRef.current = true;
-    setRecommendationsLoading(true);
-    setRecommendationsError('');
-    getPersonalizedRecommendations({ sort: 'forYou', limit: 12 }).then((response) => {
-      setRecommendations(Array.isArray(response?.items) ? response.items : []);
-    }).catch(() => setRecommendationsError('לא הצלחנו לטעון המלצות כרגע.'))
-      .finally(() => setRecommendationsLoading(false));
-  }, [mode, recommendations.length, recommendationsError, recommendationsLoading, visible]);
-
   const comparable = useMemo(() => buildStopComparable({
     title, description, mode, exactValue, destination, pin, startTime, durationMinutes, query: searchQuery,
     selectedRecommendationId: recommendationIdFor(selectedRecommendation),
     photos: photoItems,
   }), [description, destination, durationMinutes, exactValue, mode, photoItems, pin, searchQuery, selectedRecommendation, startTime, title]);
   const hasUnsavedChanges = stopBaseline != null && comparable !== stopBaseline;
-  const mediaBusy = false;
+  useEffect(() => { setLocalIssue(null); }, [comparable]);
+  const mediaBusy = photoItems.some((item) => item.persistence === 'materializing');
   useEffect(() => {
     onBusyChange?.(locationBusy || photoItems.some((item) => item.persistence === 'materializing'));
     return () => onBusyChange?.(false);
@@ -250,11 +250,16 @@ export default function StopEditorModal({
   useEffect(() => {
     if (!validationError) return undefined;
     if (['time', 'duration'].includes(validationField)) setDetailsOpen(true);
-    const timer = setTimeout(() => ({ stopTitle: titleInputRef, time: timeInputRef, duration: durationInputRef })[validationField]?.current?.focus?.(), 100);
+    if (validationField === 'location') setLocationExpanded(true);
+    const timer = setTimeout(() => {
+      onRevealField?.(fieldRefs.current[validationField]);
+      ({ stopTitle: titleInputRef, time: timeInputRef, duration: durationInputRef })[validationField]?.current?.focus?.();
+    }, 100);
     return () => clearTimeout(timer);
-  }, [validationError, validationField]);
+  }, [validationError, validationField, onRevealField]);
   const acceptExactLocation = useCallback((value) => {
     setExactValue(value);
+    if (value?.place?.placeId) { setLocationExpanded(false); Keyboard.dismiss(); }
     if (value?.place?.name) setTitle((current) => current.trim() ? current : value.place.name);
     if (value?.place?.name) setSearchQuery('');
   }, []);
@@ -273,17 +278,35 @@ export default function StopEditorModal({
   }, [hasUnsavedChanges, mediaBusy, onClose]);
 
   const selectRecommendation = (item) => {
+    const imported = importedCopyRef.current;
+    const nextTitle = item.title || item.name || '';
+    const nextDescription = item.description || '';
+    setTitle((current) => !current.trim() || current === imported?.title ? nextTitle : current);
+    setDescription((current) => !current.trim() || current === imported?.description ? nextDescription : current);
+    importedCopyRef.current = { title: nextTitle, description: nextDescription };
     setSelectedRecommendation(item);
-    setTitle(item.title || item.name || '');
-    setDescription(item.description || '');
+    setMode(LOCATION_MODES.planli);
+    setExactValue(null);
+    setSearchQuery('');
+    setLocationMessage('');
+    setLocationExpanded(false);
+    setLocalIssue(null);
+    setLocalPickerOpen(false);
     setDestination(normalizedDestination(item.destination));
     const coordinates = getStopCoordinates(item);
     setPin(coordinates ? { latitude: coordinates.lat, longitude: coordinates.lng } : null);
   };
 
+  const openRecommendations = () => {
+    Keyboard.dismiss();
+    if (onRequestRecommendations) onRequestRecommendations(selectRecommendation);
+    else setLocalPickerOpen(true);
+  };
+
   const switchLocationMode = (nextMode) => {
     if (nextMode === mode) return;
     setMode(nextMode);
+    setLocationExpanded(true);
     setLocationMessage('');
     if (nextMode === LOCATION_MODES.planli) {
       setExactValue(null);
@@ -315,6 +338,7 @@ export default function StopEditorModal({
 
   const chooseGeneralDestination = (value) => {
     setDestination(value);
+    if (value && mode === LOCATION_MODES.general) { setLocationExpanded(false); Keyboard.dismiss(); }
     setPin(null);
     setLocationMessage('');
   };
@@ -462,20 +486,29 @@ export default function StopEditorModal({
     if (!initialRender || comparable !== stopBaseline) draftChangeRef.current?.(buildDraftStop());
   }, [comparable, embedded, stopBaseline, visible]);
 
+  const showIssue = (message, field) => {
+    setLocalIssue({ message, field });
+    if (['time', 'duration'].includes(field)) setDetailsOpen(true);
+    if (field === 'location') setLocationExpanded(true);
+    setTimeout(() => {
+      onRevealField?.(fieldRefs.current[field]);
+      ({ stopTitle: titleInputRef, time: timeInputRef, duration: durationInputRef })[field]?.current?.focus?.();
+    }, 100);
+  };
   const handleSave = () => {
     const trimmedTitle = title.trim();
-    if (!trimmedTitle) { Alert.alert('חסר שם לעצירה', 'כדאי להוסיף שם קצר לעצירה.'); return; }
-    if (mediaBusy || locationBusy) { Alert.alert('רק רגע', 'כדאי להשלים את בחירת המיקום והתמונות לפני השמירה.'); return; }
+    if (!trimmedTitle) { showIssue('כדאי להוסיף שם קצר לעצירה.', 'stopTitle'); return; }
+    if (mediaBusy || locationBusy || photoItems.some((item) => item.persistence === 'failed')) { showIssue('כדאי להשלים את בחירת המיקום והתמונות לפני הסיום.', locationBusy ? 'location' : 'photos'); return; }
     const normalizedStartTime = normalizeRouteTimeInput(startTime);
     if (normalizedStartTime === null) {
-      Alert.alert('שעה לא תקינה', 'אפשר לכתוב למשל 8:30 או 09:30.'); return;
+      showIssue('אפשר לכתוב למשל 8:30 או 09:30.', 'time'); return;
     }
     const duration = durationMinutes ? Number(durationMinutes) : null;
     if (duration != null && (!Number.isSafeInteger(duration) || duration < 1 || duration > 1440)) {
-      Alert.alert('משך לא תקין', 'אפשר לבחור משך של דקה ועד 24 שעות.'); return;
+      showIssue('אפשר לבחור משך של דקה ועד 24 שעות.', 'duration'); return;
     }
     const location = buildLocation();
-    if (!location) { Alert.alert('חסר מיקום', 'כדאי להשלים את בחירת המיקום לעצירה.'); return; }
+    if (!location) { showIssue('כדאי להשלים את בחירת המיקום לעצירה.', 'location'); return; }
     const canonicalLocation = { ...location };
     delete canonicalLocation.reuseSavedLocation;
     const preservedStop = { ...(initialData || {}) };
@@ -498,6 +531,8 @@ export default function StopEditorModal({
     }));
     const nextStop = {
       ...preservedStop, ...canonicalLocation,
+      mediaOrder: photoItems.map((item) => item.asset ? 'remote' : 'local'),
+      editorState: { locationMode: mode, locationIncomplete: false, query: '', startTime: normalizedStartTime, durationMinutes },
       id: initialData?.id || createStopId(),
       title: trimmedTitle,
       description: description.trim(),
@@ -518,6 +553,7 @@ export default function StopEditorModal({
     };
     const saved = onSave?.(nextStop, safeStopIndex);
     if (saved === false) return;
+    Keyboard.dismiss(); setLocalIssue(null);
     setUnsavedModalVisible(false); pendingDiscardRef.current = null; onClose?.();
   };
 
@@ -526,24 +562,30 @@ export default function StopEditorModal({
     { id: LOCATION_MODES.general, label: 'עיר או אזור', icon: 'map-outline' },
     { id: LOCATION_MODES.pin, label: 'נקודה במפה', icon: 'pin-outline' },
   ];
+  const location = buildLocation();
+  const locationCollapsed = Boolean(location && !locationExpanded);
+  const issue = localIssue || (validationError ? { message: validationError, field: validationField } : null);
+  const renderIssue = (field) => issue?.field === field
+    ? <AppText style={composer.fieldError} accessibilityLiveRegion="assertive" testID="route-stop-validation-error">{issue.message}</AppText>
+    : null;
   const Container = embedded ? View : Modal;
   const Content = embedded ? View : ScrollView;
   return (
     <Container {...(embedded ? { testID: 'route-stop-inline-editor' } : { visible, animationType: 'slide', presentationStyle: 'pageSheet', onRequestClose: tryClose })}>
-      <View style={embedded ? undefined : styles.container}>
+      <View style={[embedded ? builder.inlineEditor : styles.container, localPickerOpen && builder.hiddenEditor]}>
         {!embedded ? <UnsavedChangesModal contained visible={unsavedModalVisible} title={UNSAVED_LEAVE_TITLE} message={UNSAVED_LEAVE_MESSAGE} onCancel={dismissUnsavedModal} onConfirm={confirmUnsavedLeave} testID="stop-editor-unsaved-modal" cancelTestID="stop-editor-unsaved-cancel" confirmTestID="stop-editor-unsaved-confirm" /> : null}
         {!embedded ? <View style={styles.header}>
-          <TouchableOpacity onPress={tryClose} disabled={mediaBusy}><AppText style={styles.headerButton}>ביטול</AppText></TouchableOpacity>
+          <TouchableOpacity accessibilityRole="button" onPress={tryClose} disabled={mediaBusy}><AppText style={styles.headerButton}>ביטול</AppText></TouchableOpacity>
           <AppText style={styles.headerTitle}>יום {safeDayIndex + 1} · עצירה {safeStopIndex + 1}</AppText>
-          <TouchableOpacity onPress={handleSave} disabled={mediaBusy || locationBusy}><AppText style={[styles.headerButton, styles.headerButtonStrong]}>שמירה</AppText></TouchableOpacity>
+          <TouchableOpacity accessibilityRole="button" onPress={handleSave} disabled={mediaBusy || locationBusy}><AppText style={[styles.headerButton, styles.headerButtonStrong]}>שמירה</AppText></TouchableOpacity>
         </View> : null}
-        <Content {...(embedded ? { style: { gap: 14 } } : { style: styles.content, contentContainerStyle: styles.scrollContent, keyboardShouldPersistTaps: 'handled' })}>
-          {!!validationError && <AppText style={composer.fieldError} accessibilityLiveRegion="assertive" testID="route-stop-validation-error">{validationError}</AppText>}
+        <Content {...(embedded ? { style: builder.inlineEditor } : { style: styles.content, contentContainerStyle: styles.scrollContent, keyboardShouldPersistTaps: 'handled' })}>
+          {!!issue && !['stopTitle', 'location', 'photos', 'time', 'duration'].includes(issue.field) && renderIssue(issue.field)}
           <NoyaTourTarget scope="route-stop-editor" targetId={NOYA_CREATOR_TARGETS.routeStop}>
-            <FocusClearingFormInput inputRef={titleInputRef} label="שם העצירה" placeholder="למשל: השוק המרכזי" value={title} onChangeText={setTitle} maxLength={160} rtl testID="route-stop-title-input" />
-            <TouchableOpacity
+            <View collapsable={false} ref={(node) => { fieldRefs.current.stopTitle = node; }}>{renderIssue('stopTitle')}<FocusClearingFormInput inputRef={titleInputRef} label="שם העצירה" placeholder="למשל: השוק המרכזי" value={title} onChangeText={setTitle} maxLength={160} rtl testID="route-stop-title-input" /></View>
+            {!locationCollapsed && <><TouchableOpacity
               style={[styles.planliSourceButton, mode === LOCATION_MODES.planli && styles.planliSourceButtonSelected]}
-              onPress={() => switchLocationMode(LOCATION_MODES.planli)}
+              onPress={openRecommendations}
               accessibilityRole="button"
               accessibilityState={{ selected: mode === LOCATION_MODES.planli }}
               testID="route-stop-mode-planli"
@@ -557,9 +599,16 @@ export default function StopEditorModal({
             <AppText style={styles.locationModeLabel}>או בחירת מיקום</AppText>
             <View style={composer.modeActions}>
               {locationModes.map((entry) => <TouchableOpacity key={entry.id} style={[composer.modeButton, mode === entry.id && composer.modeButtonSelected]} onPress={() => switchLocationMode(entry.id)} accessibilityRole="radio" accessibilityState={{ checked: mode === entry.id }} testID={`route-stop-mode-${entry.id}`}><Ionicons name={entry.icon} size={18} color={colors.primary} /><AppText style={composer.modeButtonText}>{entry.label}</AppText></TouchableOpacity>)}
-            </View>
+            </View></>}
           </NoyaTourTarget>
-          <View style={styles.locationWrap}>
+          <View style={styles.locationWrap} collapsable={false} ref={(node) => { fieldRefs.current.location = node; }}>
+            {renderIssue('location')}
+            {locationCollapsed ? <View style={builder.stopCard} testID={mode === LOCATION_MODES.exact ? 'route-stop-exact-selected' : 'route-stop-location-summary'}>
+              <Ionicons name={mode === LOCATION_MODES.planli ? 'heart-outline' : 'location-outline'} size={22} color={colors.primary} />
+              <View style={builder.flexCopy}><AppText style={builder.stopTitle}>{mode === LOCATION_MODES.planli ? selectedRecommendation?.title || title : location.place?.name || location.location}</AppText><AppText style={builder.stopMeta}>{mode === LOCATION_MODES.planli ? 'מהמלצות PlanLi' : location.destination?.cityName || ''}</AppText></View>
+              <TouchableOpacity accessibilityRole="button" style={builder.textButton} onPress={() => setLocationExpanded(true)} testID={mode === LOCATION_MODES.exact ? 'route-stop-exact-change' : 'route-stop-location-change'}><AppText style={builder.retryText}>שינוי</AppText></TouchableOpacity>
+            </View> : <>
+            {location && <TouchableOpacity accessibilityRole="button" style={builder.textButton} onPress={() => { setLocationExpanded(false); Keyboard.dismiss(); }} testID="route-stop-location-done"><AppText style={builder.retryText}>סיום בחירת מיקום</AppText></TouchableOpacity>}
             {mode === LOCATION_MODES.exact ? <ExactLocationPicker
               value={exactValue}
               onChange={acceptExactLocation}
@@ -569,7 +618,7 @@ export default function StopEditorModal({
               label="חיפוש מקום"
               placeholder="למשל: Café Central, וינה"
               inputTestID="route-stop-location-input"
-              showSelectedCard
+              showSelectedCard={false}
               selectedTestID="route-stop-exact-selected"
               changeTestID="route-stop-exact-change"
               errorTestID="route-stop-location-error"
@@ -598,35 +647,25 @@ export default function StopEditorModal({
               preferredDestination={preferredRouteDestination}
             /> : null}
             {mode === LOCATION_MODES.pin && destination ? <View style={styles.manualMapSpacing}><ManualMapPinPicker destination={destination} value={pin} onChange={setPin} /></View> : null}
-            {mode === LOCATION_MODES.planli ? <View style={composer.destinationResults}>
-              {recommendationsLoading ? <ActivityIndicator /> : null}
-              {recommendationsError ? <View>
-                <AppText style={composer.destinationEmpty}>{recommendationsError}</AppText>
-                <TouchableOpacity
-                  style={styles.retryButton}
-                  onPress={() => { recommendationsRequestedRef.current = false; setRecommendationsError(''); }}
-                  testID="route-stop-recommendations-retry"
-                >
-                  <AppText style={styles.retryButtonText}>ניסיון נוסף</AppText>
-                </TouchableOpacity>
-              </View> : null}
-              {!recommendationsLoading && !recommendationsError && !recommendations.length ? <AppText style={composer.destinationEmpty}>עדיין אין המלצות זמינות לבחירה.</AppText> : null}
-              {recommendations.map((item) => <TouchableOpacity key={item.id} style={[composer.destinationResult, selectedRecommendation?.id === item.id && composer.selectedDestination]} onPress={() => selectRecommendation(item)} testID={`route-stop-recommendation-${item.id}`}><Ionicons name="heart-outline" size={18} /><View style={composer.destinationResultCopy}><AppText style={composer.destinationResultTitle}>{item.title}</AppText><AppText style={composer.destinationResultSubtitle}>{item.destination?.cityName || item.location || ''}</AppText></View></TouchableOpacity>)}
-            </View> : null}
+            {mode === LOCATION_MODES.planli ? <TouchableOpacity accessibilityRole="button" style={builder.secondaryButton} onPress={openRecommendations}><AppText style={builder.secondaryButtonText}>בחירת המלצה אחרת</AppText></TouchableOpacity> : null}
+            </>}
           </View>
-          {embedded && allowImages && maxPhotos > 0 ? <TravelMediaComposer embedded visible={visible} value={photoItems} maxItems={maxPhotos} aspect={[4, 3]} maxLongEdge={ROUTE_IMAGE_LONG_EDGE} compress={TRAVEL_IMAGE_COMPRESSION} onChange={completeMediaSelection} /> : null}
+          <View collapsable={false} ref={(node) => { fieldRefs.current.photos = node; }}>{renderIssue('photos')}{embedded && allowImages && maxPhotos > 0 ? <TravelMediaComposer embedded visible={visible} value={photoItems} maxItems={maxPhotos} aspect={[4, 3]} maxLongEdge={ROUTE_IMAGE_LONG_EDGE} compress={TRAVEL_IMAGE_COMPRESSION} onChange={completeMediaSelection} /> : null}</View>
           {embedded && allowImages && maxPhotos <= 0 ? <AppText style={composer.fieldHint}>כבר נבחרו 40 תמונות למסלול. אפשר להסיר תמונה מעצירה אחרת כדי להוסיף כאן.</AppText> : null}
-          <FocusClearingFormInput label="תיאור" placeholder="למשל: מה כדאי לעשות כאן וכמה זמן להקדיש" value={description} onChangeText={setDescription} maxLength={3000} multiline style={styles.descriptionInput} rtl testID="route-stop-description-input" />
-          {embedded ? <TouchableOpacity style={styles.retryButton} onPress={() => setDetailsOpen((current) => !current)} accessibilityRole="button" accessibilityState={{ expanded: detailsOpen }} testID="route-stop-details-toggle"><AppText style={styles.headerButton}>פרטים נוספים, רק אם רלוונטי</AppText></TouchableOpacity> : null}
+          <FocusClearingFormInput label="תיאור" placeholder="למשל: מה כדאי לעשות כאן וכמה זמן להקדיש" value={description} onChangeText={setDescription} maxLength={3000} multiline scrollEnabled={false} style={styles.descriptionInput} rtl testID="route-stop-description-input" />
+          {embedded ? <TouchableOpacity ref={(node) => { fieldRefs.current.details = node; }} style={builder.detailsToggle} onPress={() => setDetailsOpen((current) => !current)} accessibilityRole="button" accessibilityState={{ expanded: detailsOpen }} testID="route-stop-details-toggle"><AppText style={builder.detailsToggleText}>פרטים נוספים, רק אם רלוונטי</AppText></TouchableOpacity> : null}
           {!embedded || detailsOpen ? <>
-          <FocusClearingFormInput inputRef={timeInputRef} label="שעת התחלה (רשות)" placeholder="למשל: 09:30" value={startTime} onChangeText={setStartTime} keyboardType="numbers-and-punctuation" maxLength={5} rtl testID="route-stop-start-time" />
-          <FocusClearingFormInput inputRef={durationInputRef} label="משך ביקור בדקות (רשות)" placeholder="למשל: 90" value={durationMinutes} onChangeText={(value) => setDurationMinutes(value.replace(/\D/g, ''))} keyboardType="numeric" maxLength={4} rtl testID="route-stop-duration" />
+          <View collapsable={false} ref={(node) => { fieldRefs.current.time = node; }}>{renderIssue('time')}<FocusClearingFormInput inputRef={timeInputRef} label="שעת התחלה (רשות)" placeholder="למשל: 09:30" value={startTime} onChangeText={setStartTime} keyboardType="numbers-and-punctuation" maxLength={5} rtl testID="route-stop-start-time" /></View>
+          <View collapsable={false} ref={(node) => { fieldRefs.current.duration = node; }}>{renderIssue('duration')}<FocusClearingFormInput inputRef={durationInputRef} label="משך ביקור בדקות (רשות)" placeholder="למשל: 90" value={durationMinutes} onChangeText={(value) => setDurationMinutes(value.replace(/\D/g, ''))} keyboardType="numeric" maxLength={4} rtl testID="route-stop-duration" /></View>
+          {embedded && <TouchableOpacity accessibilityRole="button" style={builder.textButton} onPress={() => { Keyboard.dismiss(); setDetailsOpen(false); requestAnimationFrame(() => onRevealField?.(fieldRefs.current.details)); }} testID="route-stop-details-done"><AppText style={builder.retryText}>סיום פרטים נוספים</AppText></TouchableOpacity>}
           </> : null}
           {!embedded && allowImages ? <><AppText style={styles.photoLabel}>תמונות לעצירה (רשות)</AppText><ImagePickerBox imageUris={photoItems.map(travelMediaUri)} onPress={addPhotos} onRemove={removePhoto} maxImages={3} placeholderText="הוספת עד 3 תמונות" previewAspectRatio={4 / 3} style={styles.imagePickerSpacing} loading={mediaBusy} testID="route-stop-photos" /></> : null}
+          {embedded && <TouchableOpacity style={builder.primaryButton} onPress={handleSave} testID="route-stop-done" accessibilityRole="button"><AppText style={builder.primaryButtonText}>סיום עצירה</AppText></TouchableOpacity>}
         </Content>
         {!embedded ? <TravelMediaComposer contained visible={mediaComposerVisible} value={photoItems} maxItems={3} aspect={[4, 3]} maxLongEdge={ROUTE_IMAGE_LONG_EDGE} compress={TRAVEL_IMAGE_COMPRESSION} onCancel={() => setMediaComposerVisible(false)} onChange={completeMediaSelection} /> : null}
         {guideEnabled ? <NoyaTourOverlayHost scope="route-stop-editor" /> : null}
       </View>
+      {localPickerOpen && <RouteRecommendationPicker routeDestination={routeDestination} onSelect={selectRecommendation} onCancel={() => setLocalPickerOpen(false)} />}
     </Container>
   );
 }

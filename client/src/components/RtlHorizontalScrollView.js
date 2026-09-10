@@ -4,7 +4,7 @@ import { Platform, ScrollView } from 'react-native';
 import { rtlHorizontalStyles as styles } from '../styles';
 
 const RtlHorizontalScrollView = forwardRef(function RtlHorizontalScrollView(
-  { contentContainerStyle, onContentSizeChange, ...props },
+  { contentContainerStyle, onContentSizeChange, autoScrollToStart = true, ...props },
   forwardedRef
 ) {
   const scrollRef = useRef(null);
@@ -13,8 +13,8 @@ const RtlHorizontalScrollView = forwardRef(function RtlHorizontalScrollView(
 
   const handleContentSizeChange = useCallback((width, height) => {
     onContentSizeChange?.(width, height);
-    requestAnimationFrame(() => scrollRef.current?.scrollToEnd?.({ animated: false }));
-  }, [onContentSizeChange]);
+    if (autoScrollToStart) requestAnimationFrame(() => scrollRef.current?.scrollToEnd?.({ animated: false }));
+  }, [autoScrollToStart, onContentSizeChange]);
 
   return (
     <ScrollView

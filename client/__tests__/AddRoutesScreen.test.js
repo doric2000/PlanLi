@@ -24,6 +24,7 @@ const mockClearStaleRouteDraftMedia = jest.fn(async () => {});
 const mockRestoreRouteDraftMedia = jest.fn(async () => ({ entries: [], missingCount: 0 }));
 const mockMoveStopMedia = jest.fn(async () => {});
 const mockUuid = jest.fn(() => 'stable-new-stop-id');
+jest.mock('../src/services/PersonalizationService', () => ({ getPersonalizedRecommendations: jest.fn(async () => ({ items: [] })) }));
 
 jest.mock('../src/services/RouteService', () => ({
   getCurrentRouteDraft: (...args) => mockGetCurrentRouteDraft(...args),
@@ -70,6 +71,12 @@ jest.mock('react-native-draggable-flatlist', () => {
   const React = require('react');
   const { ScrollView, View } = require('react-native');
   return {
+    __esModule: true,
+    default: ({ data, keyExtractor, renderItem, testID, onDragEnd }) => (
+      <View testID={testID} onDragEnd={onDragEnd}>{data.map((item, index) => (
+        <React.Fragment key={keyExtractor(item, index)}>{renderItem({ item, getIndex: () => index, drag: () => {}, isActive: false })}</React.Fragment>
+      ))}</View>
+    ),
     NestableScrollContainer: React.forwardRef(({ children, ...props }, ref) => (
       <ScrollView {...props} ref={ref}>{children}</ScrollView>
     )),
@@ -99,13 +106,14 @@ jest.mock('../src/features/community/components/SingleDestinationPicker', () => 
 });
 jest.mock('../src/features/roadtrip/components/StopEditorModal', () => {
   const { Pressable, Text, TextInput, View } = require('react-native');
-  return ({ visible, initialData, dayIndex, stopIndex, onSave, onClose, onDraftChange }) => visible ? (
+  return ({ visible, initialData, dayIndex, stopIndex, onSave, onClose, onDraftChange, onRequestRecommendations }) => visible ? (
     <View
       testID="direct-stop-editor"
       accessibilityLabel={`stop-${dayIndex}-${stopIndex}-${initialData?.id || 'null'}`}
     >
       <Text>{initialData?.title || 'missing stop'}</Text>
       <TextInput testID="inline-stop-name" value={initialData?.title || ''} onChangeText={(title) => onDraftChange?.({ ...initialData, title })} />
+      <Pressable testID="inline-stop-recommendations" onPress={() => onRequestRecommendations?.((item) => onDraftChange?.({ ...initialData, title: item.title }))}><Text>בחירת המלצה</Text></Pressable>
       <Pressable testID="direct-stop-save" onPress={() => {
         onSave?.({ ...initialData, title: 'עצירה מעודכנת', locationPrecision: 'general',
           destination: { countryId: 'HU', cityId: 'budapest' }, editorState: undefined }, stopIndex);
@@ -145,6 +153,43 @@ const currentDraft = (overrides = {}) => ({
 });
 
 describe('streamlined route builder', () => {
+  it('preserves the open draft while sorting, retains order and handles back inside the workspace', async () => {
+    mockGetCurrentRouteDraft.mockResolvedValue(currentDraft());
+    const nav = navigation();
+    const screen = render(<AddRoutesScreen navigation={nav} route={{ params: {} }} />);
+    fireEvent.press(await screen.findByTestId('route-draft-continue'));
+    fireEvent.press(await screen.findByTestId('route-stop-edit-a'));
+    fireEvent.changeText(screen.getByTestId('inline-stop-name'), 'טיוטה שלא הסתיימה');
+    fireEvent.press(screen.getByTestId('route-sort-stops'));
+    expect(screen.queryByTestId('route-submit')).toBeNull();
+    expect(screen.queryByTestId('inline-stop-name')).toBeNull();
+    fireEvent.press(screen.getByTestId('route-sort-up-b'));
+    await act(async () => mockUseBackButton.mock.calls.at(-1)[1].onPress());
+    expect(nav.goBack).not.toHaveBeenCalled();
+    expect(screen.getByTestId('inline-stop-name').props.value).toBe('טיוטה שלא הסתיימה');
+    expect(screen.getAllByTestId(/^route-stop-edit-/).map((item) => item.props.testID)).toEqual(['route-stop-edit-b', 'route-stop-edit-a']);
+    fireEvent.press(screen.getByTestId('inline-stop-recommendations'));
+    expect(screen.getByTestId('route-recommendation-picker')).toBeTruthy();
+    expect(screen.queryByTestId('route-submit')).toBeNull();
+    fireEvent.press(screen.getByTestId('route-recommendations-cancel'));
+    expect(screen.getByTestId('inline-stop-name').props.value).toBe('טיוטה שלא הסתיימה');
+  });
+
+  it('collapses completed route and day details while retaining their values', async () => {
+    mockGetCurrentRouteDraft.mockResolvedValue(currentDraft());
+    const screen = render(<AddRoutesScreen navigation={navigation()} route={{ params: {} }} />);
+    fireEvent.press(await screen.findByTestId('route-draft-continue'));
+    fireEvent.press(await screen.findByTestId('route-details-done'));
+    expect(screen.queryByTestId('route-title-input')).toBeNull();
+    fireEvent.press(screen.getByTestId('route-details-toggle'));
+    expect(screen.getByTestId('route-title-input').props.value).toBe('יום בבודפשט');
+    fireEvent.press(screen.getByTestId('route-day-details-toggle'));
+    fireEvent.changeText(screen.getByTestId('route-day-title-input'), 'יום של אגמים');
+    fireEvent.press(screen.getByTestId('route-day-details-done'));
+    expect(screen.queryByTestId('route-day-title-input')).toBeNull();
+    expect(screen.getByText('יום 1 · יום של אגמים')).toBeTruthy();
+  });
+
   it('moves legacy stops with duplicate per-day IDs and preserves their trusted source identity', async () => {
     mockGetCurrentRouteDraft.mockResolvedValue(currentDraft({ dayCount: 2, days: [
       { id: 'first', stops: [currentDraft().days[0].stops[0]] },
@@ -319,15 +364,19 @@ describe('streamlined route builder', () => {
     }])).toBe(4);
   });
 
-  it('shows drag handles and can start a new stop between existing stops', async () => {
+  it('restricts drag handles to sorting and can insert a stop between existing stops', async () => {
     mockGetCurrentRouteDraft.mockResolvedValue(currentDraft());
     const screen = render(<AddRoutesScreen navigation={navigation()} route={{ params: {} }} />);
     await waitFor(() => expect(screen.getByTestId('route-draft-continue')).toBeTruthy());
     fireEvent.press(screen.getByTestId('route-draft-continue'));
     await waitFor(() => expect(screen.getByTestId('route-map-peek')).toBeTruthy());
     expect(screen.queryByText('NaN')).toBeNull();
+    expect(screen.queryByTestId('route-stop-drag-handle-a')).toBeNull();
+    fireEvent.press(screen.getByTestId('route-sort-stops'));
     expect(screen.getByTestId('route-stop-drag-handle-a')).toBeTruthy();
     expect(screen.getByTestId('route-stop-drag-handle-b')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('route-sort-done'));
+    fireEvent.press(screen.getByTestId('route-stop-edit-b'));
     fireEvent.press(screen.getByTestId('route-insert-stop-before-b'));
     expect(screen.getByLabelText('stop-0-1-stable-new-stop-id')).toBeTruthy();
     fireEvent.press(screen.getByTestId('direct-stop-save'));

@@ -119,8 +119,17 @@ function requestDiscovery(name, payload = {}, retryIdentityChange = true) {
 export const requestPersonalizedRecommendations = (payload = {}) =>
   requestDiscovery(DISCOVERY_CALLABLES.recommendations, payload);
 
-export const getPersonalizedRecommendations = (payload = {}) =>
-  requestPersonalizedRecommendations(payload).promise;
+export const getPersonalizedRecommendations = (payload = {}, { retryFailed = false } = {}) => {
+  const request = requestPersonalizedRecommendations(payload);
+  if (retryFailed && request.source === 'backoff') {
+    // An explicit retry clears only this failed search, preserving fresh data and in-flight deduplication.
+    request.promise.catch(() => {});
+    const failedKey = discoveryCacheKey(DISCOVERY_CALLABLES.recommendations, payload);
+    discoveryCoordinator.invalidate((key) => key === failedKey);
+    return requestPersonalizedRecommendations(payload).promise;
+  }
+  return request.promise;
+};
 
 export const requestPersonalizedRoutes = (payload = {}) =>
   requestDiscovery(DISCOVERY_CALLABLES.routes, payload);
