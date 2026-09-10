@@ -18,21 +18,23 @@ export function HomeRegionHero({ regionId, mode, onChangeRegion, onExplore }) {
   const action = global ? 'גלו המלצות מכל העולם' : scope ? `גלו המלצות ב${scope}` : 'בחרו לאן ממשיכים';
   return (
     <View style={styles.hero} testID="home-region-hero">
-      <CachedImage source={atlasPhotos[regionId] || atlasPhotos.europe} style={styles.heroImage} contentFit="cover" priority="high" />
+      <CachedImage source={atlasPhotos[regionId] || atlasPhotos.europe} style={styles.heroImage} contentFit="cover" priority="high" testID="home-region-photo" />
       <LinearGradient pointerEvents="none" colors={['rgba(10,26,43,0.3)', 'rgba(10,26,43,0.12)', 'rgba(10,26,43,0.86)']} style={styles.heroImage} />
-      <View style={styles.heroTop}>
-        <AppText style={styles.scope}>{global ? 'מגלים בלי גבולות · כל העולם' : scope ? `האזור שלך · ${scope}` : 'עולם שלם של אפשרויות'}</AppText>
-        <Pressable onPress={onChangeRegion} accessibilityRole="button" accessibilityLabel="החלפת אזור" style={styles.changeRegion} testID="home-region-preview-change">
-          <AppText style={styles.changeText}>החלפת אזור</AppText>
-        </Pressable>
-      </View>
-      <View style={styles.heroCopy}>
-        <AppText style={styles.heroTitle}>{title}</AppText>
-        <AppText style={styles.heroSubtitle}>מקומות חדשים. רעיונות ששווה לשמור.</AppText>
-        <Pressable onPress={scope ? onExplore : onChangeRegion} accessibilityRole="button" accessibilityLabel={action} style={styles.heroButton} testID="home-region-explore">
-          <AppText style={styles.heroButtonText}>{action}</AppText>
-          <Ionicons name="arrow-back-outline" size={18} color={colors.primary} />
-        </Pressable>
+      <View style={styles.heroContent} testID="home-region-content">
+        <View style={styles.heroTop}>
+          <AppText style={styles.scope}>{global ? 'מגלים בלי גבולות · כל העולם' : scope ? `האזור שלך · ${scope}` : 'עולם שלם של אפשרויות'}</AppText>
+          <Pressable onPress={onChangeRegion} accessibilityRole="button" accessibilityLabel="החלפת אזור" style={styles.changeRegion} testID="home-region-preview-change">
+            <AppText style={styles.changeText}>החלפת אזור</AppText>
+          </Pressable>
+        </View>
+        <View style={styles.heroCopy}>
+          <AppText style={styles.heroTitle}>{title}</AppText>
+          <AppText style={styles.heroSubtitle}>מקומות חדשים. רעיונות ששווה לשמור.</AppText>
+          <Pressable onPress={scope ? onExplore : onChangeRegion} accessibilityRole="button" accessibilityLabel={action} style={styles.heroButton} testID="home-region-explore">
+            <AppText style={styles.heroButtonText}>{action}</AppText>
+            <Ionicons name="arrow-back-outline" size={18} color={colors.primary} />
+          </Pressable>
+        </View>
       </View>
     </View>
   );

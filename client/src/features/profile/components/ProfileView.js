@@ -87,7 +87,7 @@ export default function ProfileView({
     : `התוכן של ${userData?.displayName || 'המטייל/ת'}`;
 
   return (
-    <SafeAreaView style={styles.screen}>
+    <SafeAreaView style={styles.screen} edges={['top', 'left', 'right']}>
       <View style={styles.toolbar} testID="profile-refresh-toolbar">
         {typeof (isOwner ? onMenuPress : onBackPress) === 'function' ? (
           <Pressable style={styles.toolbarAction} onPress={isOwner ? onMenuPress : onBackPress} accessibilityRole="button" accessibilityLabel={isOwner ? 'פתיחת תפריט פרופיל' : 'חזרה'}>
