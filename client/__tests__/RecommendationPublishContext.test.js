@@ -1,3 +1,6 @@
+jest.mock('../src/features/operations/BackgroundMediaService', () => ({
+  backgroundTransfersAvailable: () => false, removeBackgroundSources: async () => {}, discardBackgroundJob: async () => {},
+}));
 import React from 'react';
 import { act, render, waitFor } from '@testing-library/react-native';
 
@@ -19,6 +22,7 @@ jest.mock('expo-crypto', () => ({
 }));
 
 const mockUser = { uid: 'owner-1' };
+let mockCurrentUser;
 const mockUploadImageAsset = jest.fn();
 const mockSaveRecommendation = jest.fn();
 const mockGetCurrentRecommendationDraft = jest.fn();
@@ -40,7 +44,7 @@ const mockDeletePreparedTravelMedia = jest.fn();
 jest.mock('../src/hooks/useAuthUser', () => ({
   useAuthUser: () => ({ user: mockUser, loading: false }),
 }));
-jest.mock('../src/config/firebase', () => ({ auth: { currentUser: mockUser } }));
+jest.mock('../src/config/firebase', () => ({ auth: { get currentUser() { return mockCurrentUser; } } }));
 jest.mock('../src/hooks/useImagePickerWithUpload', () => ({
   useImagePickerWithUpload: () => ({ uploadImageAsset: mockUploadImageAsset }),
 }));
@@ -84,6 +88,7 @@ function Harness() {
 describe('RecommendationPublishProvider', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockCurrentUser = mockUser;
     api = null;
     mockLoadJobs.mockResolvedValue([]);
     mockSaveJobs.mockResolvedValue(undefined);
@@ -153,6 +158,19 @@ describe('RecommendationPublishProvider', () => {
       expect.anything(),
       expect.objectContaining({ code: 'publication_status_missing' })
     );
+    screen.unmount();
+  });
+
+  it('does not publish for another account when sign-in changes after media preparation', async () => {
+    mockUploadImageAsset.mockImplementation(async () => {
+      mockCurrentUser = { uid: 'other-owner' };
+      return { assetId: '123e4567-e89b-42d3-a456-426614174000', feed: { url: 'https://cdn/feed.webp' } };
+    });
+    const screen = render(<RecommendationPublishProvider><Harness /></RecommendationPublishProvider>);
+    await act(async () => { await api.enqueueCreate({ payload: { recommendation: { title: 'Photo', media: [] } },
+      media: [{ uri: 'file:///photo.jpg' }], draft: {} }); });
+    await waitFor(() => expect(api.activeJob?.status).toBe('failed'));
+    expect(mockSaveRecommendation).not.toHaveBeenCalled();
     screen.unmount();
   });
 

@@ -22,7 +22,7 @@ function verifyRuntimeInputs(expected, flows, env, root = ROOT) {
 function binarySignature({ root = ROOT, directory = DIRECTORY, env = require('./run').env } = {}) {
   const hash = crypto.createHash('sha256');
   for (const file of inputFiles(root, 'client').filter((name) =>
-    /^client\/(?:app\.|package|plugins\/|patches\/|assets\/)/.test(name))) {
+    /^client\/(?:app\.|package|plugins\/|modules\/|patches\/|assets\/)/.test(name))) {
     hash.update(file);
     if (file === 'client/package.json') {
       const manifest = JSON.parse(fs.readFileSync(path.join(root, file)));
@@ -33,7 +33,7 @@ function binarySignature({ root = ROOT, directory = DIRECTORY, env = require('./
   hash.update(JSON.stringify({ javaHome: env.JAVA_HOME, project: env.GCLOUD_PROJECT, maps: [env.GOOGLE_MAPS_ANDROID_KEY, env.GOOGLE_MAPS_IOS_KEY] }));
   hash.update(fs.readFileSync(path.join(env.JAVA_HOME, 'release')));
   hash.update(fs.readFileSync(path.join(directory, 'google-services.json')));
-  hash.update('android-debug-api36-x86_64-v2');
+  hash.update('android-debug-api36-x86_64-v3');
   return hash.digest('hex');
 }
 async function nativeSmoke({ args, env, start, run, waitFor, LOGS, inputSignature }) {
@@ -60,7 +60,20 @@ async function nativeSmoke({ args, env, start, run, waitFor, LOGS, inputSignatur
       fs.writeFileSync(packagePath, `${JSON.stringify(manifest, null, 2)}\n`);
     }
     fs.writeFileSync(path.join(client, 'android/local.properties'), `sdk.dir=${env.ANDROID_HOME.replace(/\\/g, '/')}`);
-    await run('android-build', 'cmd.exe', ['/d', '/s', '/c', 'gradlew.bat app:assembleDebug -PreactNativeArchitectures=x86_64 --no-daemon --console=plain --max-workers=2 --no-parallel'], path.join(client, 'android'));
+    // Gradle's worker cap does not constrain Ninja. Keep C++ compilation within
+    // this validation host's memory budget without changing production builds.
+    const initScript = path.join(DIRECTORY, 'limit-native-compilers.gradle');
+    fs.writeFileSync(initScript, `allprojects { project ->
+  ['com.android.application', 'com.android.library'].each { pluginId ->
+    project.plugins.withId(pluginId) {
+      project.android.defaultConfig.externalNativeBuild.cmake.arguments.addAll([
+        '-DCMAKE_JOB_POOLS=planli_compile=2', '-DCMAKE_JOB_POOL_COMPILE=planli_compile', '-DCMAKE_JOB_POOL_LINK=planli_compile'
+      ])
+    }
+  }
+}
+`);
+    await run('android-build', 'cmd.exe', ['/d', '/s', '/c', 'gradlew.bat app:assembleDebug --init-script ../../.codex_tmp/android/limit-native-compilers.gradle -PreactNativeArchitectures=x86_64 --no-daemon --console=plain --max-workers=2 --no-parallel'], path.join(client, 'android'));
     if (binarySignature() !== digest) throw new Error('Native inputs changed during compilation; run the incremental build again.');
     fs.writeFileSync(receipt, JSON.stringify({ signature: digest, completedAt: new Date().toISOString() }));
   } else console.log('REUSE Android development binary (native inputs unchanged)');

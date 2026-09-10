@@ -2,7 +2,7 @@
  * UI flow: Settings -> Change Name.
  * - Tap "שינוי שם" in settings.
  * - Type new name and submit.
- * - Show success alert, tap OK, and navigate back.
+ * - Navigate back after saving; the shared operation feedback owns success.
  */
 import React from 'react';
 import { render as renderNative, fireEvent, waitFor } from '@testing-library/react-native';
@@ -93,7 +93,7 @@ describe('ChangeNameFlow', () => {
     mockedAuth.currentUser.emailVerified = true;
   });
 
-  it('updates the name and navigates back after confirming success', async () => {
+  it('updates the name and navigates back without a duplicate success dialog', async () => {
     const settingsNav = { navigate: jest.fn(), goBack: jest.fn() };
     const changeNameNav = {
       goBack: jest.fn(),
@@ -101,15 +101,7 @@ describe('ChangeNameFlow', () => {
       dispatch: jest.fn(),
     };
 
-    const alertSpy = jest
-      .spyOn(Alert, 'alert')
-      .mockImplementation((title, message, buttons) => {
-        // Simulate tapping the first button (OK) in the alert.
-        if (Array.isArray(buttons)) {
-          buttons[0]?.onPress?.();
-        }
-        return undefined;
-      });
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
 
     const { getByTestId: getSettingsByTestId, unmount } = render(
       <SettingsScreen navigation={settingsNav} />
@@ -140,15 +132,9 @@ describe('ChangeNameFlow', () => {
     await waitFor(() => {
       expect(saveProfile).toHaveBeenCalledWith({ displayName: 'test' });
       expect(mockedAuth.currentUser.reload).toHaveBeenCalled();
-      expect(Alert.alert).toHaveBeenCalledWith(
-        'הצלחה',
-        'השם עודכן בהצלחה',
-        expect.arrayContaining([
-          expect.objectContaining({ text: 'אישור' }),
-        ])
-      );
       expect(changeNameNav.goBack).toHaveBeenCalled();
     });
+    expect(Alert.alert).not.toHaveBeenCalled();
 
     alertSpy.mockRestore?.();
   });

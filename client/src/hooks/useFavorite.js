@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert } from 'react-native';
 import * as Crypto from 'expo-crypto';
 import { doc, onSnapshot } from 'firebase/firestore';
@@ -60,6 +60,9 @@ export function useFavorite(type, id, snapshotData = {}) {
     [type, id, snapshotData?.countryId]
   );
   const [favoriteKey, setFavoriteKey] = useState(null);
+  const pending = useRef(false);
+  const operationOwner = useRef(user?.uid);
+  operationOwner.current = user?.uid;
   const [isFavorite, setIsFavorite] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -89,27 +92,33 @@ export function useFavorite(type, id, snapshotData = {}) {
   }, [user, favoriteKey]);
 
   const toggleFavorite = useCallback(async () => {
+    if (pending.current) return;
     if (!await ensureCapability(CAPABILITIES.ACTIVE)) return;
+    if (pending.current) return;
     if (!target || !favoriteKey) {
       Alert.alert('שגיאה', 'לא ניתן לזהות את הפריט שנבחר.');
       return;
     }
 
     const nextSaved = !isFavorite;
+    const ownerUid = user?.uid;
+    pending.current = true;
     setLoading(true);
     setIsFavorite(nextSaved);
     try {
       await setFavorite(target, nextSaved);
     } catch (error) {
+      if (operationOwner.current !== ownerUid) return;
       setIsFavorite(!nextSaved);
       console.error('Error toggling favorite:', error);
       if (handleCallableAuthError(error)) return;
       const alert = getFavoriteErrorAlert(error, nextSaved ? 'add' : 'remove');
       Alert.alert(alert.title, alert.message);
     } finally {
+      pending.current = false;
       setLoading(false);
     }
-  }, [ensureCapability, favoriteKey, handleCallableAuthError, isFavorite, target]);
+  }, [ensureCapability, favoriteKey, handleCallableAuthError, isFavorite, target, user?.uid]);
 
   return { isFavorite, toggleFavorite, loading };
 }

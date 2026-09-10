@@ -11,6 +11,8 @@ import {
   resetGuestPersonalization,
 } from '../features/profile/services/GuestPersonalizationStorage';
 
+import { trackOperation } from '../features/operations/operationService';
+
 const callables = new Map();
 const recentViewAttempts = new Map();
 const discoveryVersions = new Map();
@@ -64,8 +66,9 @@ const call = async (name, payload = {}) => {
     return callPublicCallable(name, payload);
   }
   if (!callables.has(name)) callables.set(name, httpsCallable(cloudFunctions, name));
-  const response = await callables.get(name)(payload);
-  return response?.data || null;
+  const execute = async () => (await callables.get(name)(payload))?.data || null;
+  return ['setPersonalizationBehavior', 'resetPersonalizationActivity'].includes(name)
+    ? trackOperation({ kind: 'personalization', recoveryRoute: 'Settings' }, execute) : execute();
 };
 
 function createPrincipalChangedError() {

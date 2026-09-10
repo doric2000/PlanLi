@@ -30,7 +30,6 @@ import { useUnsavedLeaveGuard } from '../../../hooks/useUnsavedLeaveGuard';
 import { useImagePickerWithUpload } from '../../../hooks/useImagePickerWithUpload';
 import useExactPlaceSelection from '../../../hooks/useExactPlaceSelection';
 import useDurableDraftMedia from '../../../hooks/useDurableDraftMedia';
-import { saveRecommendation } from '../../../services/RecommendationService';
 import { addDiagnosticBreadcrumb } from '../../../services/ErrorReporting';
 import { useRecommendationPublish } from '../publishing/RecommendationPublishContext';
 
@@ -40,15 +39,10 @@ import { getBudgetTheme } from '../../../utils/getBudgetTheme';
 import { travelMediaErrorMessage } from '../../../utils/travelMediaErrors';
 import {
   createTravelMediaDescriptor,
-  pairTravelMediaUploads,
   removedTravelMediaItems,
   travelMediaUri,
   travelMediaIdentity,
 } from '../../../utils/travelMedia';
-import {
-  deletePreparedTravelMedia,
-  prepareTravelMediaBatch,
-} from '../../../utils/travelMediaPreparation';
 import {
   getMediaVariantUrl,
 } from '../../../utils/mediaAssets';
@@ -261,7 +255,7 @@ export default function AddRecommendationScreen(props) {
   const isEdit = props?.route?.params?.mode === 'edit';
   const editItem = props?.route?.params?.item ?? props?.route?.params?.recommendation ?? null;
   const usesRecommendationCatalog = Number(editItem?.recommendationCatalogVersion || 0) > 0;
-  return isEdit && !usesRecommendationCatalog
+  return props?.route?.params?.legacyPublishJob || (isEdit && !usesRecommendationCatalog)
     ? <LegacyAddRecommendationScreen {...props} />
     : <CreateRecommendationScreen {...props} />;
 }
@@ -803,7 +797,7 @@ const handleSubmit = async () => {
       const current = currentItems.map(travelMediaUri);
       const isRemote = (uri) => typeof uri === 'string' && /^https?:\/\//i.test(uri);
 
-      if (!isEdit) {
+      {
         if (typeof enqueueCreate !== 'function') {
           throw new Error('Recommendation publishing is not available.');
         }
@@ -831,6 +825,7 @@ const handleSubmit = async () => {
           draftJobId: publishJobId ? null : draftJobId,
           sourceJobId: publishJobId,
           payload: {
+            ...(isEdit ? { recommendationId: editingPostKey } : {}),
             ...destinationPayload,
             locationMode: 'exact',
             recommendation: {
@@ -886,117 +881,6 @@ const handleSubmit = async () => {
         navigation.goBack();
         return;
       }
-
-      const localItems = currentItems.filter((item) => !item.asset && !isRemote(travelMediaUri(item)));
-      const cachedAssets = uploadedAssetsByIdentityRef.current;
-      const itemsToUpload = localItems.filter((item) => !cachedAssets.has(travelMediaIdentity(item)));
-      const preparedLocal = await prepareTravelMediaBatch(itemsToUpload, { concurrency: 2 });
-      let uploadedLocal;
-      try {
-        uploadedLocal = preparedLocal.length
-          ? await uploadImageAssets(preparedLocal.map((entry) => entry.uri))
-          : [];
-      } finally {
-        await Promise.allSettled(preparedLocal.map(deletePreparedTravelMedia));
-      }
-      pairTravelMediaUploads(itemsToUpload, uploadedLocal)
-        .forEach((asset, identity) => cachedAssets.set(identity, asset));
-      const finalMedia = currentItems.map((item) => {
-        if (!item.asset && !isRemote(travelMediaUri(item))) {
-          return cachedAssets.get(travelMediaIdentity(item)) || null;
-        }
-        return item.asset || existingMediaByIdentity.get(travelMediaIdentity(item)) || null;
-      }).filter(Boolean);
-      if (finalMedia.length !== currentItems.length) {
-        const error = new Error('One or more selected images could not be matched after upload.');
-        error.code = 'media/order-mapping-incomplete';
-        error.details = {
-          publishStage: 'saving',
-          reason: 'media_order_mapping_incomplete',
-          selectedCount: currentItems.length,
-          resolvedCount: finalMedia.length,
-        };
-        throw error;
-      }
-      if (typeof addDiagnosticBreadcrumb === 'function') {
-        addDiagnosticBreadcrumb({
-          category: 'media',
-          message: 'Recommendation edit media order verified',
-          data: {
-            operation: 'recommendation_edit_media_order',
-            stage: 'saving',
-            imageCount: finalMedia.length,
-            mediaIdentities: currentItems.map(travelMediaIdentity),
-          },
-        });
-      }
-      const exactDestination = exactDestinationRef(selectedCountry, selectedCity);
-      const destinationPayload = selectedPlace?.resolvedPlaceToken
-        ? {
-            resolvedPlaceToken: selectedPlace.resolvedPlaceToken,
-            ...(selectedPlace.placeId ? { placeId: selectedPlace.placeId } : {}),
-            ...(selectedPlace.incidentId ? { incidentId: selectedPlace.incidentId } : {}),
-            ...(exactDestination ? { destinationRef: exactDestination } : {}),
-          }
-        : isEdit && selectedCountry?.id && selectedCity?.id
-        ? {
-            destinationRef: {
-              countryId: selectedCountry.id,
-              cityId: selectedCity.id,
-            },
-          }
-        : selectedPlace?.placeId
-        ? {
-            placeId: selectedPlace.placeId,
-            ...(exactDestination ? { destinationRef: exactDestination } : {}),
-          }
-        : {
-            destinationRef: {
-              countryId: selectedCountry.id,
-              cityId: selectedCity.id,
-            },
-          };
-      const callablePayload = {
-        recommendationId: editPostId,
-        ...destinationPayload,
-        locationMode: 'exact',
-        recommendation: {
-          taxonomyVersion: TRAVEL_TAXONOMY_VERSION,
-          title,
-          description,
-          category: getCategoryLabel(category),
-          categoryId: category,
-          tags: selectedTags,
-          budget,
-          media: finalMedia,
-          attributes: {
-            audienceScope,
-            audiences,
-            vibes: recommendationVibes,
-            environment: recommendationEnvironment,
-            needs: recommendationNeeds,
-            needsConfirmed,
-          },
-        },
-      };
-
-      await saveRecommendation(callablePayload);
-      uploadedAssetsByIdentityRef.current.clear();
-      Alert.alert("איזה כיף!", "ההמלצה עודכנה בהצלחה!");
-      if (
-        typeof URL !== 'undefined' &&
-        typeof URL.revokeObjectURL === 'function'
-      ) {
-        Array.from(
-          new Set(
-            editableImageUris.filter(
-              (uri) => typeof uri === 'string' && uri.startsWith('blob:')
-            )
-          )
-        ).forEach((uri) => URL.revokeObjectURL(uri));
-      }
-      allowLeaveRef.current = true;
-      navigation.goBack();
 
     } catch (error) {
       console.error("Error saving document: ", error);

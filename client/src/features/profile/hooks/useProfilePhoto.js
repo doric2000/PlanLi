@@ -1,79 +1,28 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 import { Alert } from 'react-native';
-import { auth } from '../../../config/firebase';
-import { useImagePickerWithUpload } from '../../../hooks/useImagePickerWithUpload';
-import { primeUserDataCache } from '../../../hooks/useUserData';
-import { saveProfile } from '../../../services/ProfileService';
+import { useImagePicker } from '../../../hooks/useImagePicker';
+import { useProfilePhotoJobs } from '../../operations/ProfilePhotoContext';
+import { TERMINAL_STATES } from '../../operations/operationModel';
 
-const IMAGE_PICKER_CONFIG = {
-  kind: 'avatar',
-  aspect: [1, 1],
-  quality: 1,
-  normalizeToAspect: true,
-  normalizeAspect: [1, 1],
-  normalizeWidth: 2560,
-  normalizeHeight: 2560,
-  normalizeCompress: 0.94,
-};
-
-export function useProfilePhoto({ uid, user, userData, updateLocalUserData, onSaved }) {
-  const {
-    pickImage,
-    uploadImageAsset,
-    uploading,
-  } = useImagePickerWithUpload(IMAGE_PICKER_CONFIG);
-
-  const handleProfilePictureUpload = useCallback(
-    async (uri) => {
-      if (!uri || !auth.currentUser || !uid) return;
-
-      let uploadedAsset = null;
-      try {
-        uploadedAsset = await uploadImageAsset(uri);
-        const downloadURL = uploadedAsset?.feed?.url;
-        if (!downloadURL) return;
-
-        await saveProfile({ photoMedia: uploadedAsset });
-        await auth.currentUser.reload();
-
-        if (typeof updateLocalUserData === 'function') {
-          updateLocalUserData({
-            photoURL: downloadURL,
-            photoMedia: uploadedAsset,
-          });
-        }
-        primeUserDataCache(uid, {
-          displayName: userData?.displayName || user?.displayName || 'Traveler',
-          photoURL: downloadURL,
-          photoMedia: uploadedAsset,
-        });
-        onSaved?.();
-
-        Alert.alert('Success', 'Profile picture updated!');
-      } catch (error) {
-        // Unclaimed prepared media is removed by the scheduled server cleanup.
-        console.error('Upload failed', error);
-        Alert.alert('Error', 'Failed to upload profile picture.');
-      }
-    },
-    [
-      uid,
-      userData?.displayName,
-      user,
-      uploadImageAsset,
-      updateLocalUserData,
-      onSaved,
-    ]
-  );
-
+export function useProfilePhoto({ uid, updateLocalUserData }) {
+  const { jobs, enqueue, lastSaved } = useProfilePhotoJobs();
+  const { pickImage } = useImagePicker({ aspect: [1, 1], quality: 1, processOnSelect: false });
+  const uploading = jobs.some((job) => job.ownerUid === uid && !TERMINAL_STATES.has(job.status));
+  useEffect(() => {
+    if (lastSaved?.ownerUid === uid) updateLocalUserData?.({ photoURL: lastSaved.asset.feed.url, photoMedia: lastSaved.asset });
+  }, [lastSaved, uid, updateLocalUserData]);
   const onPickImage = useCallback(() => {
-    pickImage(handleProfilePictureUpload);
-  }, [pickImage, handleProfilePictureUpload]);
-
-  return {
-    onPickImage,
-    uploading,
-  };
+    if (uploading) return;
+    pickImage(async (uri) => {
+      if (!uri) return;
+      try {
+        if (!enqueue) throw new Error('Photo queue unavailable');
+        await enqueue(uri);
+      } catch {
+        Alert.alert('לא הצלחנו להתחיל את ההעלאה', 'בדקו שיש מקום פנוי במכשיר ונסו לבחור את התמונה שוב.');
+      }
+    });
+  }, [enqueue, pickImage, uploading]);
+  return { onPickImage, uploading };
 }
-
 export default useProfilePhoto;

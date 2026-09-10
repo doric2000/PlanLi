@@ -179,22 +179,22 @@ export const useImageUploader = (options = {}) => {
       setUploadProgress(0);
     }
 
+    const ownerUid = config.strategy.getUserId?.() || 'anonymous';
     let blob = null;
     let path = null;
     const shouldRollbackGeneratedPath = !details.path;
     try {
       // Convert URI to blob
       blob = await uriToBlob(uri);
-      setUploadProgress(30);
-      details.onProgress?.(0.3);
 
       // Generate path using strategy
       const userId = config.strategy.getUserId?.() || 'anonymous';
+      if (userId !== ownerUid || (details.expectedOwnerUid && details.expectedOwnerUid !== userId)) {
+        throw Object.assign(new Error('Account changed during image preparation'), { code: 'auth/unauthenticated' });
+      }
       path =
         details.path ||
         config.strategy.generatePath(config.storagePath, userId);
-      setUploadProgress(50);
-      details.onProgress?.(0.5);
 
       // Upload using strategy
       const downloadUrl = await config.strategy.upload(blob, path, {
@@ -207,8 +207,8 @@ export const useImageUploader = (options = {}) => {
           ...(details.height ? { height: String(details.height) } : {}),
         },
       }, (ratio) => {
-        setUploadProgress(50 + Math.round(ratio * 45));
-        details.onProgress?.(0.5 + ratio * 0.45);
+        setUploadProgress(Math.round(ratio * 100));
+        details.onProgress?.(ratio);
       }, {
         resolveDownloadUrl: details.resolveDownloadUrl !== false,
         stallTimeoutMs: details.stallTimeoutMs,

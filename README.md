@@ -25,6 +25,29 @@ the existing Text Search quota remains zero. See
 
 ## Current environment status
 
+### Operation feedback implementation — unreleased (2026-09-10)
+
+The implementation on `feat/operation-feedback`, based on `161270d`, adds
+shared progress/outcome feedback, private Activity history, a root-owned avatar
+queue, and optional native transfers with server-owned completion. See
+[operation feedback and release requirements](docs/operation-feedback.md).
+Focused client/recovery tests and a browser fixture passed. Automated CLI review
+was unavailable because CLI 0.151.0 does not support its configured model; the
+diff was reviewed manually.
+
+The local Android candidate is `com.planli.planlitravels.e2e`, version `1.1.0 (1)`,
+runtime `1.3.0`, using `demo-planli-e2e` and disabled OTA. Its debug APK built at
+`2026-09-10T15:03:03.307Z`; the native receipt matches the current inputs.
+The Firebase emulators confirmed autonomous avatar processing/save and recommendation
+publication. The APK was installed on the local Android emulator and its JavaScript
+bundle compiled. At `2026-09-10T15:24Z`, the device flow failed in the existing Expo
+developer-menu Close step, before reaching app assertions; System UI had also
+reported an ANR under host memory pressure. The publication-to-Activity device flow
+remains unverified. No physical iPhone native test, EAS build, submission, OTA,
+backend/index deployment, IAM change or
+production-data write has occurred. The distributed release records below remain
+unchanged; this feature is not live.
+
 ### Consistent profile-menu transitions iPhone OTA (2026-09-10)
 
 PR [#369](https://github.com/doric2000/PlanLi/pull/369) merged as

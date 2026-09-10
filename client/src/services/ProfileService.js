@@ -1,6 +1,7 @@
 import { doc, getDocFromServer } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { auth, cloudFunctions, db } from '../config/firebase';
+import { trackOperation } from '../features/operations/operationService';
 import {
   hasCompletedAccountSetup,
   hasCompletedPreferences,
@@ -123,8 +124,11 @@ async function readBackSmartProfile(requested, { complete }) {
 
 export const saveProfile = async (
   fields,
-  { completeSmartProfile = false, verifySmartProfile = true } = {}
-) => runProfileOperation('update_profile', async () => {
+  { completeSmartProfile = false, verifySmartProfile = true, feedback = true } = {}
+) => trackOperation({ kind: fields?.smartProfile ? 'preferences' : 'profile',
+  recoveryRoute: fields?.displayName ? 'ChangeName' : fields?.smartProfile ? 'EditProfile' : null,
+  feedback: feedback && !fields?.noyaOnboarding,
+}, () => runProfileOperation('update_profile', async () => {
   updateProfileCallable ||= httpsCallable(cloudFunctions, 'updateProfile');
   const payload = Object.fromEntries(
     PROFILE_UPDATE_FIELDS
@@ -173,7 +177,7 @@ export const saveProfile = async (
     complete: completeSmartProfile,
   });
   return { ...(response.data || {}), ...persisted };
-});
+}));
 
 export const saveNoyaOnboardingStatus = async (status, version = 2) =>
   saveProfile(

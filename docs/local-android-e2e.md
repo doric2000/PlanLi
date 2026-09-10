@@ -82,6 +82,10 @@ always-running failure gate.
 The local suite uses Firebase's documented serialized Functions mode on localhost
 inspector port 9230 to bound memory on this 16GB Windows machine. This verifies
 UI/business flows, not production concurrency. Gradle is limited to two workers.
+The generated local Gradle init script also limits Ninja compile/link jobs to two
+using CMake job pools; Gradle's worker limit alone does not constrain C++ compilers.
+This setting applies only to the local debug harness. Local Expo module sources
+invalidate the binary receipt; their ignored generated build output does not.
 
 The dedicated AVD uses the installed emulator's `swangle` software mode, two CPU
 cores, a 540x960 display and density 240 (360dp wide), at 30 Hz. Local Metro uses

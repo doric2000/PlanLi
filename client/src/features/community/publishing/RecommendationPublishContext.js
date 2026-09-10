@@ -14,6 +14,10 @@ import { auth } from '../../../config/firebase';
 import { TRAVEL_TAXONOMY_VERSION } from '../../../constants/travelTaxonomy';
 import { useAuthUser } from '../../../hooks/useAuthUser';
 import { useImagePickerWithUpload } from '../../../hooks/useImagePickerWithUpload';
+import { backgroundTransfersAvailable, runBackgroundMedia, removeBackgroundSources, discardBackgroundJob } from '../../operations/BackgroundMediaService';
+import { operationStore } from '../../operations/operationService';
+import { HISTORY_LIMIT, HISTORY_AGE_MS } from '../../operations/operationModel';
+import { syncPublishOperation } from '../../operations/publishOperation';
 import {
   getCurrentRecommendationDraft,
   publishRecommendationDraft,
@@ -41,9 +45,20 @@ import {
   saveRecommendationPublishJobs,
 } from './recommendationPublishStorage';
 
+function trimCompletedJobs(jobs) {
+  const counts = new Map(); const history = operationStore.getSnapshot();
+  const keep = new Set([...jobs].sort((a, b) => b.updatedAt - a.updatedAt).filter((job) => {
+    if (job.status !== 'success') return true;
+    const entry = history.find((value) => value.id === `publish:${job.id}` && value.ownerUid === job.ownerUid);
+    if (entry && !entry.acknowledged) return true;
+    const count = (counts.get(job.ownerUid) || 0) + 1; counts.set(job.ownerUid, count);
+    return count <= HISTORY_LIMIT && Date.now() - job.updatedAt <= HISTORY_AGE_MS;
+  }).map((job) => job.id));
+  return jobs.filter((job) => keep.has(job.id));
+}
+
 const MAX_AUTOMATIC_RETRIES = 2;
 const RETRY_DELAYS_MS = [1000, 5000];
-const SUCCESS_VISIBLE_MS = 4000;
 const AUTOMATIC_TRANSIENT_CODES = new Set([
   'functions/aborted',
   'functions/cancelled',
@@ -315,7 +330,7 @@ export function upgradeRestoredPublishJob(job) {
       error: null,
       reviewRequired: false,
     } : {}),
-    ...(['preparing', 'uploading', 'saving'].includes(job?.status)
+    ...(['preparing', 'uploading', 'processing', 'waiting', 'saving'].includes(job?.status)
       ? { status: 'queued', stage: 'queued', retryAt: 0 }
       : {}),
   };
@@ -392,7 +407,6 @@ export function ContentPublishProvider({ children }) {
   const processingRef = useRef(false);
   const persistenceRef = useRef(Promise.resolve());
   const reviewSourcesRef = useRef(new Map());
-  const successTimersRef = useRef(new Map());
   const recommendationUploader = useImagePickerWithUpload({ kind: 'recommendation' });
   const routeUploader = useImagePickerWithUpload({ kind: 'route' });
   const uploadersRef = useRef({
@@ -405,14 +419,19 @@ export function ContentPublishProvider({ children }) {
   };
 
   const publishSnapshot = useCallback((nextJobs) => {
+    nextJobs = trimCompletedJobs(nextJobs);
     jobsRef.current = nextJobs;
     setJobs(nextJobs);
+    nextJobs.forEach((job) => { syncPublishOperation(job, false).catch(() => {}); });
   }, []);
 
   const persistSnapshot = useCallback((nextJobs) => {
+    nextJobs = trimCompletedJobs(nextJobs);
     persistenceRef.current = persistenceRef.current
       .catch(() => {})
-      .then(() => saveRecommendationPublishJobs(nextJobs));
+      .then(() => saveRecommendationPublishJobs(nextJobs.map((job) => job.status === 'success'
+        ? { ...job, media: [], payload: {}, draft: {} } : job)))
+      .then(() => Promise.all(nextJobs.map((job) => syncPublishOperation(job).catch(() => {}))));
     return persistenceRef.current;
   }, []);
 
@@ -453,8 +472,10 @@ export function ContentPublishProvider({ children }) {
         storedJobs.filter((job) => job?.status === 'success').map(deleteRecommendationPublishJobMedia)
       );
       const restored = storedJobs
-        .filter((job) => job && job.id && job.ownerUid && job.status !== 'success')
-        .map(upgradeRestoredPublishJob);
+        .filter((job) => job && job.id && job.ownerUid)
+        .map((job) => job.status === 'success'
+          ? { ...job, media: [], payload: {}, draft: {} }
+          : upgradeRestoredPublishJob(job));
       publishSnapshot(restored);
       if (JSON.stringify(restored) !== JSON.stringify(storedJobs)) persistSnapshot(restored);
       setHydrated(true);
@@ -470,7 +491,6 @@ export function ContentPublishProvider({ children }) {
   }, []);
 
   useEffect(() => () => {
-    successTimersRef.current.forEach((timer) => clearTimeout(timer));
     reviewSourcesRef.current.forEach((source) => source.revokes?.forEach((revoke) => revoke()));
   }, []);
 
@@ -488,7 +508,8 @@ export function ContentPublishProvider({ children }) {
     if (sourceJobId && !sourceJob) throw new Error('The queued recommendation is no longer available.');
 
     const jobId = sourceJob?.id || draftJobId || randomUUID();
-    const publishRequestId = sourceJob?.publishRequestId || randomUUID();
+    if (sourceJob?.background) await discardBackgroundJob(sourceJob);
+    const publishRequestId = sourceJob?.background ? randomUUID() : sourceJob?.publishRequestId || randomUUID();
     const reviewSource = reviewSourcesRef.current.get(jobId);
     const reusableByUri = reviewSource?.entriesByUri || new Map();
     const createdReferences = [];
@@ -560,7 +581,8 @@ export function ContentPublishProvider({ children }) {
       retryAt: 0,
       progress: 0,
       error: null,
-      payload,
+      payload: sourceJob?.payload?.recommendationId
+        ? { ...payload, recommendationId: sourceJob.payload.recommendationId } : payload,
       draft,
       media: nextMedia,
       timings: { queuedAt: now },
@@ -639,7 +661,8 @@ export function ContentPublishProvider({ children }) {
 
   const retry = useCallback(async (jobId) => {
     const current = jobsRef.current.find((job) => job.id === jobId);
-    if (current?.reviewRequired) return;
+    if (!current || current.ownerUid !== (user?.uid || auth.currentUser?.uid)
+      || current.status !== 'failed' || current.reviewRequired) return;
     await updateJob(jobId, (job) => ({
       ...job,
       status: 'queued',
@@ -647,15 +670,17 @@ export function ContentPublishProvider({ children }) {
       attempts: 0,
       retryAt: 0,
       error: null,
+      ...(job.background ? { background: { ...job.background, retryRequested: true } } : {}),
       updatedAt: Date.now(),
     }));
     setWakeSerial((value) => value + 1);
-  }, [updateJob]);
+  }, [updateJob, user?.uid]);
 
   const discard = useCallback(async (jobId) => {
     const job = jobsRef.current.find((entry) => entry.id === jobId);
     const ownerUid = user?.uid || auth.currentUser?.uid;
     if (!job || job.ownerUid !== ownerUid) return;
+    await discardBackgroundJob(job);
     await commitJobs((current) => current.filter((entry) => entry.id !== jobId));
     const reviewSource = reviewSourcesRef.current.get(jobId);
     reviewSource?.revokes?.forEach((revoke) => revoke());
@@ -738,8 +763,11 @@ export function ContentPublishProvider({ children }) {
         const mediaStartedAt = Date.now();
         const uploader = uploadersRef.current[currentJob.contentType || 'recommendation'];
         if (typeof uploader !== 'function') throw new Error('Media publishing is unavailable.');
+        if (auth.currentUser?.uid !== currentJob.ownerUid) throw Object.assign(new Error('Account changed'), { code: 'auth/unauthenticated' });
         const preparedAsset = await uploader(source.prepared.uri, {
+          expectedOwnerUid: currentJob.ownerUid,
           onProgress: (ratio) => setMediaProgress(jobId, source.mediaId, ratio),
+          onStage: (stage) => updateJob(jobId, (job) => ({ ...job, stage, updatedAt: Date.now() }), { persist: false }),
         });
         console.info('content_publish_stage_timing', {
           contentType: currentJob.contentType || 'recommendation',
@@ -771,7 +799,12 @@ export function ContentPublishProvider({ children }) {
 
   const processJob = useCallback(async (jobId) => {
     const startedAt = Date.now();
+    const ownerUid = jobsRef.current.find((entry) => entry.id === jobId)?.ownerUid;
+    const assertOwner = () => {
+      if (auth.currentUser?.uid !== ownerUid) throw Object.assign(new Error('Account changed'), { code: 'auth/unauthenticated' });
+    };
     try {
+      assertOwner();
       await updateJob(jobId, (job) => ({
         ...job,
         status: 'preparing',
@@ -781,6 +814,18 @@ export function ContentPublishProvider({ children }) {
         updatedAt: startedAt,
         timings: { ...job.timings, attemptStartedAt: startedAt },
       }));
+      const initial = jobsRef.current.find((entry) => entry.id === jobId);
+      let result;
+      const useBackground = Boolean(initial?.background || (backgroundTransfersAvailable() &&
+        (initial.contentType !== 'route' || initial.payload?.draftId)));
+      const saveRequestStartedAt = Date.now();
+      if (useBackground) {
+        result = await runBackgroundMedia({ job: initial, kind: initial.contentType || 'recommendation', media: initial.media || [],
+          checkpoint: (background) => updateJob(jobId, (job) => ({ ...job, background })),
+          stage: (stage) => updateJob(jobId, (job) => ({ ...job, status: stage, stage, updatedAt: Date.now() })),
+          progress: (index, value) => setMediaProgress(jobId, initial.media[index].id, value),
+        });
+      } else {
       await preparePendingMedia(jobId);
       let current = jobsRef.current.find((entry) => entry.id === jobId);
       if (!current) return;
@@ -813,8 +858,6 @@ export function ContentPublishProvider({ children }) {
         timings: { ...job.timings, saveStartedAt: Date.now() },
       }));
       current = jobsRef.current.find((entry) => entry.id === jobId);
-      let result;
-      const saveRequestStartedAt = Date.now();
       if (current.contentType === 'route') {
         const preparedEntries = (current.media || []).map((entry, index) => ({
           ...entry,
@@ -836,6 +879,7 @@ export function ContentPublishProvider({ children }) {
                 updatedAt: Date.now(),
               }));
             }
+            assertOwner();
             const savedDraft = await saveRouteDraft({
               draftId: current.payload.draftId,
               sourceRouteId: current.payload.sourceRouteId || null,
@@ -855,8 +899,10 @@ export function ContentPublishProvider({ children }) {
               updatedAt: Date.now(),
             }));
           }
+          assertOwner();
           result = await publishRouteDraft(current.payload.draftId, publishVersion);
         } else {
+          assertOwner();
           result = await saveRoute(
             routePayload,
             current.payload?.routeId || null,
@@ -878,6 +924,7 @@ export function ContentPublishProvider({ children }) {
           let providerDestinationSaved = current.payload.recommendationDraftProviderDestinationSaved === true;
           if (mediaSaved && current.payload.recommendationDraftIdSynced !== true &&
               current.payload.recommendationDraftMediaSaveRequestId) {
+            assertOwner();
             const replayedMediaSave = await saveRecommendationDraftForPublication({
               draftId: publishDraftId,
               sourceRecommendationId: current.payload.sourceRecommendationId || null,
@@ -913,6 +960,7 @@ export function ContentPublishProvider({ children }) {
                 updatedAt: Date.now(),
               }));
             }
+            assertOwner();
             const savedDraft = await saveRecommendationDraftForPublication({
               draftId: current.payload.draftId,
               sourceRecommendationId: current.payload.sourceRecommendationId || null,
@@ -955,6 +1003,7 @@ export function ContentPublishProvider({ children }) {
                 updatedAt: Date.now(),
               }));
             }
+            assertOwner();
             const syncedDestinationDraft = await saveRecommendationDraftForPublication({
               draftId: publishDraftId,
               sourceRecommendationId: current.payload.sourceRecommendationId || null,
@@ -979,6 +1028,7 @@ export function ContentPublishProvider({ children }) {
             }));
           }
           try {
+            assertOwner();
             result = await publishRecommendationDraft(publishDraftId, publishVersion);
           } catch (error) {
             if (!isMissingRecommendationDraftError(error)) throw error;
@@ -995,6 +1045,7 @@ export function ContentPublishProvider({ children }) {
                 updatedAt: Date.now(),
               }));
             }
+            assertOwner();
             const recoveredDraft = await saveRecommendationDraft({
               draftId: publishDraftId,
               sourceRecommendationId: current.payload.sourceRecommendationId || null,
@@ -1018,15 +1069,17 @@ export function ContentPublishProvider({ children }) {
               },
               updatedAt: Date.now(),
             }));
+            assertOwner();
             result = await publishRecommendationDraft(publishDraftId, publishVersion);
           }
         } else {
           let savePayload = {
             ...current.payload,
-            publishRequestId: current.publishRequestId,
+            ...(current.payload?.recommendationId ? {} : { publishRequestId: current.publishRequestId }),
             recommendation: { ...current.payload.recommendation, media: finalMedia },
           };
           try {
+            assertOwner();
             result = await saveRecommendation(savePayload);
           } catch (error) {
             if (!current.payload?.resolvedPlaceToken || !current.draft?.selectedPlace?.placeId || !isExpiredPlaceTokenError(error)) {
@@ -1036,17 +1089,20 @@ export function ContentPublishProvider({ children }) {
             savePayload = {
               ...withoutExpiredToken,
               placeId: current.draft.selectedPlace.placeId,
-              publishRequestId: current.publishRequestId,
+              ...(current.payload?.recommendationId ? {} : { publishRequestId: current.publishRequestId }),
               recommendation: { ...current.payload.recommendation, media: finalMedia },
             };
             await updateJob(jobId, (job) => ({
               ...job,
               payload: { ...withoutExpiredToken, placeId: current.draft.selectedPlace.placeId },
             }));
+            assertOwner();
             result = await saveRecommendation(savePayload);
           }
         }
       }
+      }
+      const current = jobsRef.current.find((entry) => entry.id === jobId);
       console.info('content_publish_stage_timing', {
         contentType: current.contentType || 'recommendation',
         stage: 'final_save',
@@ -1092,6 +1148,7 @@ export function ContentPublishProvider({ children }) {
         imageCount: completedJob.media?.length || 0,
         retryCount: completedJob.attempts || 0,
       });
+      await removeBackgroundSources(completedJob).catch(() => {});
       await deleteRecommendationPublishJobMedia(completedJob).catch((error) => {
         console.warn('content_publish_cleanup_failed', {
           code: String(error?.code || 'unknown'),
@@ -1121,19 +1178,26 @@ export function ContentPublishProvider({ children }) {
         [completedJob.contentType || 'recommendation']:
           Number(currentVersions[completedJob.contentType || 'recommendation'] || 0) + 1,
       }));
-      const timer = setTimeout(() => {
-        commitJobs((currentJobs) => currentJobs.filter((entry) => entry.id !== jobId));
-        successTimersRef.current.delete(jobId);
-      }, SUCCESS_VISIBLE_MS);
-      successTimersRef.current.set(jobId, timer);
+      // Durable snapshots retain only the completed receipt, never its source media.
     } catch (error) {
       const current = jobsRef.current.find((entry) => entry.id === jobId);
       if (!current) return;
+      if (current.status === 'success') {
+        // Local receipt/cache cleanup cannot make a confirmed publication fail.
+        syncPublishOperation(current).catch(() => {});
+        return;
+      }
       const attempts = Number(current.attempts || 0) + 1;
       const failedStage = ['preparing', 'uploading', 'processing', 'saving'].includes(error?.details?.publishStage)
         ? error.details.publishStage
         : current.stage;
       const retryPolicy = publishRetryPolicy(error, attempts);
+      if (current.background) retryPolicy.shouldRetry = false;
+      // Legacy edits have no server publication receipt. Reopen the editor instead of replaying a write.
+      if (current.payload?.recommendationId && !current.payload?.draftId) {
+        retryPolicy.shouldRetry = false;
+        retryPolicy.retryable = false;
+      }
       const mediaIdentities = (current.media || []).map(publishMediaIdentity);
       addDiagnosticBreadcrumb({
         category: 'network',

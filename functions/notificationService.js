@@ -13,6 +13,9 @@ const NOTIFICATION_SUBTYPES = Object.freeze({
   like: Object.freeze(['grouped_likes', 'like_milestone']),
   comment: Object.freeze(['new_comment', 'new_reply']),
   system: Object.freeze([
+    'operation_completed',
+    'operation_failed',
+    'operation_review',
     'content_held',
     'content_restored',
     'content_deleted',
@@ -258,6 +261,7 @@ function moderationNavigation(caseId) {
 
 function sanitizeNavigation(input = {}) {
   const action = String(input.action || '');
+  if (action === 'open_operation') return { action, operationId: cleanId(input.operationId, 'operationId') };
   if (action === 'open_recommendation') {
     return { action, recommendationId: cleanId(input.recommendationId, 'recommendationId') };
   }

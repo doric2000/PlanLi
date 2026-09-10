@@ -1000,12 +1000,17 @@ async function saveRoute({
   restCountriesKey,
   providerRateLimitKey,
   serverTrustedPlaces = new Map(),
+  operation,
 }) {
   const saveStartedAt = Date.now();
   assert(auth?.uid, 'unauthenticated', 'You must be signed in.');
   assert(isVerifiedCaller(auth), 'permission-denied', 'Email verification is required.');
   const db = admin.firestore();
   const uid = auth.uid;
+  if (operation) {
+    const receipt = (await operation.ref.get()).data()?.committedResult;
+    if (receipt) return receipt;
+  }
   const routeId = typeof data?.routeId === 'string' && data.routeId.trim()
     ? cleanDocumentId(data.routeId, 'routeId', '')
     : null;
@@ -1219,7 +1224,18 @@ async function saveRoute({
   let transactionOutcome;
   try {
     transactionOutcome = await db.runTransaction(async (transaction) => {
+    if (operation) {
+      const [jobSnapshot, ownerSnapshot] = await Promise.all([transaction.get(operation.ref), transaction.get(db.doc(`users/${uid}`))]);
+      assert(jobSnapshot.data()?.ownerUid === uid && jobSnapshot.data()?.leaseId === operation.leaseId
+        && jobSnapshot.data()?.status === 'processing', 'aborted', 'The operation is no longer active.');
+      if (jobSnapshot.data()?.committedResult) return { operationResult: jobSnapshot.data().committedResult };
+      const owner = ownerSnapshot.data();
+      assert(owner && owner.status !== 'deleting' && !['suspended', 'deleting'].includes(owner.moderation?.status),
+        'permission-denied', 'The owner is no longer eligible to publish.');
+    }
     const currentSnapshot = await transaction.get(routeRef);
+    if (operation?.expectedUpdatedAt != null && routeId) assert((currentSnapshot.data()?.updatedAt?.toMillis?.() || 0) === operation.expectedUpdatedAt,
+      'failed-precondition', 'The route changed. Review the current route before retrying.');
     const currentRoute = routeId
       ? assertEditableRoute(currentSnapshot, uid, isAdmin)
       : null;
@@ -1460,6 +1476,10 @@ async function saveRoute({
         expireAt: new Date(Date.now() + SUPERSEDED_REVISION_TTL_MS),
       });
     }
+      if (operation) transaction.update(operation.ref, { committedResult: {
+        routeId: routeRef.id, revisionId, revisionVersion: baseVersion + 1,
+        ...publicationOutcome(routeDocument.status), discoveryRegionIds: routeDiscoveryRegions.discoveryRegionIds,
+      } });
       return { replay: false, status: routeDocument.status, ...routeDiscoveryRegions };
     });
   } catch (error) {
@@ -1471,6 +1491,10 @@ async function saveRoute({
     stopCount: mediaDays.reduce((sum, day) => sum + day.stops.length, 0),
     providerCalls: resolved.providerCalls,
   });
+  if (transactionOutcome?.operationResult) {
+    await deletePreparedRevision(db, revisionRef, 'route_replay_revision_cleanup_failed');
+    return transactionOutcome.operationResult;
+  }
   if (transactionOutcome?.replay) {
     await deletePreparedRevision(db, revisionRef, 'route_replay_revision_cleanup_failed');
     console.info('route_save_timing', {

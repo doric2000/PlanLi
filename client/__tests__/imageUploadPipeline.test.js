@@ -59,6 +59,23 @@ const canonicalAsset = {
   thumb: { url: 'https://cdn/thumb.webp', path: 'media/u/a/thumb.webp' },
 };
 
+test('a queued upload cannot switch owners while its source is being read', async () => {
+  let uid = 'owner'; let finishSource;
+  const originalFetch = global.fetch;
+  global.fetch = jest.fn(() => new Promise((resolve) => { finishSource = resolve; }));
+  const strategy = { getUserId: () => uid, generatePath: jest.fn(), upload: jest.fn() };
+  const hook = renderHook(() => useImageUploader({ strategy }));
+  let request;
+  try {
+    act(() => { request = hook.result.current.uploadImageDetailed('file:///selected.jpg', { expectedOwnerUid: 'owner' }); });
+    const rejection = expect(request).rejects.toMatchObject({ code: 'auth/unauthenticated' });
+    uid = 'another-owner';
+    await act(async () => { finishSource({ blob: async () => ({ size: 10 }) }); await rejection; });
+    expect(strategy.upload).not.toHaveBeenCalled();
+    expect(strategy.generatePath).not.toHaveBeenCalled();
+  } finally { global.fetch = originalFetch; hook.unmount(); }
+});
+
 describe('canonical image upload pipeline', () => {
   beforeEach(() => {
     jest.clearAllMocks();

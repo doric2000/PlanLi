@@ -407,10 +407,10 @@ export function createNotificationPushCoordinator({
     if (started) return { status: 'started' };
     started = true;
     notifications.setNotificationHandler?.({
-      handleNotification: async () => ({
-        shouldShowBanner: true,
+      handleNotification: async (notification) => ({
+        shouldShowBanner: !String(notification?.request?.content?.data?.notificationId || '').startsWith('operation_'),
         shouldShowList: true,
-        shouldPlaySound: true,
+        shouldPlaySound: !String(notification?.request?.content?.data?.notificationId || '').startsWith('operation_'),
         shouldSetBadge: true,
       }),
     });

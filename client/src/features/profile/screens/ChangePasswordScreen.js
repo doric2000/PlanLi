@@ -10,6 +10,7 @@ import RtlBackButton from '../../../components/RtlBackButton';
 import { auth } from '../../../config/firebase';
 import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth';
 import { signOutCentral } from '../../../services/AuthService';
+import { trackOperation } from '../../operations/operationService';
 import { changePasswordScreenStyles as styles } from '../../../styles';
 import { useUnsavedLeaveGuard } from '../../../hooks/useUnsavedLeaveGuard';
 import UnsavedChangesModal from '../../../components/UnsavedChangesModal';
@@ -100,10 +101,14 @@ export default function ChangePasswordScreen({ navigation }) {
     if (newPw === currentPw) return Alert.alert('שגיאה', 'הסיסמה החדשה חייבת להיות שונה');
 
     setSaving(true);
+    let passwordChanged = false;
     try {
-      const cred = EmailAuthProvider.credential(u.email, currentPw);
-      await reauthenticateWithCredential(u, cred);
-      await updatePassword(u, newPw);
+      await trackOperation({ kind: 'password', ownerUid: u.uid, recoveryRoute: 'ChangePassword' }, async () => {
+        const cred = EmailAuthProvider.credential(u.email, currentPw);
+        await reauthenticateWithCredential(u, cred);
+        await updatePassword(u, newPw);
+        passwordChanged = true;
+      });
 
       // logout מיד אחרי שינוי
       try {
@@ -113,13 +118,17 @@ export default function ChangePasswordScreen({ navigation }) {
         navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
       }
     } catch (e) {
+      if (passwordChanged) {
+        Alert.alert('הסיסמה שונתה בהצלחה', 'יש להתחבר מחדש עם הסיסמה החדשה.');
+        return;
+      }
       const code = e?.code || '';
       if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
         Alert.alert('שגיאה', 'הסיסמה הנוכחית שגויה');
       } else if (code === 'auth/requires-recent-login') {
         Alert.alert('שגיאה', 'צריך להתחבר מחדש ואז לנסות שוב');
       } else {
-        Alert.alert('שגיאה', e?.message || 'שינוי הסיסמה נכשל');
+        Alert.alert('שגיאה', 'לא התקבל אישור לשינוי הסיסמה. אפשר לבדוק את פרטי הפעולה בפעילות שלי.');
       }
     } finally {
       setSaving(false);

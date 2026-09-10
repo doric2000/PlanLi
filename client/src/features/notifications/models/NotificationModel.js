@@ -18,6 +18,7 @@ export const NotificationPriority = Object.freeze({
 });
 
 export const NotificationNavigationAction = Object.freeze({
+  OPERATION: 'open_operation',
   RECOMMENDATION: 'open_recommendation',
   ROUTE: 'open_route',
   TRIP: 'open_trip',
@@ -145,7 +146,7 @@ function normalizeNavigation(value = {}) {
   if (!ALLOWED_ACTIONS.has(action)) return action ? { action } : null;
   const result = { action };
   [
-    'recommendationId', 'routeId', 'tripId', 'profileId', 'uid', 'caseId',
+    'recommendationId', 'routeId', 'tripId', 'profileId', 'uid', 'caseId', 'operationId',
     'commentId', 'postId', 'parentId', 'countryId', 'cityId', 'targetId',
   ].forEach((key) => {
     const normalized = cleanId(value[key]);
@@ -461,6 +462,10 @@ export function buildNotificationRouteAction(notification) {
   const target = notification?.target || {};
   const action = navigation?.action;
   if (!ALLOWED_ACTIONS.has(action)) return statusAction('unsupported');
+  if (action === NotificationNavigationAction.OPERATION) {
+    const operationId = firstId(navigation.operationId);
+    return operationId ? { type: 'navigate', routeName: 'Activity', params: { operationId } } : statusAction('unsupported');
+  }
 
   if (action === NotificationNavigationAction.RECOMMENDATION) {
     const postId = firstId(navigation.recommendationId, navigation.postId, navigation.targetId, target.id);

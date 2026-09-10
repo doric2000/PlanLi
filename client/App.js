@@ -37,7 +37,11 @@ import {
 	rtlStackScreenOptions,
 } from "./src/navigation/rtlStackOptions";
 import withRequireAuth from "./src/navigation/withRequireAuth";
-import ContentPublishBanner from "./src/features/publishing/ContentPublishBanner";
+import OperationBanner from "./src/features/operations/OperationBanner";
+import { OperationProvider } from "./src/features/operations/OperationContext";
+import ActivityScreen from "./src/features/operations/ActivityScreen";
+import { openOperation } from "./src/features/operations/operationNavigation";
+import { ProfilePhotoProvider } from "./src/features/operations/ProfilePhotoContext";
 import { ContentPublishProvider } from "./src/features/publishing/ContentPublishContext";
 import { AuthProvider } from "./src/features/auth/AuthContext";
 import { BlockedUsersProvider } from "./src/features/moderation/BlockedUsersContext";
@@ -57,6 +61,7 @@ const Stack = createStackNavigator();
 const navigationRef = createNavigationContainerRef();
 
 const EditProfileAuthed = withRequireAuth(EditProfileScreen);
+const ActivityAuthed = withRequireAuth(ActivityScreen);
 const NotificationsAuthed = withRequireAuth(NotificationScreen);
 const NotificationSettingsAuthed = withRequireAuth(NotificationSettingsScreen);
 const SettingsAuthed = withRequireAuth(SettingsScreen);
@@ -112,6 +117,8 @@ export default function App() {
 		<AppFontProvider>
 			<SafeAreaProvider initialMetrics={initialWindowMetrics}>
 				<AuthProvider navigationRef={navigationRef}>
+				<OperationProvider>
+				<ProfilePhotoProvider>
 				<RegionSelectionProvider>
 				 <PersonalizationFeedbackProvider>
 				 <BlockedUsersProvider>
@@ -139,6 +146,7 @@ export default function App() {
 					<Stack.Screen name='RegionSelector' component={RegionSelectorScreen} options={profileStackScreenOptions} />
 					<Stack.Screen name='PreferenceSetup' component={PreferenceSetupScreen} />
 					<Stack.Screen name="EditProfile" component={EditProfileAuthed} options={profileStackScreenOptions} />
+					<Stack.Screen name="Activity" component={ActivityAuthed} options={profileStackScreenOptions} />
 					<Stack.Screen name="NotificationSettings" component={NotificationSettingsAuthed} options={profileStackScreenOptions} />
 					<Stack.Screen name='Settings' component={SettingsAuthed} options={profileStackScreenOptions} />
 					<Stack.Screen name='BlockedUsers' component={BlockedUsersAuthed} options={profileStackScreenOptions} />
@@ -197,21 +205,11 @@ export default function App() {
 					navigationReady={navigationReady}
 				/>
 				<AuthGateModal />
-				<ContentPublishBanner
-					onView={(job) => {
-						if (!navigationRef.isReady()) return;
-						if (job.contentType === 'route') navigationRef.navigate('RouteDetail', { routeId: job.result?.routeId });
-						else navigationRef.navigate('RecommendationDetail', { postId: job.result?.recommendationId });
-					}}
+				<OperationBanner
+					hidden={currentRouteName === 'Activity'}
 					onChooseRegion={() => navigationRef.isReady() && navigationRef.navigate('RegionSelector', { source: 'publish-change' })}
-					onReview={(publishJobId, contentType) => {
-						if (navigationRef.isReady()) {
-							navigationRef.navigate(
-								contentType === 'route' ? 'AddRoutesScreen' : 'AddRecommendation',
-								{ publishJobId }
-							);
-						}
-					}}
+					onActivity={() => navigationRef.isReady() && navigationRef.navigate('Activity')}
+					onOpen={(entry) => navigationRef.isReady() && openOperation(navigationRef, entry)}
 				/>
 				<NoyaTourOverlayHost />
 				<GuestPersonalizationBridge />
@@ -221,6 +219,8 @@ export default function App() {
 				 </BlockedUsersProvider>
 				 </PersonalizationFeedbackProvider>
 				</RegionSelectionProvider>
+				</ProfilePhotoProvider>
+				</OperationProvider>
 				</AuthProvider>
 			</SafeAreaProvider>
 		</AppFontProvider>

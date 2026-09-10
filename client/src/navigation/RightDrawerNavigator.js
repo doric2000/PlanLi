@@ -26,6 +26,7 @@ const MENU_ITEMS = [
   { key: 'editProfile', icon: 'person-outline', label: 'עריכת פרופיל' },
   { key: 'settings', icon: 'settings-outline', label: 'הגדרות' },
   { key: 'notifications', icon: 'notifications-outline', label: 'התראות' },
+  { key: 'activity', icon: 'cloud-upload-outline', label: 'הפעילות שלי' },
   { key: 'support', icon: 'help-circle-outline', label: 'עזרה ותמיכה' },
 ];
 
@@ -123,6 +124,10 @@ export function CustomDrawerContent(props) {
       }
       if (key === 'notifications') {
         rootStackNav?.navigate?.('Notifications');
+        return;
+      }
+      if (key === 'activity') {
+        rootStackNav?.navigate?.('Activity');
         return;
       }
       if (key === 'settings') {

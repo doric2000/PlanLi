@@ -1,5 +1,6 @@
 import { normalizePushPreferences, PUSH_PREFERENCE_FIELDS } from '../push/preferences';
 import { getNotificationPushRuntime } from '../push/runtimeManager';
+import { trackOperation } from '../../operations/operationService';
 
 function getDefaultRuntime() {
   return getNotificationPushRuntime();
@@ -28,6 +29,13 @@ export async function loadNotificationPushPreferences(runtime = getDefaultRuntim
  * callable, while a global transition must also register/unregister this device.
  */
 export async function saveNotificationPushPreferences(
+  nextValue, previousValue, runtime = getDefaultRuntime()
+) {
+  return trackOperation({ kind: 'notifications', recoveryRoute: 'NotificationSettings' },
+    () => persistNotificationPushPreferences(nextValue, previousValue, runtime));
+}
+
+async function persistNotificationPushPreferences(
   nextValue,
   previousValue,
   runtime = getDefaultRuntime()
