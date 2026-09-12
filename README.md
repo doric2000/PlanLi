@@ -25,13 +25,61 @@ the existing Text Search quota remains zero. See
 
 ## Current environment status
 
+### Profile entry crash hotfix (2026-09-13 local / 2026-09-12 UTC)
+
+PR [#375](https://github.com/doric2000/PlanLi/pull/375) merged as
+`0940c79062e9fdf099a3ddeb2af2f14690ba4281` after all applicable GitHub checks passed.
+This is the current production iOS runtime `1.3.0` update. The Community design
+below is preserved. The crash came from PR #371's avatar synchronization hook:
+before the user snapshot arrives, both IDs are undefined, so the old equality
+check passed and dereferenced a null saved upload. The hook now requires a user
+ID, matching saved owner and a usable avatar URL before applying the photo.
+
+Published `2026-09-12T23:36:31.039Z`, channel/environment `production`, group
+[5df5a17d](https://expo.dev/accounts/doric2000/projects/client/updates/5df5a17d-d574-415f-968d-7d8a747b55db),
+update `01a097fa-cc3f-7589-9d5b-7b2bdcbb82c6`. Verified staging candidate
+`9b0dff2f-5318-45b1-acbe-84a1db48f401` (production environment) was republished
+without another export. The immutable launch bundle is 10,768,320 bytes, SHA-256
+`88DF83F7717EEA5D9ECCF0996A847EE9DCB8D0DB914BDADE658F7F38EAA4CE6D`.
+The public channel manifest independently served that exact update and hash at
+`2026-09-12T23:36:55.952Z`; public iOS runtime `1.2.0` and Android runtime `1.3.0`
+responses were unchanged.
+
+Target remains TestFlight **1.1.1 (30)**, build
+`b16eca67-6291-4520-82b6-10cb1af190f5`, runtime `1.3.0`. The pre-upload native
+guard passed with the unchanged reviewed optional-module fingerprint `f5fac23f11fb1f2c0b1adbaf545b164644c461d3`;
+the optional background-transfer feature remains disabled on build 30. No native
+build, version change, Apple submission/review, Android OTA or backend deployment
+was performed. Download/application of this hotfix on the physical iPhone is
+pending verification; the preceding Community OTA was reported to crash on Profile entry.
+
+Validation: the new real-screen/delayed-user regression reproduced the null-asset
+exception before the fix. After the fix, 35 focused profile/photo tests and the
+45-test related navigation/profile OTA readiness selection passed (overlapping
+selections). A production-mode browser fixture exercised the real ProfileScreen,
+useCurrentUser and photo hook with held user snapshots, repeated tab entry and
+direct own/public profile entry without console errors; presentation and external
+data services were mocked. Final defect review found no actionable findings.
+Physical iPhone entry/re-entry and avatar display checks remain pending; Android
+emulator testing remains waived.
+
+Rollback: retain this source commit and the Codex checkpoint at `10561229c854aa2cd1997332d2a26a45bd59a072`
+for source comparison. **Do not restore the immediately preceding OTA
+`638d125b-fa3a-47c7-9d78-c8c3d767229f` as a stability rollback: it contains this crash.**
+The earlier artifact-verified emergency rollback group is
+`05fe7bdd-4153-43b3-a24b-14d49b3fd5c7` (iOS only, runtime `1.3.0`, source `c6ea08e063e3f5365de598c0b2138df3316ff1d1`);
+republishing it would also remove the Community redesign and operation-feedback
+JavaScript. Its physical-device validation remains unverified. No rollback was performed.
+
 The repeated iOS fingerprint warnings are addressed by a tracked, pre-upload
 native compatibility guard and deterministic Git-archive packaging. See
 [native compatibility findings and release commands](docs/eas-native-compatibility.md).
-This release-tooling change does not publish an OTA or change the installed build;
-the Community production update below remains the current release.
+The release-tooling change itself did not publish an OTA or change the installed build;
+the current hotfix above uses that guarded workflow.
 
 ### Community redesign iPhone OTA (2026-09-11 local / 2026-09-10 UTC)
+
+Historical release, superseded by the Profile entry hotfix above.
 
 PR [#372](https://github.com/doric2000/PlanLi/pull/372) merged as
 `7c420beef68f9b61c41f9bf544e5891af99ba29e` after all applicable GitHub checks passed.
@@ -4478,3 +4526,14 @@ part of this follow-up.
 - Message: Consistent profile transitions and drawer-close sequencing
 - Device application, native transitions and interrupted swipe-back checks: pending.
 - Rollback: republish verified group `5829a5e8-1041-4ab2-9b91-f75784f0d297` for iOS only.
+
+## iOS production OTA release
+
+- Source commit: `0940c79062e9fdf099a3ddeb2af2f14690ba4281`.
+- EAS Update group: `5df5a17d-d574-415f-968d-7d8a747b55db`; channel `production`; runtime `1.3.0`.
+- EAS environment: `production`; published at `2026-09-12T23:36:31.039Z`.
+- Immutable iOS launch bundle: update `01a097fa-cc3f-7589-9d5b-7b2bdcbb82c6`; 10768320 bytes; SHA-256 `88DF83F7717EEA5D9ECCF0996A847EE9DCB8D0DB914BDADE658F7F38EAA4CE6D`.
+- Message: Fix Profile entry crash while user data loads (0940c79)
+- Target: TestFlight 1.1.1 (30), build `b16eca67-6291-4520-82b6-10cb1af190f5`; no new native build or Apple review/submission.
+- Device application and physical iPhone Profile entry/re-entry checks: pending.
+- Rollback: emergency iOS group `05fe7bdd-4153-43b3-a24b-14d49b3fd5c7`; the immediately preceding `638d125b-fa3a-47c7-9d78-c8c3d767229f` contains the Profile crash. See the scope and verification limits in Current environment status.
