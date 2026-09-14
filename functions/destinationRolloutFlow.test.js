@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createDestinationMemoryAdmin } = require('./testSupport/destinationMemoryAdmin');
 const { buildPlan, applyPlan, inventory } = require('./scripts/importReviewedDestinationCatalog');
-const { resolveRecommendationDestination, resolveGoogleDestination, resolveDestinationFromToken, saveRecommendation } = require('./recommendationService');
+const { resolveRecommendationDestination, resolveGoogleDestination, resolveDestinationFromToken, saveRecommendation, finalizeDestinationChoice } = require('./recommendationService');
 const { registryEntriesForCountry, clearRegistryCache } = require('./canonicalDestinationRegistry');
 const { createResolvedPlaceToken } = require('./placesGatewayService');
 const auth = { uid: 'synthetic-owner', token: { email_verified: true, firebase: { sign_in_provider: 'password' } } };
@@ -39,6 +39,13 @@ test('a catalog locality classifies and publishes an exact hotel without any des
     resolvedPlaceToken: token, placeId: venue.placeId, recommendation: content } });
   assert.equal(saved.publicationStatus, 'active');
   assert.equal(admin.documents.get(`recommendations/${saved.recommendationId}`).destination.cityName, 'קסאמיל');
+  const choice = await resolveRecommendationDestination({ admin, auth, providerRateLimitKey: key,
+    data: { resolvedPlaceToken: token, requestDestinationChoice: true } });
+  const manual = await finalizeDestinationChoice({ admin, auth, providerRateLimitKey: key, data: {
+    resolutionId: choice.resolutionId, destinationRef: { countryId: 'AL', cityId: result.cityId },
+  } });
+  assert.equal(manual.status, 'resolved'); assert.equal(manual.destination.city.id, result.cityId);
+  assert.equal(manual.place.placeId, venue.placeId);
 });
 
 test('a newly verified locality asks only for its Hebrew name and the next hotel reuses it immediately', async () => {
