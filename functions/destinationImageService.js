@@ -537,7 +537,8 @@ async function resolveAndPersistDestinationIdentity({ admin, countryId, cityId, 
   if (!citySnapshot.exists || !countrySnapshot.exists) return { state: 'missing_city' };
   const city = citySnapshot.data() || {};
   const timestamp = admin.firestore.FieldValue.serverTimestamp();
-  const ready = Boolean(city.googleCache?.names?.en && city.googleCache?.names?.he);
+  const catalogIdentity = require('./reviewedCatalogPolicy').hasReviewedCatalogIdentity(city.identity);
+  const ready = catalogIdentity || Boolean(city.googleCache?.names?.en && city.googleCache?.names?.he);
   await jobRef.set({
     countryId, cityId,
     identitySync: {
@@ -549,7 +550,7 @@ async function resolveAndPersistDestinationIdentity({ admin, countryId, cityId, 
     },
     updatedAt: timestamp,
   }, { merge: true });
-  return { state: ready ? 'ready' : 'needs_review', identity: ready ? city.googleCache : null };
+  return { state: ready ? 'ready' : 'needs_review', identity: catalogIdentity ? city.identity : ready ? city.googleCache : null };
 }
 
 async function resolveAndPersistDestinationImage({

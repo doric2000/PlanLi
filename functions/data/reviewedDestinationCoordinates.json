@@ -1,0 +1,89 @@
+{
+  "lk-weligama": {
+    "center": {
+      "lat": 5.975,
+      "lng": 80.429722222222
+    },
+    "coordinateSource": {
+      "url": "https://www.wikidata.org/wiki/Q3534843",
+      "retrievedAt": "2026-09-14",
+      "wikidataId": "Q3534843"
+    }
+  },
+  "lk-mirissa": {
+    "center": {
+      "lat": 5.945607,
+      "lng": 80.459765
+    },
+    "coordinateSource": {
+      "url": "https://www.wikidata.org/wiki/Q1345652",
+      "retrievedAt": "2026-09-14",
+      "wikidataId": "Q1345652"
+    }
+  },
+  "lk-unawatuna": {
+    "center": {
+      "lat": 6.0166667,
+      "lng": 80.25
+    },
+    "coordinateSource": {
+      "url": "https://www.wikidata.org/wiki/Q651301",
+      "retrievedAt": "2026-09-14",
+      "wikidataId": "Q651301"
+    }
+  },
+  "lk-hikkaduwa": {
+    "center": {
+      "lat": 6.141084,
+      "lng": 80.100034
+    },
+    "coordinateSource": {
+      "url": "https://www.wikidata.org/wiki/Q1618065",
+      "retrievedAt": "2026-09-14",
+      "wikidataId": "Q1618065"
+    }
+  },
+  "lk-tangalle": {
+    "center": {
+      "lat": 6.024,
+      "lng": 80.7911
+    },
+    "coordinateSource": {
+      "url": "https://www.wikidata.org/wiki/Q598658",
+      "retrievedAt": "2026-09-14",
+      "wikidataId": "Q598658"
+    }
+  },
+  "lk-ahangama": {
+    "center": {
+      "lat": 5.9833333333333,
+      "lng": 80.366666666667
+    },
+    "coordinateSource": {
+      "url": "https://www.wikidata.org/wiki/Q4694946",
+      "retrievedAt": "2026-09-14",
+      "wikidataId": "Q4694946"
+    }
+  },
+  "lk-arugam-bay": {
+    "center": {
+      "lat": 6.85,
+      "lng": 81.833333333333
+    },
+    "coordinateSource": {
+      "url": "https://www.wikidata.org/wiki/Q4802027",
+      "retrievedAt": "2026-09-14",
+      "wikidataId": "Q4802027"
+    }
+  },
+  "lk-hiriketiya": {
+    "center": {
+      "lat": 5.9626,
+      "lng": 80.7064
+    },
+    "coordinateSource": {
+      "url": "https://www.reiseceylon.com/destinations/hiriketiya-beach",
+      "retrievedAt": "2026-09-14"
+    }
+  }
+}

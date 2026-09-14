@@ -1,3 +1,4 @@
+const { touchRegistryRevision } = require('./destinationRegistryRevision');
 const crypto = require('crypto');
 const { hasActiveAdminAccess } = require('./adminAuthorization');
 const { HttpsError } = require('firebase-functions/v2/https');
@@ -1405,6 +1406,8 @@ async function resolveGoogleDestination({
   destinationIntentVerified = false,
   confirmedHebrewName = null,
   requestContext = providerRequestContext(),
+  supportsLocationRecovery = false,
+  verifiedLocality = null,
 }) {
   selectedProvider(placesProvider);
   const db = admin.firestore();
@@ -1527,6 +1530,19 @@ async function resolveGoogleDestination({
     throw ambiguityError;
   }
   let canonicalEntry = canonicalMatch?.entry || null;
+  const resolveReviewedEntry = async () => {
+    const parts = String(canonicalEntry.destinationPath || '').split('/');
+    assert(parts.length === 4 && parts[0] === 'countries' && parts[2] === 'destinations',
+      'failed-precondition', 'The catalog destination binding is invalid.');
+    const existing = await resolveExistingDestination(db, { countryId: parts[1], cityId: parts[3] });
+    assert(String(existing.countryData.code).toUpperCase() === preliminaryCountry.countryCode,
+      'failed-precondition', 'Choose a destination in the same country as the selected place.');
+    assert(destinationOwnsResolvedRegistryEntry(existing.cityData, canonicalEntry.id),
+      'failed-precondition', 'The catalog destination identity changed. Try again.');
+    return { ...existing, place: exactPlaceFromBilingual(bilingual),
+      resolutionSource: canonicalMatch.source, providerCallCount: requestContext.count };
+  };
+  if (canonicalEntry?.destinationPath) return resolveReviewedEntry();
   let provisionalDestination = false;
   const directlySelectedDestination = selectedIsDestination &&
     (selectionIntent === 'destination' || selectionIntent === 'exact_place');
@@ -1633,7 +1649,8 @@ async function resolveGoogleDestination({
       existingDestination.cityData?.providerRefs?.googlePlaceId === parsed.placeId;
     const approvedExistingDestination = existingDestination && !existingDestination.ambiguity &&
       (existingDestination.cityData?.canonicalPolicy?.approved === true || explicitlySelectedLegacyDestination) &&
-      destinationAcceptsNewReferences(existingDestination.cityData, existingDestination.countryId);
+      destinationAcceptsNewReferences(existingDestination.cityData, existingDestination.countryId)
+      ? existingDestination : null;
     const deferAdministrativeFallback = approvedExistingDestination &&
       preliminaryCountry.countryCode !== 'TH' &&
       isAdministrativeDestination(approvedExistingDestination.cityData);
@@ -1659,9 +1676,9 @@ async function resolveGoogleDestination({
       return normalizeDestinationForUse(destination, preliminaryCountry.countryCode);
     }
     const localityProviderConfigured = placesProvider === 'new';
-    let localityPlaceId = null;
+    let localityPlaceId = verifiedLocality?.en?.placeId || null;
     try {
-      localityPlaceId = localityCandidates.length && localityProviderConfigured
+      localityPlaceId = localityPlaceId || (localityCandidates.length && localityProviderConfigured
         ? await fetchLocalityPlaceId({
             provider: placesProvider,
             localityName: selectedEn.localityName,
@@ -1674,7 +1691,7 @@ async function resolveGoogleDestination({
             projectId,
             requestContext,
           })
-        : null;
+        : null);
     } catch (error) {
       if (/ambiguous|more specific/i.test(String(error?.message || ''))) {
         error.destinationSelectionRequired = true;
@@ -1684,7 +1701,7 @@ async function resolveGoogleDestination({
       throw error;
     }
     if (localityPlaceId) {
-      const localityBilingual = await fetchBilingualPlace({
+      const localityBilingual = verifiedLocality || await fetchBilingualPlace({
         provider: placesProvider,
         placeId: localityPlaceId,
         accessTokenProvider,
@@ -1755,13 +1772,24 @@ async function resolveGoogleDestination({
           countryCode: preliminaryCountry.countryCode, googleHebrewName, englishName,
           coordinates: localityEn.coordinates || localityHe.coordinates,
         });
-        if (hasHebrewName(localized.name) && localized.source !== 'transliteration_fallback') {
+        const confirmedName = supportsLocationRecovery && confirmedHebrewName
+          ? cleanString(confirmedHebrewName, { field: 'confirmedHebrewName', min: 2, max: 80 }) : '';
+        if (confirmedName) assert(hasHebrewName(confirmedName), 'invalid-argument', 'A Hebrew name is required.');
+        const named = confirmedName ? { name: confirmedName, source: 'user_confirmed' } : localized;
+        if (supportsLocationRecovery && (!hasHebrewName(named.name) || named.source === 'transliteration_fallback')) {
+          return { requiresNameConfirmation: true, place: exactPlaceFromBilingual(bilingual),
+            nameConfirmation: { scope: 'containing_destination', englishName,
+              suggestedHebrewName: localized.name || transliterateDestinationName(englishName),
+              countryName: preliminaryCountry.countryName || selectedEn.countryName },
+            verifiedLocality: localityBilingual, providerCallCount: requestContext.count };
+        }
+        if (hasHebrewName(named.name) && named.source !== 'transliteration_fallback') {
           provisionalDestination = true;
           canonicalEntry = {
             id: provisionalRegistryId(preliminaryCountry.countryCode, localityPlaceId),
             countryCode: preliminaryCountry.countryCode,
-            names: { he: localized.name, en: englishName || localized.name },
-            nameSources: { he: localized.source, en: 'google' },
+            names: { he: named.name, en: englishName || named.name },
+            nameSources: { he: named.source, en: 'google' },
             aliases: [englishName, googleHebrewName].filter(Boolean),
             kind: provisionalDestinationKind(localityEn.types),
             groupingPolicy: 'self',
@@ -1790,6 +1818,7 @@ async function resolveGoogleDestination({
       throw selectionError;
     }
   }
+  if (canonicalEntry?.destinationPath) return resolveReviewedEntry();
   const resolvedCountry = preliminaryCountry;
 
   let countryId = null;
@@ -2433,6 +2462,7 @@ async function resolveDestinationFromToken({
   confirmedHebrewName = null,
   expectedDestinationRef = null,
   allowAutomaticPolicyRefresh = true,
+  supportsLocationRecovery = false,
 }) {
   const resolvedPlace = await readResolvedPlaceToken({
     admin, auth, resolvedPlaceToken, providerRateLimitKey,
@@ -2499,10 +2529,17 @@ async function resolveDestinationFromToken({
     selectionIntent,
     destinationIntentVerified,
     confirmedHebrewName,
+    supportsLocationRecovery,
+    verifiedLocality: resolvedPlace.pendingDestinationNaming || null,
     expectedDestinationRef,
     requestContext,
   });
   if (destination?.requiresNameConfirmation) {
+    if (destination.verifiedLocality) await admin.firestore()
+      .doc(`system/runtime/resolvedPlaceTokens/${resolvedPlaceToken}`).set({
+        pendingDestinationNaming: destination.verifiedLocality,
+        providerCallCount: requestContext.count,
+      }, { merge: true });
     return { ...destination, incidentId, providerCallCount: requestContext.count };
   }
   if (!countryOverrideId) {
@@ -2540,6 +2577,7 @@ async function resolveSubmittedPlaceDestination({
   destinationIntentVerified = false,
   confirmedHebrewName = null,
   allowAutomaticPolicyRefresh = true,
+  supportsLocationRecovery = false,
 }) {
   const effectiveIncidentId = createIncidentId(incidentId);
   if (resolvedPlaceToken) {
@@ -2547,7 +2585,7 @@ async function resolveSubmittedPlaceDestination({
       return await resolveDestinationFromToken({
         admin, auth, resolvedPlaceToken, countryOverrideId, accessTokenProvider,
         projectId, placesProvider, restCountriesKey, providerRateLimitKey,
-        selectionIntent, confirmedHebrewName, allowAutomaticPolicyRefresh,
+        selectionIntent, confirmedHebrewName, allowAutomaticPolicyRefresh, supportsLocationRecovery,
       });
     } catch (error) {
       if (!placeId || !isExpiredResolvedPlaceError(error)) throw error;
@@ -2576,7 +2614,7 @@ async function resolveSubmittedPlaceDestination({
   const destination = await resolveGoogleDestination({
     admin, placeId, countryOverrideId, accessTokenProvider, projectId, placesProvider,
     restCountriesKey, selectionIntent, destinationIntentVerified,
-    confirmedHebrewName, requestContext,
+    confirmedHebrewName, supportsLocationRecovery, requestContext,
   });
   return {
     ...destination,
@@ -2877,6 +2915,7 @@ async function resolveRecommendationDestinationInternal({
       incidentId: data?.incidentId,
       selectionIntent: data?.selectionIntent === 'destination' ? 'destination' : 'exact_place',
       confirmedHebrewName: data?.confirmedHebrewName || null,
+      supportsLocationRecovery: data?.supportsLocationRecovery === true,
     });
     if (destination?.requiresNameConfirmation) {
       return {
@@ -2921,6 +2960,17 @@ async function resolveRecommendationDestinationInternal({
           selectedPlace.fetchedAt instanceof Date ? selectedPlace.fetchedAt : new Date()
         ),
       });
+    }
+    if (data?.supportsLocationRecovery === true && data?.resolvedPlaceToken &&
+        !['unauthenticated', 'permission-denied', 'invalid-argument', 'not-found'].includes(String(error?.code))) {
+      const selected = await readResolvedPlaceToken({ admin, auth,
+        resolvedPlaceToken: data.resolvedPlaceToken, providerRateLimitKey });
+      const incidentId = selected.incidentId || createIncidentId(data.incidentId);
+      const decorated = decorateLocationError(error, incidentId, 'destination_resolution_failed');
+      locationLog('destination', { incidentId, outcome: 'failed', reason: decorated.details.reason,
+        errorCode: String(error?.code || 'internal'), errorName: error?.name });
+      return { status: 'destination_resolution_unavailable', resolvedPlaceToken: data.resolvedPlaceToken,
+        incidentId, place: exactPlaceFromBilingual(selected), recovery: decorated.details };
     }
     throw error;
   }
@@ -3475,6 +3525,7 @@ async function saveRecommendation({
     }
     if (destination.registryRef) {
       if (!registrySnapshot?.exists) {
+        touchRegistryRevision(transaction, db, destination.registryData.countryCode);
         transaction.create(destination.registryRef, {
           ...destination.registryData,
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -3484,6 +3535,7 @@ async function saveRecommendation({
         { id: registrySnapshot.id, ...registrySnapshot.data() },
         destination.registryData
       )) {
+        touchRegistryRevision(transaction, db, destination.registryData.countryCode);
         transaction.update(destination.registryRef, {
           ...destination.registryData,
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),

@@ -66,6 +66,22 @@ describe('useExactPlaceSelection', () => {
     expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ cityId: 'other-destination' }));
   });
 
+  it('retains the exact venue after classification failure and retries with its verified token', async () => {
+    mockResolve.mockResolvedValueOnce({ status: 'destination_resolution_unavailable',
+      resolvedPlaceToken: 'verified-hotel-token', incidentId: 'loc_test', place: resolved.place })
+      .mockResolvedValueOnce(resolved);
+    const onChange = jest.fn();
+    const { result } = renderHook(() => useExactPlaceSelection({ onChange }));
+    await act(async () => result.current.handleSelectGooglePlace('wat-doi-kham', { autoConfirm: true }));
+    expect(result.current.pendingLocation.place.placeId).toBe(resolved.place.placeId);
+    expect(result.current.locationResolveRetryable).toBe(true);
+    act(() => result.current.confirmPendingLocation());
+    expect(onChange).not.toHaveBeenCalled();
+    await act(async () => result.current.retryLocationResolution({ autoConfirm: true }));
+    expect(mockResolve).toHaveBeenLastCalledWith(expect.objectContaining({ resolvedPlaceToken: 'verified-hotel-token' }));
+    expect(result.current.selectedCity.id).toBe('chiang-mai');
+  });
+
   it('confirms a missing Hebrew name without searching for the place again', async () => {
     mockResolve.mockResolvedValue({ status: 'destination_name_confirmation_required', resolvedPlaceToken: 'name-token',
       nameConfirmation: { englishName: 'Town', suggestedHebrewName: 'טאון' }, place: resolved.place });

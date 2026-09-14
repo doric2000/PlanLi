@@ -96,6 +96,7 @@ export default function ExactLocationConfirmation({
   }
   if (!pendingLocation?.place && !resolving) return null;
   const previewPlace = pendingLocation?.place || null;
+  const canConfirm = Boolean(previewPlace && pendingLocation?.cityId && pendingLocation?.countryId);
   const resolvingLabel = resolvingPreview?.description || resolvingPreview?.name || '';
   const destinationLabel = [pendingLocation?.location, pendingLocation?.country]
     .filter(Boolean)
@@ -131,8 +132,8 @@ export default function ExactLocationConfirmation({
         <TouchableOpacity
           style={styles.confirmButton}
           onPress={onConfirm}
-          disabled={resolving || !previewPlace}
-          accessibilityState={{ disabled: resolving || !previewPlace }}
+          disabled={resolving || !canConfirm}
+          accessibilityState={{ disabled: resolving || !canConfirm }}
           accessibilityRole="button"
           accessibilityLabel={copy.confirmLocation}
           testID="exact-location-confirm"

@@ -27,6 +27,7 @@ test('exact-location confirmation exposes prepared English copy when requested',
       pendingLocation={{
         location: 'Vlorë',
         country: 'Albania',
+        countryId: 'AL', cityId: 'vlore',
         place: {
           placeId: 'hotel-liro',
           name: 'Hotel Liro',
@@ -45,6 +46,18 @@ test('exact-location confirmation exposes prepared English copy when requested',
   expect(screen.getByTestId('exact-location-confirm').props.accessibilityState.disabled).toBe(false);
   fireEvent.press(screen.getByTestId('exact-location-confirm'));
   expect(onConfirm).toHaveBeenCalledTimes(1);
+});
+
+test('a verified venue without a destination remains visible but cannot be confirmed', () => {
+  const onConfirm = jest.fn();
+  const screen = render(<ExactLocationConfirmation pendingLocation={{
+    place: { placeId: 'hotel', name: 'Absolute Hotel', coordinates: { lat: 39.7668, lng: 20.0001 } },
+  }} onConfirm={onConfirm} onChangeDestination={jest.fn()} />);
+  expect(screen.getByTestId('mock-location-map')).toBeTruthy();
+  expect(screen.getByText('Absolute Hotel')).toBeTruthy();
+  expect(screen.getByTestId('exact-location-confirm').props.accessibilityState.disabled).toBe(true);
+  fireEvent.press(screen.getByTestId('exact-location-confirm'));
+  expect(onConfirm).not.toHaveBeenCalled();
 });
 
 test('a resolved place exposes destination correction without replacing the place', () => {

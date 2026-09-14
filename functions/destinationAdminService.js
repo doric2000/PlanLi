@@ -1,3 +1,5 @@
+const { touchRegistryRevision } = require('./destinationRegistryRevision');
+const { hasReviewedCatalogIdentity, sameReviewedCatalogIdentity } = require('./reviewedCatalogPolicy');
 const crypto = require('crypto');
 const { FieldPath } = require('firebase-admin/firestore');
 const { HttpsError } = require('firebase-functions/v2/https');
@@ -239,7 +241,7 @@ function qualityIssues(destination, job = {}, review = {}, now = Date.now()) {
     add('unapproved_canonical_destination', 'error', 'היעד אינו מאושר במאגר היעדים הקנוני');
   }
   if (!names.en) add('missing_english_name', 'error', 'חסר שם באנגלית');
-  if (!placeId) add('missing_google_place', 'error', 'חסר מזהה מקום מאומת של גוגל');
+  if (!placeId && !hasReviewedCatalogIdentity(destination?.identity)) add('missing_google_place', 'error', 'חסר מזהה מקום מאומת של גוגל');
   if (!googleCountry && !identityCountry) add('missing_country_code', 'error', 'חסר קוד מדינה');
   if (googleCountry && identityCountry && googleCountry !== identityCountry) add('country_conflict', 'error', 'קיימת סתירה בזיהוי המדינה');
   if (!destinationCoordinates(destination)) add('missing_coordinates', 'error', 'חסרות נקודות ציון');
@@ -582,7 +584,9 @@ function selectDestinationPolicyRegistryBinding({
       return { issue: 'destination_registry_path_mismatch' };
     }
     const selectedPrimaryProvider = String(selectedEntry?.providerRefs?.googlePlaceId || '').trim();
-    if (!providerPlaceId || selectedPrimaryProvider !== providerPlaceId) {
+    const catalogBinding = !providerPlaceId && !selectedPrimaryProvider &&
+      sameReviewedCatalogIdentity(currentCity?.identity, selectedEntry?.identity);
+    if (!catalogBinding && (!providerPlaceId || selectedPrimaryProvider !== providerPlaceId)) {
       return { issue: 'destination_registry_provider_mismatch' };
     }
   }
@@ -875,6 +879,7 @@ async function updateDestinationPolicy({ admin, auth, data }) {
       },
       updatedAt: timestamp,
     });
+    touchRegistryRevision(transaction, db, countryCode);
     transaction.set(registryRef, { ...registryPlan.writeData, updatedAt: timestamp }, { merge: true });
     transaction.set(reviewRef(db, countryId, cityId), {
       status: 'ready',
@@ -947,7 +952,9 @@ function canonicalApprovalBindingIssues(destination, registryEntry) {
   if (normalizeParentId(policy.parentId) !== normalizeParentId(registryEntry?.parentId)) {
     issues.push('destination_registry_parent_mismatch');
   }
-  if (!destinationPlaceId || destinationPlaceId !== registryPlaceId) {
+  const catalogBinding = !destinationPlaceId && !registryPlaceId &&
+    sameReviewedCatalogIdentity(destination?.identity, registryEntry?.identity);
+  if (!catalogBinding && (!destinationPlaceId || destinationPlaceId !== registryPlaceId)) {
     issues.push('destination_registry_provider_mismatch');
   }
   return issues;
@@ -1544,6 +1551,7 @@ async function approveDestination({ admin, auth, data }) {
       },
       updatedAt: timestamp,
     });
+    touchRegistryRevision(transaction, db, bundle.country?.code || bundle.countryData?.code || countryId);
     transaction.set(registryRef, {
       status: 'active',
       approval: { approvedByAdmin: true, reason, approvedBy: auth.uid },
@@ -2031,6 +2039,7 @@ async function deactivateDestination({ admin, auth, data }) {
       updatedAt: timestamp,
     });
     if (registrySnapshot?.exists) {
+      touchRegistryRevision(transaction, db, registrySnapshot.data().countryCode || countryId);
       transaction.set(registryRef, {
         status: 'inactive',
         approval: { approvedByAdmin: false, reason, deactivatedBy: auth.uid },

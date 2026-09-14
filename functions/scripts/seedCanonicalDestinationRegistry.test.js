@@ -142,7 +142,7 @@ test('resumed imports preserve administrator decisions and existing provider ide
     { id: 'lk-secondary', providerRefs: { googlePlaceId: 'secondary' } },
     { id: 'lk-reverse-secondary', providerRefs: { googlePlaceId: 'different', googlePlaceIds: ['existing'] } },
     { id: 'lk-both-secondary', providerRefs: { googlePlaceId: 'another', googlePlaceIds: ['secondary'] } },
-    { id: 'lk-new', providerRefs: { googlePlaceId: 'new' }, names: { he: 'חדש', en: 'New' } },
+    { id: 'lk-new', countryCode: 'LK', providerRefs: { googlePlaceId: 'new' }, names: { he: 'חדש', en: 'New' } },
   ];
   const documents = new Map([['system/destinationRegistry/entries/lk-existing', {
     ...entries[0], status: 'inactive', approval: { approvedByAdmin: true }, names: { he: 'שם מנהל' },
@@ -157,6 +157,7 @@ test('resumed imports preserve administrator decisions and existing provider ide
           ? entry.providerRefs.googlePlaceIds?.includes(query.providerId)
           : entry.providerRefs.googlePlaceId === query.providerId) },
       create: (ref, data) => documents.set(ref.path, data),
+      set: (ref, data) => { assert.equal(ref.path, 'system/destinationRegistry'); assert.ok(data.countryRevisions.LK); },
     }),
   };
   const admin = { firestore: { FieldValue: { serverTimestamp: () => 'timestamp' } } };

@@ -119,7 +119,7 @@ function catalogData({ countryId, cityId, city, country, timestamp }) {
       city?.googleCache?.viewport || city?.identity?.viewport || city?.viewport
     ),
     googleTypes,
-    search: { prefixes: prefixes(names.he, names.en, countryNames.he, countryNames.en) },
+    search: { prefixes: prefixes(names.he, names.en, ...(city?.canonicalPolicy?.aliases || []), countryNames.he, countryNames.en) },
     recommendationCount: Math.max(0, Number(city?.stats?.recommendationCount || 0)),
     destinationImage: city?.destinationImage || null,
     cacheExpiresAt: city?.googleCache?.expiresAt || null,

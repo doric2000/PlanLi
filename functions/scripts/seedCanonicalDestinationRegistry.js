@@ -297,6 +297,7 @@ async function commitRegistry(db, entries, adminImpl) {
         registryVersion: REGISTRY_VERSION,
         updatedAt: adminImpl.firestore.FieldValue.serverTimestamp(),
       });
+      require('../destinationRegistryRevision').touchRegistryRevision(transaction, db, entry.countryCode);
       return 'created';
     });
     if (outcome === 'conflict') result.identityConflicts.push(entry.id);

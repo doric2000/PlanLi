@@ -279,6 +279,7 @@ async function readResolvedPlaceToken({ admin, auth, resolvedPlaceToken, provide
       ? value.searchMode
       : null,
     destinationResolution: value.destinationResolution || null,
+    pendingDestinationNaming: value.pendingDestinationNaming || null,
     destinationNamingPolicyVersion: Number(value.destinationNamingPolicyVersion || 0),
     incidentId: createIncidentId(value.incidentId),
     providerCallCount: Number(value.providerCallCount || 0),
