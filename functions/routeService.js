@@ -1,3 +1,4 @@
+const { touchRegistryRevision } = require('./destinationRegistryRevision');
 const { HttpsError } = require('firebase-functions/v2/https');
 const { hasActiveAdminAccess } = require('./adminAuthorization');
 const { evaluateTextSafety } = require('./moderationService');
@@ -1358,6 +1359,7 @@ async function saveRoute({
         'A verified destination registry identity changed while saving. Search again.'
       );
       if (!snapshot.exists) {
+        touchRegistryRevision(transaction, db, entry.data.countryCode);
         transaction.create(entry.ref, {
           ...entry.data,
           createdAt: now,
@@ -1366,6 +1368,7 @@ async function saveRoute({
       } else if (!verifiedProviderRegistryEntryMatches(
         { id: snapshot.id, ...snapshot.data() }, entry.data
       )) {
+        touchRegistryRevision(transaction, db, entry.data.countryCode);
         transaction.update(entry.ref, {
           ...entry.data,
           updatedAt: now,

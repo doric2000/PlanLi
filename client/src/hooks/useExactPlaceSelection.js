@@ -193,6 +193,17 @@ export default function useExactPlaceSelection({
     try {
       const result = await resolveSelectionWithExpiryRecovery(selection);
       if (!mountedRef.current || generation !== resolutionGenerationRef.current) return null;
+      if (result?.status === 'destination_resolution_unavailable') {
+        setPendingLocation({ place: { ...result.place, resolvedPlaceToken: result.resolvedPlaceToken,
+          incidentId: result.incidentId } });
+        setDestinationChoice(null);
+        setLastSelection({ ...(typeof selection === 'object' ? selection : { placeId: selection }),
+          resolvedPlaceToken: result.resolvedPlaceToken,
+          sessionId: null, selectionId: null });
+        setLocationResolveError('המקום זוהה, אך שיוך היעד לא הושלם. אפשר לנסות שוב או לבחור יעד.');
+        setLocationResolveRetryable(true);
+        return null;
+      }
       if (result?.status === 'destination_name_confirmation_required') {
         setDestinationChoice(result);
         setPendingLocation({ place: result.place });

@@ -160,6 +160,10 @@ function destinationHebrewName(destination) {
 
 function normalizeDestinationHebrewData(destination, options = {}) {
   const source = destination && typeof destination === 'object' ? destination : {};
+  if (source.identity?.source === 'planli_catalog' && !source.googleCache?.nameSources?.he) {
+    return { destination: source, name: source.identity.names?.he || '',
+      source: 'planli_catalog', changed: false };
+  }
   const googleCache = source.googleCache || {};
   const names = googleCache.names || {};
   const existingSource = String(googleCache.nameSources?.he || '').trim();

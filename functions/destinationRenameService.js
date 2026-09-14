@@ -6,6 +6,7 @@ const { buildSearchIndex, destinationKey } = require('./discoverySearch');
 const {
   DESTINATION_NAMING_POLICY_VERSION,
   hasHebrewName,
+  destinationHebrewName,
 } = require('./destinationLocalizationService');
 
 const DEFAULT_PAGE_SIZE = 25;
@@ -45,7 +46,11 @@ function renameJobRef(db, jobId) {
   return db.doc(`system/runtime/destinationRenameJobs/${jobId}`);
 }
 
-function destinationNamePatch(nameHe) {
+function destinationNamePatch(nameHe, destination) {
+  if (destination?.identity?.source === 'planli_catalog') return {
+    namingPolicyVersion: DESTINATION_NAMING_POLICY_VERSION,
+    'identity.names.he': nameHe, 'identity.nameSources.he': 'admin',
+  };
   return {
     namingPolicyVersion: DESTINATION_NAMING_POLICY_VERSION,
     'googleCache.names.he': nameHe,
@@ -210,10 +215,10 @@ async function startDestinationRename({ admin, countryId, cityId, nameHe, reason
     ]);
     if (!citySnapshot.exists) fail('not-found', 'Destination was not found.', 'destination_missing');
     const existingJob = jobSnapshot.exists ? jobSnapshot.data() || {} : {};
-    const currentName = citySnapshot.data()?.googleCache?.names?.he;
+    const currentName = destinationHebrewName(citySnapshot.data());
     const shouldQueue = shouldQueueRename(existingJob, currentName, cleanName);
     transaction.update(cityRef, {
-      ...destinationNamePatch(cleanName),
+      ...destinationNamePatch(cleanName, citySnapshot.data()),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
     if (shouldQueue) {
@@ -286,8 +291,10 @@ async function processDestinationRenameJob({ admin, jobId, pageSize = DEFAULT_PA
     return { state: 'ignored', status: job.status };
   }
   const citySnapshot = await db.doc(`countries/${job.countryId}/destinations/${job.cityId}`).get();
-  if (!citySnapshot.exists || citySnapshot.data()?.googleCache?.names?.he !== job.nameHe ||
-      citySnapshot.data()?.googleCache?.nameSources?.he !== 'admin') {
+  const city = citySnapshot.data();
+  const nameSource = city?.identity?.source === 'planli_catalog'
+    ? city.identity.nameSources?.he : city?.googleCache?.nameSources?.he;
+  if (!citySnapshot.exists || destinationHebrewName(city) !== job.nameHe || nameSource !== 'admin') {
     await jobRef.update({
       status: 'superseded',
       errors: [{ code: 'canonical_name_changed' }],

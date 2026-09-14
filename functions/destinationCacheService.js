@@ -4,6 +4,9 @@ const {
 
 function hasUsableDestinationCache(destination) {
   if (Number(destination?.schemaVersion || 0) < 3) return true;
+  if (destination?.identity?.source === 'planli_catalog') {
+    return Boolean(hasHebrewName(destination.identity.names?.he) && destination.identity.names?.en);
+  }
   return Boolean(
     hasHebrewName(destination?.googleCache?.names?.he) &&
     destination?.googleCache?.names?.en

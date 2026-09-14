@@ -4,6 +4,7 @@ const { compactDestinationSearchText } = require('./destinationCatalogService');
 const { distanceKm } = require('./destinationIdentityService');
 const { hasVerifiedProviderDestinationApproval } = require('./destinationApprovalPolicy');
 const sriLankaPolicies = require('./data/sriLankaDestinationPolicies');
+const { hasReviewedCatalogApproval, hasReviewedCatalogIdentity } = require('./reviewedCatalogPolicy');
 
 const REGISTRY_PATH = 'system/destinationRegistry/entries';
 const REGISTRY_VERSION = 3;
@@ -270,7 +271,7 @@ function buildMatchProfile(entry, { radiusCapKm = Infinity } = {}) {
     // membership. Policy approval must not erase semantic alias matching.
     containmentReviewed: legacyReviewed || entry?.matchProfile?.source === 'planli_reviewed',
     aliasEligible: identity.compatible && !exactOnlyNaturalFeature &&
-      (trusted || hasVerifiedProviderDestinationApproval(entry)),
+      (trusted || hasVerifiedProviderDestinationApproval(entry) || hasReviewedCatalogApproval(entry)),
     areas,
     aliasMaxDistanceKm: Number(entry?.matchProfile?.aliasMaxDistanceKm ||
       Math.max(15, ...areas.filter((area) => area.type === 'circle').map((area) => area.radiusKm), 0)),
@@ -302,6 +303,10 @@ function validateRegistryEntry(entry, {
   requireResearchSources = true,
 } = {}) {
   const normalized = normalizeEntry(entry);
+  const reviewedCatalog = hasReviewedCatalogIdentity(normalized.identity) &&
+    normalized.identity.countryCode === normalized.countryCode &&
+    normalized.identity.names.he === normalized.names.he && normalized.identity.names.en === normalized.names.en;
+  if (reviewedCatalog) requireProviderIdentity = false;
   const errors = [];
   if (!isValidRegistryId(normalized.id)) errors.push('invalid_id');
   if (!/^[A-Z]{2}$/.test(normalized.countryCode)) errors.push('invalid_country_code');
@@ -331,7 +336,7 @@ function validateRegistryEntry(entry, {
   if (requireProviderIdentity && !validViewport && !validRadius) errors.push('missing_geometry');
   const sources = Array.isArray(normalized.researchSources) ? normalized.researchSources : [];
   if (requireResearchSources && normalized.approval?.approvedByAdmin !== true &&
-      !hasVerifiedProviderDestinationApproval(normalized) &&
+      !hasVerifiedProviderDestinationApproval(normalized) && !reviewedCatalog &&
       new Set(sources.map((source) => source?.url).filter(Boolean)).size < 2) {
     errors.push('insufficient_research_sources');
   }
@@ -618,8 +623,11 @@ function matchCanonicalEntry(entries, {
 
 async function registryEntriesForCountry(db, countryCode, now = Date.now()) {
   const code = String(countryCode || '').toUpperCase();
+  const metadata = typeof db.doc === 'function'
+    ? await db.doc('system/destinationRegistry').get() : null;
+  const revision = metadata?.data?.()?.countryRevisions?.[code] || '';
   const cached = cache.get(code);
-  if (cached && cached.expiresAt > now) return cached.entries;
+  if (cached && cached.db === db && cached.revision === revision && cached.expiresAt > now) return cached.entries;
   let persisted = [];
   try {
     const snapshot = await db.collection(REGISTRY_PATH).where('countryCode', '==', code).get();
@@ -656,7 +664,7 @@ async function registryEntriesForCountry(db, countryCode, now = Date.now()) {
     }) : entry);
   });
   const entries = Array.from(merged.values());
-  cache.set(code, { expiresAt: now + CACHE_TTL_MS, entries });
+  cache.set(code, { db, revision, expiresAt: now + CACHE_TTL_MS, entries });
   return entries;
 }
 

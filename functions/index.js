@@ -450,6 +450,7 @@ exports.resolvePlaceSelection = callable(
         incidentId: selection.incidentId,
         supportsDestinationChoice: request.data?.supportsDestinationChoice === true,
         supportsDestinationSearch: request.data?.supportsDestinationSearch === true,
+        supportsLocationRecovery: request.data?.supportsLocationRecovery === true,
         selectionIntent: request.data?.selectionIntent === 'destination'
           ? 'destination'
           : 'exact_place',
@@ -1140,7 +1141,9 @@ async function handleMediaCleanup(event, collectionName) {
 exports.onDestinationImageCreated = firestoreCreated(
   'countries/{countryId}/destinations/{cityId}',
   async (event) => {
-    await onDestinationCreated({ admin, countryId: event.params.countryId, cityId: event.params.cityId });
+    const initial = await onDestinationCreated({ admin, countryId: event.params.countryId, cityId: event.params.cityId });
+    // Bulk catalog materialization must not launch thousands of unrelated image-provider requests.
+    if (require('./reviewedCatalogPolicy').hasReviewedCatalogIdentity(event.data?.data()?.identity)) return initial;
     await resolveAndPersistDestinationImage({
       admin,
       countryId: event.params.countryId,

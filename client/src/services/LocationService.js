@@ -97,7 +97,7 @@ export async function searchDestinationChoices(query, { countryId, onResults } =
 export const requestDestinationChoice = ({ resolvedPlaceToken, incidentId, placeId }) =>
   resolveRecommendationDestination({
     resolvedPlaceToken, incidentId, placeId, requestDestinationChoice: true,
-    supportsDestinationChoice: true, supportsDestinationSearch: true,
+    supportsDestinationChoice: true, supportsDestinationSearch: true, supportsLocationRecovery: true,
   });
 
 export const searchPlaces = async (searchText, { signal, locationBias } = {}) => {
@@ -127,11 +127,11 @@ export const resolveDestinationForPlacePreview = async (selectionOrPlaceId, {
           ...(selectionOrPlaceId || {}),
           ...(typeof placeId === 'string' ? { placeId } : {}),
           supportsDestinationChoice: true,
-          supportsDestinationSearch: true,
+          supportsDestinationSearch: true, supportsLocationRecovery: true,
           selectionIntent,
           ...(confirmedHebrewName ? { confirmedHebrewName } : {}),
         }
-      : { placeId, selectionIntent, supportsDestinationChoice: true, supportsDestinationSearch: true,
+      : { placeId, selectionIntent, supportsDestinationChoice: true, supportsDestinationSearch: true, supportsLocationRecovery: true,
           ...(confirmedHebrewName ? { confirmedHebrewName } : {}) });
     return { ...result, ...(result?.place ? { place: { ...result.place,
       ...(result.resolvedPlaceToken ? { resolvedPlaceToken: result.resolvedPlaceToken } : {}),
@@ -143,7 +143,7 @@ export const resolveDestinationForPlacePreview = async (selectionOrPlaceId, {
     selectionId: selection.selectionId,
     incidentId: selection.incidentId,
     supportsDestinationChoice: true,
-    supportsDestinationSearch: true,
+    supportsDestinationSearch: true, supportsLocationRecovery: true,
     selectionIntent,
     ...(confirmedHebrewName ? { confirmedHebrewName } : {}),
   });
@@ -214,7 +214,7 @@ export const confirmProvisionalDestinationName = async ({
     selectionIntent,
     confirmedHebrewName,
     supportsDestinationChoice: true,
-    supportsDestinationSearch: true,
+    supportsDestinationSearch: true, supportsLocationRecovery: true,
   });
   const confirmedResolvedPlaceToken = result?.resolvedPlaceToken || resolvedPlaceToken;
   const confirmedIncidentId = result?.incidentId || incidentId;
