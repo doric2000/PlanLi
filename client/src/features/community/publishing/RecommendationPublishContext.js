@@ -668,6 +668,7 @@ export function ContentPublishProvider({ children }) {
       status: 'queued',
       stage: 'queued',
       attempts: 0,
+      feedbackAttempt: Math.max(job.feedbackAttempt || 1, job.background?.attempt || 1) + 1,
       retryAt: 0,
       error: null,
       ...(job.background ? { background: { ...job.background, retryRequested: true } } : {}),

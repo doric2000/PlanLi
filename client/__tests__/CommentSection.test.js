@@ -1,4 +1,5 @@
 import React from 'react';
+import { Alert } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 jest.mock('firebase/firestore', () => ({
@@ -144,6 +145,20 @@ describe('threaded comment presentation', () => {
     await act(async () => fireEvent.press(screen.getByTestId('toggle-replies-root-1')));
     expect(await screen.findByTestId('replies-root-1')).toBeTruthy();
     expect(screen.getByText('בתגובה לנועה')).toBeTruthy();
+  });
+
+  it('keeps the draft after one failure alert and never automatically retries', async () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    mockSaveComment.mockRejectedValueOnce(new Error('failed'));
+    const screen = render(<CommentsSection collectionName="recommendations" postId="post-1" />);
+    fireEvent.changeText(screen.getByTestId('comment-input'), 'בדיקה');
+    await act(async () => fireEvent.press(screen.getByTestId('comment-send')));
+    expect(alert).toHaveBeenCalledTimes(1);
+    expect(alert).toHaveBeenCalledWith('התגובה לא נשלחה', 'אפשר לנסות שוב בעוד כמה רגעים.');
+    expect(screen.getByTestId('comment-input').props.value).toBe('בדיקה');
+    act(() => jest.advanceTimersByTime(60000));
+    expect(mockSaveComment).toHaveBeenCalledTimes(1);
+    alert.mockRestore();
   });
 
   it('deduplicates pages and identifies edit timestamps', () => {

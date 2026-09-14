@@ -7,7 +7,6 @@ const callables = new Map();
 const REPLAY_PROTECTED_CALLABLES = new Set(['deleteContent', 'requestAccountDeletion']);
 const FEEDBACK = {
   setFavorite: { kind: 'favorite', quiet: true }, setReaction: { kind: 'reaction', quiet: true },
-  saveComment: { kind: 'comment' }, deleteComment: { kind: 'deletion' },
   deleteContent: { kind: 'deletion' }, setNotificationRead: { kind: 'notifications', quiet: true },
   clearNotifications: { kind: 'notifications' }, deleteNotification: { kind: 'notifications', quiet: true },
   requestAccountDeletion: { kind: 'deletion' }, submitReport: { kind: 'report' }, setBlockedUser: { kind: 'block' },

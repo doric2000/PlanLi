@@ -87,6 +87,7 @@ it('retains the source for a failed upload and retries only when requested', asy
   await act(async () => { await api.retry(api.jobs[0].id); });
   await waitFor(() => expect(api.jobs).toHaveLength(0));
   expect(mockUpload).toHaveBeenCalledTimes(2);
+  expect(mockRecord).toHaveBeenCalledWith(expect.objectContaining({ status: 'success', attempt: 2 }), expect.anything());
   screen.unmount();
 });
 

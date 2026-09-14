@@ -8,6 +8,7 @@ import { operationStore } from './operationService';
 import { openOperation } from './operationNavigation';
 import { TERMINAL_STATES } from './operationModel';
 import OperationCard, { OperationButton } from './OperationCard';
+import OperationDismissButton from './OperationDismissButton';
 import OperationRegionAction from './OperationRegionAction';
 import styles from '../../styles/operations';
 import { useProfilePhotoJobs } from './ProfilePhotoContext';
@@ -80,8 +81,7 @@ export default function ActivityScreen({ navigation, route }) {
                 }) },
               ])}>מחיקת הטיוטה</OperationButton>
             </>}
-            {['failed', 'uncertain'].includes(entry.status) && !job && <OperationButton
-              onPress={() => operationStore.update({ ...entry, acknowledged: true, dismissed: true }).catch(() => {})}>אישור קריאה</OperationButton>}
+            {['failed', 'uncertain'].includes(entry.status) && !job && <OperationDismissButton entry={entry}>אישור קריאה</OperationDismissButton>}
           </View>
         </OperationCard></View>;
       }} />

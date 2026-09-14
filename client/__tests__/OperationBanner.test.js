@@ -5,12 +5,13 @@ import OperationBanner from '../src/features/operations/OperationBanner';
 
 let mockState;
 const mockUpdate = jest.fn(async () => {});
+const mockDismiss = jest.fn(async () => {});
 jest.mock('../src/features/operations/OperationState', () => ({ useOperations: () => mockState }));
-jest.mock('../src/features/operations/operationService', () => ({ operationStore: { update: (...args) => mockUpdate(...args), getSnapshot: () => mockState.entries } }));
+jest.mock('../src/features/operations/operationService', () => ({ operationStore: { dismiss: (...args) => mockDismiss(...args), update: (...args) => mockUpdate(...args), getSnapshot: () => mockState.entries } }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ bottom: 0 }) }));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 const success = { id: 'one', ownerUid: 'owner', kind: 'avatar', status: 'success', stage: 'success', visibleMs: 0, updatedAt: 1 };
-beforeEach(() => { jest.useFakeTimers(); mockUpdate.mockClear(); mockState = { active: true, noticeActive: false, entries: [success] }; });
+beforeEach(() => { jest.useFakeTimers(); mockUpdate.mockClear(); mockDismiss.mockReset().mockResolvedValue(); mockState = { active: true, noticeActive: false, entries: [success] }; });
 afterEach(() => { jest.useRealTimers(); });
 
 test('a completion receives eight foreground seconds, preserving remaining time across backgrounding', () => {
@@ -28,13 +29,28 @@ test('a completion receives eight foreground seconds, preserving remaining time 
   expect(mockUpdate).toHaveBeenLastCalledWith(expect.objectContaining({ acknowledged: true, visibleMs: 8000 }));
 });
 
-test('failures stay visible until acknowledgement and dismissal retains history', () => {
+test('failures stay visible until acknowledgement and dismissal retains history', async () => {
   mockState.entries = [{ ...success, status: 'failed', stage: 'failed' }];
   const screen = render(<OperationBanner />);
   act(() => jest.advanceTimersByTime(60000));
   expect(mockUpdate).not.toHaveBeenCalled();
+  await act(async () => fireEvent.press(screen.getByTestId('operation-dismiss')));
+  expect(mockDismiss).toHaveBeenCalledWith('one', 'owner', expect.objectContaining({ status: 'failed' }));
+});
+
+test('slow dismissal disables repeated taps and storage failure offers an inline retry', async () => {
+  mockState.entries = [{ ...success, status: 'failed' }];
+  let reject;
+  mockDismiss.mockImplementationOnce(() => new Promise((_resolve, fail) => { reject = fail; }));
+  const screen = render(<OperationBanner />);
   fireEvent.press(screen.getByTestId('operation-dismiss'));
-  expect(mockUpdate).toHaveBeenCalledWith(expect.objectContaining({ id: 'one', dismissed: true, acknowledged: true }));
+  fireEvent.press(screen.getByTestId('operation-dismiss'));
+  expect(mockDismiss).toHaveBeenCalledTimes(1);
+  expect(screen.getByTestId('operation-dismiss').props.accessibilityState.disabled).toBe(true);
+  await act(async () => reject(new Error('disk full')));
+  expect(screen.getByText('לא הצלחנו לשמור את סגירת ההודעה. אפשר לנסות שוב.')).toBeTruthy();
+  await act(async () => fireEvent.press(screen.getByText('ניסיון נוסף לסגירה')));
+  expect(mockDismiss).toHaveBeenCalledTimes(2);
 });
 
 test('another upload cannot hide a completed result and Undo pauses its timer', () => {

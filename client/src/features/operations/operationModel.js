@@ -72,6 +72,9 @@ export function sanitizeOperation(value) {
     acknowledged: value.acknowledged === true,
     visibleMs: Math.max(0, Math.min(SUCCESS_VISIBLE_MS, Number(value.visibleMs) || 0)),
     quiet: value.quiet === true, dismissed: value.dismissed === true,
+    attempt: Math.max(1, Math.trunc(Number(value.attempt) || 1)),
+    dismissedOutcomes: [...new Set((Array.isArray(value.dismissedOutcomes) ? value.dismissedOutcomes : [])
+      .filter((status) => TERMINAL_STATES.has(status)))],
     progress: Number.isFinite(value.progress) ? Math.max(0, Math.min(1, value.progress)) : null,
     message: text(value.message, 300), code: text(value.code, 80),
     retryable: value.retryable === true,
@@ -90,7 +93,7 @@ export function pruneOperations(operations, now = Date.now()) {
 }
 
 export function selectBanner(operations) {
-  const visible = operations.filter((entry) => !entry.dismissed && (!entry.quiet || ['failed', 'uncertain'].includes(entry.status)));
+  const visible = operations.filter((entry) => entry.kind !== 'comment' && !entry.dismissed && (!entry.quiet || ['failed', 'uncertain'].includes(entry.status)));
   // Every unseen outcome gets foreground time, even when another upload is running.
   return visible.filter((entry) => TERMINAL_STATES.has(entry.status) && !entry.acknowledged)
     .sort((a, b) => a.updatedAt - b.updatedAt)[0]

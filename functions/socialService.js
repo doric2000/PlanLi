@@ -476,8 +476,7 @@ async function getReactionState({ admin, auth, data }) {
 }
 
 async function saveComment({ admin, auth, data }) {
-  const isAdmin = await hasActiveAdminAccess({ admin, auth, requireRecentTotp: true });
-  if (!isAdmin) assertVerified(auth);
+  assertVerified(auth);
   const target = normalizeTarget(data?.target);
   assert(target.type !== 'city', 'invalid-argument', 'Cities do not support comments.');
   const text = cleanText(data?.text, { field: 'text', min: 1, max: 2000 });
@@ -522,7 +521,8 @@ async function saveComment({ admin, auth, data }) {
         'Only published comments can be edited.'
       );
       assert(
-        previous.authorId === auth.uid || isAdmin,
+        previous.authorId === auth.uid
+          || await hasActiveAdminAccess({ admin, auth, requireRecentTotp: true }),
         'permission-denied',
         'You do not own this comment.'
       );
@@ -783,11 +783,11 @@ async function handleCommentThreadDeletionJobWrite({ admin, event }) {
 
 async function deleteComment({ admin, auth, data, internalActorUid = null }) {
   const internalUid = internalActorUid ? cleanId(internalActorUid, 'internalActorUid') : null;
-  const isAdmin = internalUid
-    ? true
-    : await hasActiveAdminAccess({ admin, auth, requireRecentTotp: true });
-  if (!isAdmin) assertVerified(auth);
+  if (!internalUid) assertVerified(auth);
   const actorUid = internalUid || auth.uid;
+  // Resolve elevated access only when ownership does not authorize the action.
+  const canDelete = async (ownerUid) => ownerUid === actorUid || Boolean(internalUid)
+    || await hasActiveAdminAccess({ admin, auth, requireRecentTotp: true });
   const target = normalizeTarget(data?.target);
   const commentId = cleanId(data?.commentId, 'commentId');
   if (!internalUid) await consumeRateLimit({ admin, uid: auth.uid, action: 'comment' });
@@ -811,7 +811,7 @@ async function deleteComment({ admin, auth, data, internalActorUid = null }) {
       const rootJob = rootJobSnapshot.exists ? rootJobSnapshot.data() || {} : null;
       if (validCommentThreadDeletionJob(rootJob)) {
         assert(
-          rootJob.authorizedUid === actorUid || isAdmin,
+          await canDelete(rootJob.authorizedUid),
           'not-found',
           'Comment does not exist.'
         );
@@ -820,7 +820,7 @@ async function deleteComment({ admin, auth, data, internalActorUid = null }) {
       }
       const cleanupJob = cleanupJobSnapshot.exists ? cleanupJobSnapshot.data() || {} : null;
       assert(
-        cleanupJob?.authorizedUid === actorUid || isAdmin,
+        cleanupJob && await canDelete(cleanupJob.authorizedUid),
         'not-found',
         'Comment does not exist.'
       );
@@ -829,7 +829,7 @@ async function deleteComment({ admin, auth, data, internalActorUid = null }) {
     }
     const comment = commentSnapshot.data();
     assert(
-      comment.authorId === actorUid || isAdmin,
+      await canDelete(comment.authorId),
       'permission-denied',
       'You do not own this comment.'
     );

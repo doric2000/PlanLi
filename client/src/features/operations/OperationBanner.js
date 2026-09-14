@@ -5,6 +5,7 @@ import { useOperations } from './OperationState';
 import { operationStore } from './operationService';
 import { RESOLVED_STATES, selectBanner, SUCCESS_VISIBLE_MS, TERMINAL_STATES } from './operationModel';
 import OperationCard, { OperationButton } from './OperationCard';
+import OperationDismissButton from './OperationDismissButton';
 import OperationRegionAction from './OperationRegionAction';
 import styles from '../../styles/operations';
 
@@ -26,7 +27,7 @@ export default function OperationBanner({ onActivity, onOpen, onChooseRegion, hi
       if (!current || current.acknowledged || current.status !== entry.status) return;
       operationStore.update({ ...current, visibleMs: Math.min(SUCCESS_VISIBLE_MS, (entry.visibleMs || 0) + Date.now() - started) }).catch(() => {});
     };
-  }, [entry?.id, entry?.status, active, hidden]);
+  }, [entry?.id, entry?.ownerUid, entry?.attempt, entry?.status, active, hidden]);
   if (!entry || hidden) return null;
   return <View style={[styles.banner, { bottom: Math.max(insets.bottom, 10) + 82 }]}
     accessibilityLiveRegion="polite" testID="operation-banner">
@@ -35,9 +36,8 @@ export default function OperationBanner({ onActivity, onOpen, onChooseRegion, hi
         <OperationRegionAction entry={entry} onChooseRegion={onChooseRegion} />
         <OperationButton onPress={onActivity} testID="operation-activity">הפעילות שלי</OperationButton>
         {TERMINAL_STATES.has(entry.status) && <OperationButton onPress={() => onOpen?.(entry)} testID="operation-open">צפייה</OperationButton>}
-        {TERMINAL_STATES.has(entry.status) && <OperationButton
-          onPress={() => operationStore.update({ ...entry, acknowledged: true, dismissed: true }).catch(() => {})}
-          label="סגירת ההודעה, הפעולה נשארת בהיסטוריה" testID="operation-dismiss">סגירה</OperationButton>}
+        {TERMINAL_STATES.has(entry.status) && <OperationDismissButton entry={entry}
+          label="סגירת ההודעה, הפעולה נשארת בהיסטוריה" testID="operation-dismiss">סגירה</OperationDismissButton>}
       </View>
     </OperationCard>
   </View>;

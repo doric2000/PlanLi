@@ -89,6 +89,10 @@ export async function runBackgroundMedia({ job, kind, media, checkpoint, stage, 
   if (remote.status === 'failed' && background.retryRequested) {
     remote = await retryBackgroundOperation(background.operationId);
   }
+  if (remote.attempt && remote.attempt !== background.attempt) {
+    background = { ...background, attempt: remote.attempt };
+    await checkpoint(background);
+  }
   const explicitRetry = background.retryRequested === true;
   if (explicitRetry) { background = { ...background, retryRequested: false }; await checkpoint(background); }
   if (!terminal(remote.status)) {
@@ -157,10 +161,10 @@ export async function syncBackgroundHistory(uid, operationId, before) {
     await operationStore.update({ ...(previous || {}), id: previous?.id || `background:${job.operationId}`,
       ownerUid: uid, kind: job.kind, source: previous?.source || 'background', serverOperationId: job.operationId,
       status: job.status === 'ready' ? 'processing' : job.status, stage: job.stage, retryable: job.error?.retryable === true,
+      attempt: job.attempt || 1,
       discoveryRegionIds: job.kind === 'route' ? job.result?.discoveryRegionIds : [job.result?.discoveryRegionId].filter(Boolean),
       targetId: job.result?.routeId || job.result?.recommendationId || (job.kind === 'avatar' ? uid : null),
       createdAt: job.createdAt, updatedAt: job.updatedAt, message: error?.message || null, code: error?.code || null,
-      ...(previous?.status !== job.status ? { acknowledged: false, dismissed: false, visibleMs: 0 } : {}),
     });
   }
   return response.nextBefore || null;
