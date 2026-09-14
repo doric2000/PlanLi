@@ -1162,7 +1162,9 @@ exports.onDestinationImageCreated = firestoreCreated(
       cityId: event.params.cityId,
     });
   },
-  { secrets: [unsplashAccessKey], timeoutSeconds: 120 }
+  // Enrichment loads a global airport source and may decode images. Bound the
+  // per-instance event fanout so a catalog import cannot exhaust shared memory.
+  { secrets: [unsplashAccessKey], timeoutSeconds: 120, memory: '512MiB', concurrency: 1, maxInstances: 3 }
 );
 
 exports.auditDestinationQualityScheduled = onSchedule(

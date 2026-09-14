@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const {
   closestScheduledAirport,
   haversineDistanceKm,
+  parseCsvRows,
   parseOurAirportsCsv,
   downloadAirports,
   resetAirportDownloadCacheForTests,
@@ -16,6 +17,28 @@ const csv = [
   '3,LGYY,large_airport,No scheduled service,37.5,25.4,0,EU,GR,GR-L,Mykonos,no,LGYY,NSS,LGYY,,,,',
   '4,LGZZ,large_airport,Missing IATA,37.6,25.5,0,EU,GR,GR-L,Mykonos,yes,LGZZ,,LGZZ,,,,',
 ].join('\n');
+
+test('CSV row iteration preserves escaped quotes, embedded newlines and an unterminated final row', () => {
+  assert.deepEqual(parseCsvRows('a,b\r\n"x,\n""quoted""",z\r\nlast,'), [
+    ['a', 'b'], ['x,\n"quoted"', 'z'], ['last', ''],
+  ]);
+});
+
+test('airport filtering handles a global-sized source within a bounded heap', () => {
+  const { spawnSync } = require('node:child_process');
+  const source = `
+    const { parseOurAirportsCsv } = require(${JSON.stringify(require.resolve('./airportFacts'))});
+    const header = 'ident,type,name,latitude_deg,longitude_deg,scheduled_service,iata_code,unused1,unused2,unused3,unused4,unused5\\n';
+    const ignored = 'SMALL,small_airport,An unused airfield,10,20,no,,one,two,three,four,five\\n';
+    const selected = 'TEST,large_airport,"International, Airport",10,20,yes,TST,,,,,\\n';
+    const result = parseOurAirportsCsv(header + ignored.repeat(200000) + selected);
+    if (result.length !== 1 || result[0].iataCode !== 'TST') process.exit(2);
+  `;
+  const result = spawnSync(process.execPath, ['--max-old-space-size=64', '-e', source], {
+    encoding: 'utf8', timeout: 30000, maxBuffer: 128 * 1024, windowsHide: true,
+  });
+  assert.equal(result.status, 0, result.error?.message || result.stderr);
+});
 
 test('OurAirports parser keeps only scheduled medium/large airports with IATA', () => {
   const airports = parseOurAirportsCsv(csv);
