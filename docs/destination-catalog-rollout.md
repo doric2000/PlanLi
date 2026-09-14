@@ -47,10 +47,13 @@ and retrieval dates. Seven use Wikidata settlement coordinates; Hiriketiya uses
 the coastal destination documented by ReiseCeylon. Existing reviewed/provider
 coordinates supply other curated entries. No bulk Google enrichment is required.
 
-The production dry-run initially classified 2,961 candidates as new, 37 as linked
-and two as excluded by existing restrictions: `lk-sri-lanka-south-coast` and
-`il-wd-q165867`. These are planning counts, not an assertion of applied writes.
-The final release record in README is authoritative for applied/live counts.
+The September 14 production apply created 2,961 destinations and linked 37
+candidates to existing destinations, with zero conflicts. Existing restrictions
+excluded `lk-sri-lanka-south-coast` and `il-wd-q165867`; both remain inactive.
+Independent readback verified all 2,998 eligible bindings, a total active public
+catalog of 3,012 destinations and all 50 recommendations active with valid
+destinations. The README release record is authoritative for deployment IDs,
+timestamps and current verification limits.
 
 ## Operation and validation
 
@@ -69,3 +72,18 @@ owner-bound recovery, country/distance exclusions, import retries, inactive and
 ambiguous identities, and concurrent registry changes. Native map testing has a
 separate runtime receipt; synthetic tests do not establish physical iPhone or
 production App Check behavior.
+
+The production import exposed excessive memory retention in background airport
+enrichment. The airport CSV parser now filters rows as they are parsed; its
+public row-parser API and warm download cache remain compatible. The destination
+creation trigger uses 512 MiB, concurrency 1 and at most three instances, retaining
+zero idle instances and retries. A 14.6 MB source that failed with a 64 MiB heap
+before the fix passes afterward. The new deployed revision processed real events
+successfully without errors in the verified window. This background repair does
+not alter destination identity, approval or content publication.
+
+Android native validation reached the composer and displayed the provider fixture
+after fixing developer-menu dismissal in the test bootstrap. The remaining
+Maestro result-selector failure prevented completion of the map flow. Physical
+iPhone selection, expanded map gestures and actual OTA application remain
+unverified; the local callable and component tests do not establish those results.

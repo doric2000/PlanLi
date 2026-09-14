@@ -18,18 +18,130 @@ Source: `fix/destination-resolution-and-world-catalog`, based on
 `1c704dbaf351d7cbebe8cdcb8c08d92ac00c9b65`, with the reviewed destination changes.
 This was a data repair, not a backend/client deployment or store release.
 The backend release below deploys the resolver and admin projection fix; client
-distribution is tracked separately. Bulk enrichment of the 3,000 research
-candidates was not applied;
-the existing Text Search quota remains zero. See
+distribution is tracked separately. At that release, bulk enrichment of the 3,000 research
+candidates was not applied; the September 14 catalog rollout below supersedes that state.
+The existing Text Search quota remains zero. See
 [destination resolution and repair details](docs/destination-resolution.md).
 
 ## Current environment status
 
+### Destination resolution and reviewed catalog rollout (2026-09-14)
+
+PR [#377](https://github.com/doric2000/PlanLi/pull/377) merged as
+`9e499bbc2a31aacd7ebec836fa5bc56817c05e77` after all applicable GitHub checks passed.
+This is the current production iOS runtime `1.3.0` update and the source of the
+destination backend rollout. The earlier Profile crash hotfix remains included.
+
+The Ksamil failure combined a stale country-registry cache with a fallback that
+treated a boolean as a destination record. The resolver now keeps the actual
+record and checks an atomic country revision before reusing registry data.
+Verified venues survive recoverable classification failures; a verified locality
+missing only Hebrew asks for its name without requiring venue reselection.
+Catalog identities are supported by classification, manual selection, publication,
+public search and admin quality/naming. Publication still requires a current
+approved destination and all existing ownership/moderation checks. See
+[destination flow, catalog policy and import procedure](docs/destination-catalog-rollout.md).
+
+Backend: all 23 selected Functions were independently verified ACTIVE at
+`2026-09-14T17:58:47.307Z`, Node.js 22, `europe-west1`, `minInstances: 0`, with all
+traffic on their new revisions. Targets: `resolvePlaceSelection`,
+`resolveRecommendationDestination`, `saveRecommendation`, `publishRecommendationDraft`,
+`saveRoute`, `publishRouteDraft`, `getDestinationOverview`, `searchDestinations`,
+`getDestinationReview`, `recheckDestination`, `approveDestination`,
+`updateDestinationPolicy`, `deactivateDestination`, `setDestinationHebrewName`,
+`setDestinationAirport`, `selectDestinationImageCandidate`, `setDestinationUploadedImage`,
+`onDestinationImageCreated`, `auditDestinationQualityScheduled`,
+`onDestinationCatalogSync`, `onCountryDestinationCatalogSync`,
+`onDestinationRenameJobWritten` and `onCityFavoriteProjection`.
+The resolver/save/publication group has Firebase source hash
+`3b644d3ed089ba46db39ca04697fcdf02d4e1879`; resolver revision is
+`resolveplaceselection-00038-cir`. Unauthenticated resolver/save/publication probes
+returned 401, and the post-deploy error query returned no errors at verification.
+The first CLI attempt stopped before upload at its local discovery timeout;
+the bounded retry succeeded. No Rules, indexes, Hosting, IAM or quotas changed.
+
+iOS: published `2026-09-14T18:27:51.010Z`, channel/environment `production`, group
+[61dfaa40](https://expo.dev/accounts/doric2000/projects/client/updates/61dfaa40-3579-4bde-b875-ff23081f3953),
+update `01a0a12c-ec62-7466-a6dc-81384ed40a79`. Verified candidate
+`4f74b46d-fa82-4e19-8d4a-47c23a9e664f` was republished without another export.
+The immutable launch bundle is 10,710,412 bytes, SHA-256
+`D4F073F56AAFDF7780FE466F83AB7BB44588CAE13342699FC4021E500FF4FC45`.
+The public production-channel manifest independently served that exact update
+and hash at `2026-09-14T18:29:29.294Z`.
+
+Target remains TestFlight **1.1.1 (30)**, build
+`b16eca67-6291-4520-82b6-10cb1af190f5`, runtime `1.3.0`. Native compatibility passed
+the unchanged reviewed optional-module fingerprint
+`f5fac23f11fb1f2c0b1adbaf545b164644c461d3`; the optional background-transfer feature
+remains disabled on build 30. No new EAS/native production build, app version,
+Apple submission/review or Android OTA was performed. Physical iPhone download,
+application, location selection and map gestures remain unverified.
+
+Catalog: the authorized production apply finished on September 14 at 18:46 UTC:
+**2,961 new destinations, 37 links to existing destinations, two preserved
+restrictions and zero conflicts** across the existing 3,000-candidate list.
+The excluded records are the misidentified Sri Lanka South Coast and the already
+inactive Modi'in-Maccabim-Re'ut destination. Neither was reactivated.
+The catalog digest is
+`c827295a60609b5503d3cf415ab8fb250f1126d32489f9e9b1248fc2be525d9c`;
+the reviewed live-plan digest is
+`856498b6b74030fea1891eb9b597eca1907ea28d3462a089db0843d1d97574cf`.
+No bulk Google enrichment was run and the import created no new image-provider jobs.
+
+Independent production verification at `2026-09-14T19:07:59.587Z` checked all
+**2,998 eligible candidate bindings**, canonical policies, Hebrew names, public
+catalog entries and admin quality. The public catalog contains **3,012 active
+destinations** including destinations outside this candidate list. All **50
+recommendations** are active with valid references; destination holds, pending
+destination reviews and stale held admin projections are zero. The Absolute Hotel
+coordinates/locality evidence resolve to Ksamil, and Hoi An Dong ward evidence
+resolves to Hoi An, using the live registry without additional provider requests.
+The two inactive restrictions were independently checked again after the rollout.
+
+The import's background airport enrichment exposed a separate memory defect:
+the airport CSV parser retained all rows before filtering and the default
+256 MiB trigger exceeded its limit. PR [#378](https://github.com/doric2000/PlanLi/pull/378),
+merged as `2ebc8116e2d2eb465ff30d899ff6cb21375f41c6`, filters rows incrementally.
+The event function now has **512 MiB, concurrency 1, maxInstances 3, minInstances 0**.
+Only `onDestinationImageCreated`, `getAirportCandidates` and `setDestinationAirport`
+were updated in this follow-up. Independent verification at
+`2026-09-14T19:06:53.498Z` confirmed all three ACTIVE and observed successful real
+production events on `ondestinationimagecreated-00026-pig`, with no errors on
+that new revision in the complete queried window. Its Firebase source hash is
+`07b187bb8949734fa19c4670b6e9192237006b20`; the two airport callables use
+`f280807778f88e8d63a117cd9b0e96a56f7c546b`. The prior revision's memory errors are
+historical; this does not assert that every Eventarc retry has already drained.
+
+Validation: the main repair passed **17 client suites / 272 tests** and **54
+backend files / 567 tests**, focused manual-choice regression assertions, iOS OTA
+readiness and final defect review. The airport follow-up passed **124 related
+backend tests**. Its 14.6 MB / 200,000-row regression input exhausted a 64 MiB heap
+before the fix and passed afterward; local process RSS was about 53 MB. The
+public OTA manifest and immutable bundle hash were independently verified.
+
+The isolated `demo-planli-e2e` callable publication smoke passed on the final
+application source and the Android debug APK built successfully. A conditional
+Android Back fallback in the test bootstrap was exercised: it dismissed an Expo
+SDK 57 developer menu left open by the Close accessibility tap. The native flow
+then reached the recommendation composer and visibly rendered the synthetic
+London provider result, but Maestro could not locate its expected result ID.
+The complete map expansion/retry/confirmation flow therefore remains unverified;
+no native map or physical iPhone pass is claimed. No additional native production
+build or OTA was needed for the airport parser or test-helper changes.
+
+Whole-OTA rollback target: the preceding verified Profile hotfix group
+`5df5a17d-d574-415f-968d-7d8a747b55db`, source
+`0940c79062e9fdf099a3ddeb2af2f14690ba4281`. It preserves the Profile crash fix but
+removes this release's client recovery. Backend/catalog changes require their
+own scoped review; OTA rollback does not revert data or Functions. No rollback occurred.
+
 ### Profile entry crash hotfix (2026-09-13 local / 2026-09-12 UTC)
+
+Historical release, superseded by the destination rollout above; its fix remains included.
 
 PR [#375](https://github.com/doric2000/PlanLi/pull/375) merged as
 `0940c79062e9fdf099a3ddeb2af2f14690ba4281` after all applicable GitHub checks passed.
-This is the current production iOS runtime `1.3.0` update. The Community design
+This was the production iOS runtime `1.3.0` update. The Community design
 below is preserved. The crash came from PR #371's avatar synchronization hook:
 before the user snapshot arrives, both IDs are undefined, so the old equality
 check passed and dereferenced a null saved upload. The hook now requires a user
@@ -75,7 +187,7 @@ The repeated iOS fingerprint warnings are addressed by a tracked, pre-upload
 native compatibility guard and deterministic Git-archive packaging. See
 [native compatibility findings and release commands](docs/eas-native-compatibility.md).
 The release-tooling change itself did not publish an OTA or change the installed build;
-the current hotfix above uses that guarded workflow.
+the hotfix above used that guarded workflow.
 
 ### Community redesign iPhone OTA (2026-09-11 local / 2026-09-10 UTC)
 
@@ -4537,3 +4649,15 @@ part of this follow-up.
 - Target: TestFlight 1.1.1 (30), build `b16eca67-6291-4520-82b6-10cb1af190f5`; no new native build or Apple review/submission.
 - Device application and physical iPhone Profile entry/re-entry checks: pending.
 - Rollback: emergency iOS group `05fe7bdd-4153-43b3-a24b-14d49b3fd5c7`; the immediately preceding `638d125b-fa3a-47c7-9d78-c8c3d767229f` contains the Profile crash. See the scope and verification limits in Current environment status.
+
+## iOS production OTA release
+
+- Source commit: `9e499bbc2a31aacd7ebec836fa5bc56817c05e77`.
+- EAS Update group: `61dfaa40-3579-4bde-b875-ff23081f3953`; channel `production`; runtime `1.3.0`.
+- EAS environment: `production`; published at `2026-09-14T18:27:51.010Z`.
+- Immutable iOS launch bundle: update `01a0a12c-ec62-7466-a6dc-81384ed40a79`; 10710412 bytes; SHA-256 `D4F073F56AAFDF7780FE466F83AB7BB44588CAE13342699FC4021E500FF4FC45`.
+- Message: Fix destination resolution and activate reviewed destination catalog
+- Target: TestFlight 1.1.1 (30), build `b16eca67-6291-4520-82b6-10cb1af190f5`; no new native production build or Apple review/submission.
+- Public channel delivery and immutable bundle verified at `2026-09-14T18:29:29.294Z`; physical iPhone application and map checks remain unverified.
+- Backend/catalog rollout and the separate airport-memory fix are recorded in Current environment status above.
+- Rollback: iOS group `5df5a17d-d574-415f-968d-7d8a747b55db`; OTA rollback does not revert Functions or catalog data.
