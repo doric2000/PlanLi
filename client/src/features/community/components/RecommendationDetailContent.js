@@ -234,11 +234,11 @@ export default function RecommendationDetailContent({
         </View>
       )}
 
-      {!!sections.needs.length && (
+      {!!(sections.needs.length || sections.practicalFacts.length) && (
         <View style={styles.section}>
           <AppText style={styles.sectionTitle}>חשוב לדעת</AppText>
           <View style={styles.needsList}>
-            {sections.needs.map((need) => (
+            {[...sections.needs, ...sections.practicalFacts].map((need) => (
               <View key={need} style={styles.needRow}>
                 <View style={styles.needIcon}>
                   <MaterialIcons name="info-outline" size={20} color={colors.textSecondary} />

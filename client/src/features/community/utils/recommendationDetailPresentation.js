@@ -2,6 +2,7 @@ import {
   ENVIRONMENTS,
   INTERESTS,
   NEEDS,
+  PRACTICAL_FACTS,
   SEASONS,
   TRAVELER_STYLES,
   TRAVEL_PARTIES,
@@ -45,7 +46,7 @@ export function getRecommendationDetailSections(item = {}) {
     { id: 'contactName', icon: 'person-outline', title: 'איש קשר', value: details.contactName },
     { id: 'phone', icon: 'phone', title: 'טלפון', value: details.phone },
     { id: 'externalUrl', icon: 'link', title: 'קישור', value: details.externalUrl },
-    { id: 'accessibilityNote', icon: 'accessible', title: 'נגישות', value: details.accessibilityNote },
+    { id: 'accessibilityNote', icon: 'accessible', title: 'מידע שימושי ונגישות', value: details.accessibilityNote },
   ].forEach((fact) => {
     if (typeof fact.value === 'string' && fact.value.trim()) facts.push(fact);
   });
@@ -105,6 +106,7 @@ export function getRecommendationDetailSections(item = {}) {
     facts,
     tags: catalogTags.length ? catalogTags : uniqueValues(item.tags).map(getTagLabel).filter(Boolean),
     needs: labelsFor(facets.needs, NEEDS),
+    practicalFacts: labelsFor(facets.practicalFacts, PRACTICAL_FACTS),
     extras,
   };
 }

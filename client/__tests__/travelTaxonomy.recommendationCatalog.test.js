@@ -1,7 +1,10 @@
 import {
+  PRACTICAL_FACTS,
   RECOMMENDATION_CATALOG,
   RECOMMENDATION_CATEGORIES,
   RECOMMENDATION_SUBCATEGORIES,
+  getRecommendationPracticalAllowedTokens,
+  getRecommendationPracticalOptions,
   isRecommendationClassificationValid,
   normalizeRecommendationSubcategories,
   searchRecommendationCatalog,
@@ -50,5 +53,20 @@ describe('recommendation catalog', () => {
     })[0]).toMatchObject({
       categoryId: 'services', subcategoryIds: ['pharmacy'], isSuggestion: true, isPrimary: true,
     });
+  });
+
+  it('offers a short contextual practical-information set without mixing unrelated categories', () => {
+    expect(PRACTICAL_FACTS).toHaveLength(23);
+    expect(getRecommendationPracticalOptions('food', ['restaurant']).suggested.map((item) => item.key)).toEqual([
+      'need:kosher',
+      'need:vegetarian',
+      'need:vegan',
+      'need:gluten_free',
+    ]);
+    expect(getRecommendationPracticalOptions('activities', ['boat_tour']).suggested.map((item) => item.key))
+      .toContain('fact:motion_sickness');
+    expect(getRecommendationPracticalOptions('services', ['pharmacy']).suggested).toEqual([]);
+    expect(getRecommendationPracticalAllowedTokens('food')).toContain('fact:accessible_restroom');
+    expect(getRecommendationPracticalAllowedTokens('food')).not.toContain('fact:demanding_walk');
   });
 });

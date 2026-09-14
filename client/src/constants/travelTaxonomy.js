@@ -22,6 +22,7 @@ export const TRAVELER_STYLES = (taxonomy.travelerStyles || []).map((item) => ({
 }));
 export const PACES = options('paces');
 export const NEEDS = options('needs');
+export const PRACTICAL_FACTS = options('practicalFacts');
 export const SEASONS = options('seasons');
 export const ENVIRONMENTS = options('environments');
 export const ROUTE_DIFFICULTIES = options('routeDifficulties');
@@ -76,6 +77,56 @@ const recommendationCategoryIdByLabel = Object.fromEntries(
 const recommendationSubcategoryById = Object.fromEntries(
   RECOMMENDATION_SUBCATEGORIES.map((item) => [item.id, item])
 );
+const recommendationPracticalInfo = RECOMMENDATION_CATALOG.practicalInfo || {};
+const needById = lookup(NEEDS);
+const practicalFactById = lookup(PRACTICAL_FACTS);
+
+const uniqueTokens = (values = []) => Array.from(new Set(values.filter((value) => typeof value === 'string')));
+
+function practicalOptionFromToken(token) {
+  const [kind, value] = String(token || '').split(':');
+  const option = kind === 'need' ? needById[value] : kind === 'fact' ? practicalFactById[value] : null;
+  return option ? { key: `${kind}:${value}`, kind, value, label: option.label } : null;
+}
+
+function practicalRuleTokens(rule = {}) {
+  return uniqueTokens([...(rule.suggested || []), ...(rule.more || [])]);
+}
+
+export function getRecommendationPracticalOptions(categoryId, subcategoryIds = []) {
+  const categoryRule = recommendationPracticalInfo.categoryRules?.[categoryId] || {};
+  const matchingRules = (Array.isArray(subcategoryIds) ? subcategoryIds : [])
+    .map((id) => recommendationPracticalInfo.subcategoryRules?.[id])
+    .filter(Boolean);
+  const suggestedTokens = uniqueTokens(
+    matchingRules.length
+      ? matchingRules.flatMap((rule) => rule.suggested || [])
+      : categoryRule.suggested || []
+  );
+  const visibleLimit = recommendationPracticalInfo.maxSuggested || 4;
+  const suggested = suggestedTokens.slice(0, visibleLimit).map(practicalOptionFromToken).filter(Boolean);
+  const availableTokens = uniqueTokens([
+    ...practicalRuleTokens(categoryRule),
+    ...matchingRules.flatMap(practicalRuleTokens),
+  ]);
+  return {
+    suggested,
+    available: availableTokens.map(practicalOptionFromToken).filter(Boolean),
+    notePlaceholder: categoryRule.notePlaceholder || 'למשל: פרט שימושי שכדאי לדעת לפני שמגיעים',
+  };
+}
+
+export function getRecommendationPracticalAllowedTokens(categoryId, subcategoryIds = []) {
+  const categoryRule = recommendationPracticalInfo.categoryRules?.[categoryId] || {};
+  const matchingSubcategoryRules = (Array.isArray(subcategoryIds) ? subcategoryIds : [])
+    .filter((id) => recommendationSubcategoryById[id]?.categoryId === categoryId)
+    .map((id) => recommendationPracticalInfo.subcategoryRules?.[id])
+    .filter(Boolean);
+  return uniqueTokens([
+    ...practicalRuleTokens(categoryRule),
+    ...matchingSubcategoryRules.flatMap(practicalRuleTokens),
+  ]);
+}
 
 const normalizedSearchText = (value) => String(value || '')
   .normalize('NFKD')

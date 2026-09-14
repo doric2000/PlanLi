@@ -2,15 +2,29 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const {
+  PRACTICAL_FACT_IDS,
   RECOMMENDATION_CATALOG,
   RECOMMENDATION_CATEGORIES,
   RECOMMENDATION_SUBCATEGORIES,
   isRecommendationClassificationValid,
   normalizeRecommendationCategory,
   normalizeRecommendationSubcategories,
+  recommendationPracticalAllowed,
   searchRecommendationCatalog,
   suggestClassificationFromGoogleTypes,
 } = require('./travelTaxonomy');
+
+test('recommendation practical information stays bounded and category-aware', () => {
+  assert.equal(PRACTICAL_FACT_IDS.length, 23);
+  assert.deepEqual(recommendationPracticalAllowed('food').needs.slice(0, 4), [
+    'kosher', 'vegetarian', 'vegan', 'gluten_free',
+  ]);
+  assert.equal(recommendationPracticalAllowed('activities').practicalFacts.includes('motion_sickness'), true);
+  assert.deepEqual(recommendationPracticalAllowed('services'), { needs: [], practicalFacts: [] });
+  assert.deepEqual(recommendationPracticalAllowed('services', ['chabad_religious_services']).needs, ['kosher']);
+  assert.equal(recommendationPracticalAllowed('services', ['chabad_religious_services']).practicalFacts.includes('shabbat_meals'), true);
+  assert.equal(recommendationPracticalAllowed('food').practicalFacts.includes('demanding_walk'), false);
+});
 
 test('recommendation catalog exports remain read-only and active for creation', () => {
   assert.equal(RECOMMENDATION_CATALOG.runtimeEnabled, true);

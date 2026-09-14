@@ -21,6 +21,7 @@ const {
   getCategoryLabel,
   INTEREST_IDS,
   NEED_IDS,
+  PRACTICAL_FACT_IDS,
   normalizeBudget,
   normalizeCategoryId,
   POST_BUDGET_IDS,
@@ -28,6 +29,7 @@ const {
   RECOMMENDATION_CATEGORIES,
   RECOMMENDATION_SUBCATEGORIES,
   recommendationAttributeRequirements,
+  recommendationPracticalAllowed,
   SEASON_IDS,
   tagsMatchCategory,
   taxonomy,
@@ -409,6 +411,29 @@ function sanitizeSubmittedFacets(value) {
     seasons: validate('seasons', SEASON_IDS, SEASON_IDS.length),
     environments: validate('environments', ENVIRONMENT_IDS, ENVIRONMENT_IDS.length),
   };
+}
+
+function sanitizeRecommendationCatalogFacets(value, content) {
+  if (value == null) return { needs: [], practicalFacts: [] };
+  assert(value && typeof value === 'object' && !Array.isArray(value),
+    'invalid-argument', 'facets are invalid.');
+  assert(Object.keys(value).every((key) => ['needs', 'practicalFacts'].includes(key)),
+    'invalid-argument', 'facets contain unsupported fields.');
+  const validate = (field, allowed, maximum) => {
+    const entries = value[field] || [];
+    assert(Array.isArray(entries) && entries.length <= maximum &&
+      entries.every((entry) => typeof entry === 'string' && allowed.includes(entry)),
+    'invalid-argument', `${field} facets are invalid.`);
+    return Array.from(new Set(entries));
+  };
+  const needs = validate('needs', NEED_IDS, NEED_IDS.length);
+  const practicalFacts = validate('practicalFacts', PRACTICAL_FACT_IDS, 12);
+  const applicable = recommendationPracticalAllowed(content.categoryId, content.subcategoryIds);
+  assert(needs.every((valueId) => applicable.needs.includes(valueId)),
+    'invalid-argument', 'A selected practical need is not applicable to this recommendation.');
+  assert(practicalFacts.every((valueId) => applicable.practicalFacts.includes(valueId)),
+    'invalid-argument', 'A selected practical fact is not applicable to this recommendation.');
+  return { needs, practicalFacts };
 }
 
 function sanitizeRecommendationAttributes(value, content, { legacyFacets = null, taxonomyVersion = 0 } = {}) {
@@ -3117,8 +3142,11 @@ async function saveRecommendation({
     ...Object.values(details),
     content.customSubcategoryLabel,
   ]);
+  const catalogFacets = usesRecommendationCatalog
+    ? sanitizeRecommendationCatalogFacets(data?.recommendation?.facets, content)
+    : null;
   const attributes = usesRecommendationCatalog
-    ? { audienceScope: 'all', audiences: [], vibes: [], environments: [], needs: [] }
+    ? { audienceScope: 'all', audiences: [], vibes: [], environments: [], needs: catalogFacets.needs }
     : sanitizeRecommendationAttributes(
         data?.recommendation?.attributes,
         content,
@@ -3144,6 +3172,7 @@ async function saveRecommendation({
           ...(content.catalogInterestIds || []),
         ])),
         catalogInterests: content.catalogInterestIds,
+        practicalFacts: catalogFacets.practicalFacts,
       }
     : baseFacets;
   const media = await validateMediaAssets({
@@ -3706,6 +3735,7 @@ module.exports = {
   sanitizeRecommendationDetails,
   sanitizeRecommendationAttributes,
   sanitizeSubmittedFacets,
+  sanitizeRecommendationCatalogFacets,
   saveRecommendation,
   stableDocumentId,
   normalizePublishRequestId,

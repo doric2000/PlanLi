@@ -827,6 +827,7 @@ describe('AddRecommendationScreen Integration Test', () => {
 
     // 3. Price is required, while exact contact details stay optional.
     fireEvent.press(getByTestId('recommendation-budget-2'));
+    fireEvent.press(getByTestId('recommendation-contact-details-toggle'));
     fireEvent.press(getByTestId('recommendation-optional-phone'));
     expect(getByTestId('recommendation-optional-input-phone').props.maxLength).toBe(40);
     expect(StyleSheet.flatten(getByTestId('recommendation-optional-input-phone').props.style).writingDirection).toBe('ltr');
@@ -890,6 +891,70 @@ describe('AddRecommendationScreen Integration Test', () => {
     expect(mockSaveRecommendation).not.toHaveBeenCalled();
     expect(mockRememberRecentDestination).not.toHaveBeenCalled();
   }, 15000);
+
+  it('shows only contextual suggestions and preserves selected practical information in the draft job', async () => {
+    const navigationMock = {
+      goBack: jest.fn(), setOptions: jest.fn(), navigate: jest.fn(), dispatch: jest.fn(),
+      addListener: jest.fn(() => jest.fn()),
+    };
+    const screen = render(
+      <AddRecommendationScreen navigation={navigationMock} route={{ params: {} }} />
+    );
+    await waitForCatalogEditor(screen);
+    fireEvent.press(screen.getByTestId('google-result-select'));
+
+    await waitFor(() => expect(screen.getByTestId('recommendation-practical-need-kosher')).toBeTruthy());
+    expect(screen.getByTestId('recommendation-practical-need-vegetarian')).toBeTruthy();
+    expect(screen.getByTestId('recommendation-practical-need-vegan')).toBeTruthy();
+    expect(screen.getByTestId('recommendation-practical-need-gluten_free')).toBeTruthy();
+    expect(screen.queryByTestId('recommendation-practical-fact-demanding_walk')).toBeNull();
+    expect(screen.queryByTestId('recommendation-optional-phone')).toBeNull();
+
+    fireEvent.press(screen.getByTestId('recommendation-practical-need-kosher'));
+    fireEvent.press(screen.getByTestId('recommendation-practical-more'));
+    fireEvent.press(screen.getByTestId('recommendation-practical-more-fact-accessible_restroom'));
+    fireEvent.press(screen.getByTestId('recommendation-practical-more-done'));
+    fireEvent.changeText(screen.getByTestId('recommendation-description-input'), 'אוכל טוב ומידע שימושי ברור.');
+    fireEvent.press(screen.getByTestId('recommendation-budget-2'));
+    fireEvent.press(screen.getByTestId('recommendation-next'));
+
+    await waitFor(() => expect(mockSaveRecommendationDraft).toHaveBeenCalledWith(expect.objectContaining({
+      draft: expect.objectContaining({
+        needs: ['kosher'],
+        practicalFacts: ['accessible_restroom'],
+      }),
+    })));
+    expect(mockEnqueueCreate).toHaveBeenCalledWith(expect.objectContaining({
+      draft: expect.objectContaining({
+        needs: ['kosher'],
+        practicalFacts: ['accessible_restroom'],
+      }),
+    }));
+  }, 15000);
+
+  it('removes category-specific information with a reversible category change', async () => {
+    const navigationMock = {
+      goBack: jest.fn(), setOptions: jest.fn(), navigate: jest.fn(), dispatch: jest.fn(),
+      addListener: jest.fn(() => jest.fn()),
+    };
+    const screen = render(
+      <AddRecommendationScreen navigation={navigationMock} route={{ params: {} }} />
+    );
+    await waitForCatalogEditor(screen);
+    fireEvent.press(screen.getByTestId('google-result-select'));
+    await waitFor(() => expect(screen.getByTestId('recommendation-practical-need-kosher')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('recommendation-practical-need-kosher'));
+
+    fireEvent.press(screen.getByText('שינוי קטגוריה'));
+    fireEvent.press(screen.getByTestId('recommendation-category-nature'));
+    expect(screen.queryByTestId('recommendation-practical-need-kosher')).toBeNull();
+    expect(screen.getByTestId('recommendation-practical-category-undo')).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId('recommendation-practical-category-undo-action'));
+    expect(screen.getByText('אוכל ושתייה')).toBeTruthy();
+    expect(screen.getByTestId('recommendation-practical-need-kosher').props.accessibilityState)
+      .toEqual({ checked: true });
+  });
 
   it('auto-confirms an exact recommendation place without an extra approval step', async () => {
     const navigationMock = {

@@ -18,6 +18,7 @@ const {
 	resolveRecommendationDestination,
 	resolveUnchangedExactRecommendation,
 	sanitizeRecommendationAttributes,
+  sanitizeRecommendationCatalogFacets,
   sanitizeRecommendationCatalogContent,
   sanitizeRecommendationContent,
   sanitizeRecommendationDetails,
@@ -107,6 +108,25 @@ test('catalog recommendations need only a concise classification and keep useful
     phone: '+972 50 123 4567',
     externalUrl: 'https://planli.example/place',
   });
+});
+
+test('catalog practical facets accept only relevant canonical values', () => {
+  const food = { categoryId: 'food' };
+  assert.deepEqual(sanitizeRecommendationCatalogFacets({
+    needs: ['kosher', 'vegan', 'kosher'],
+    practicalFacts: ['step_free_access'],
+  }, food), {
+    needs: ['kosher', 'vegan'],
+    practicalFacts: ['step_free_access'],
+  });
+  assert.deepEqual(sanitizeRecommendationCatalogFacets(undefined, food), {
+    needs: [], practicalFacts: [],
+  });
+  assert.throws(() => sanitizeRecommendationCatalogFacets({ needs: ['kosher'] }, { categoryId: 'nature' }), /not applicable/);
+  assert.throws(() => sanitizeRecommendationCatalogFacets({ practicalFacts: ['unknown'] }, food), /invalid/);
+  assert.throws(() => sanitizeRecommendationCatalogFacets({
+    practicalFacts: Array.from({ length: 13 }, () => 'step_free_access'),
+  }, food), /invalid/);
 });
 
 test('external recommendation links discard bidi formatting but reject genuinely invalid URLs', () => {

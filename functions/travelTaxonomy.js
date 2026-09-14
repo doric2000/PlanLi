@@ -13,6 +13,7 @@ const VIBE_IDS = ids(taxonomy.vibes);
 const TRAVELER_STYLE_IDS = ids(taxonomy.travelerStyles);
 const PACE_IDS = ids(taxonomy.paces);
 const NEED_IDS = ids(taxonomy.needs);
+const PRACTICAL_FACT_IDS = ids(taxonomy.practicalFacts);
 const SEASON_IDS = ids(taxonomy.seasons);
 const ENVIRONMENT_IDS = ids(taxonomy.environments);
 const ROUTE_DIFFICULTY_IDS = ids(taxonomy.routeDifficulties);
@@ -43,6 +44,7 @@ const RECOMMENDATION_SUBCATEGORIES = Object.freeze(
       || left.order - right.order
   ))
 );
+const RECOMMENDATION_PRACTICAL_INFO = deepFreeze(RECOMMENDATION_CATALOG.practicalInfo || {});
 
 const CATEGORY_BY_ID = byId(taxonomy.categories);
 const TAG_BY_ID = byId(taxonomy.tags);
@@ -287,6 +289,33 @@ function recommendationAttributeRequirements(values) {
   };
 }
 
+function recommendationPracticalAllowed(categoryValue, subcategoryValues = []) {
+  const categoryId = normalizeRecommendationCategory(categoryValue);
+  const categoryRule = RECOMMENDATION_PRACTICAL_INFO.categoryRules?.[categoryId] || {};
+  const tokens = [
+    ...(categoryRule.suggested || []),
+    ...(categoryRule.more || []),
+  ];
+  for (const subcategoryId of Array.isArray(subcategoryValues) ? subcategoryValues : []) {
+    const subcategory = RECOMMENDATION_SUBCATEGORY_BY_ID[subcategoryId];
+    if (subcategory?.categoryId !== categoryId) continue;
+    const rule = RECOMMENDATION_PRACTICAL_INFO.subcategoryRules?.[subcategoryId];
+    if (!rule) continue;
+    tokens.push(...(rule.suggested || []), ...(rule.more || []));
+  }
+  const unique = Array.from(new Set(tokens));
+  return {
+    needs: unique
+      .filter((token) => token.startsWith('need:'))
+      .map((token) => token.slice(5))
+      .filter((value) => NEED_IDS.includes(value)),
+    practicalFacts: unique
+      .filter((token) => token.startsWith('fact:'))
+      .map((token) => token.slice(5))
+      .filter((value) => PRACTICAL_FACT_IDS.includes(value)),
+  };
+}
+
 function tagsMatchCategory(values, categoryValue) {
   const categoryId = normalizeCategoryId(categoryValue);
   const analysis = analyzeTagValues(values);
@@ -412,6 +441,7 @@ module.exports = {
   INTEREST_IDS,
   ONBOARDING_INTEREST_IDS,
   NEED_IDS,
+  PRACTICAL_FACT_IDS,
   PACE_IDS,
   POST_BUDGET_IDS,
   RECOMMENDATION_CATALOG,
@@ -442,6 +472,7 @@ module.exports = {
   normalizeRecommendationSubcategories,
   normalizeSmartProfile,
   recommendationAttributeRequirements,
+  recommendationPracticalAllowed,
   searchRecommendationCatalog,
   suggestClassificationFromGoogleTypes,
   tagsMatchCategory,
