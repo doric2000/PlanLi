@@ -100,6 +100,26 @@ test('recommendation drafts sanitize bounded partial composer state without loca
   })), /details/);
 });
 
+test('recommendation drafts preserve contextual practical information through publish', () => {
+  const draft = sanitizeRecommendationDraft(partialDraft({
+    needs: ['kosher', 'vegan'],
+    practicalFacts: ['step_free_access'],
+  }));
+  assert.deepEqual(draft.needs, ['kosher', 'vegan']);
+  assert.deepEqual(draft.practicalFacts, ['step_free_access']);
+  assert.deepEqual(publishData({
+    publishRequestId: '123e4567-e89b-42d3-a456-426614174000',
+  }, draft).recommendation.facets, {
+    needs: ['kosher', 'vegan'],
+    practicalFacts: ['step_free_access'],
+  });
+  assert.throws(() => sanitizeRecommendationDraft(partialDraft({
+    categoryId: 'nature',
+    subcategoryIds: ['beach'],
+    needs: ['kosher'],
+  })), /not applicable/);
+});
+
 test('one private pointer rejects replacing a recommendation draft and detects stale versions', async () => {
   const ownerPath = 'system/recommendationDrafts/owners/owner';
   const db = {

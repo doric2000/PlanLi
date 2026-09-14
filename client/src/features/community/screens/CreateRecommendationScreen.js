@@ -25,6 +25,7 @@ import {
   RECOMMENDATION_CATEGORIES,
   RECOMMENDATION_SUBCATEGORIES,
   POST_BUDGETS,
+  getRecommendationPracticalAllowedTokens,
   isRecommendationClassificationValid,
   searchRecommendationCatalog,
   suggestClassificationFromGoogleTypes,
@@ -60,6 +61,7 @@ import {
 import { captureDiagnosticException } from '../../../services/ErrorReporting';
 import ManualMapPinPicker from '../components/ManualMapPinPicker';
 import SingleDestinationPicker from '../components/SingleDestinationPicker';
+import RecommendationPracticalInfo from '../components/RecommendationPracticalInfo';
 import { NoyaTourTarget, useNoyaTour } from '../../noya/NoyaTourContext';
 import { NOYA_CREATOR_TARGETS } from '../../noya/NoyaTourDefinitions';
 
@@ -73,9 +75,8 @@ const OPTIONAL_FIELDS = [
   { id: 'contactName', label: 'איש קשר', placeholder: 'למשל: דנה מהקבלה או Alex 24/7', maxLength: 80, contentDirection: 'rtl' },
   { id: 'phone', label: 'טלפון', placeholder: 'למשל: +36 20 123 4567', keyboardType: 'phone-pad', maxLength: 40, contentDirection: 'ltr' },
   { id: 'externalUrl', label: 'קישור', placeholder: 'למשל: https://example.com', keyboardType: 'url', maxLength: 500, contentDirection: 'ltr' },
-  { id: 'priceNote', label: 'מחיר', placeholder: 'למשל: כ־45 ש״ח לאדם', maxLength: 120, contentDirection: 'rtl' },
-  { id: 'accessibilityNote', label: 'נגישות', placeholder: 'למשל: כניסה נגישה ומעלית', multiline: true, maxLength: 500, contentDirection: 'rtl' },
 ];
+const PRICE_FIELD = { id: 'priceNote', label: 'מחיר מדויק', placeholder: 'למשל: כ־45 ש״ח לאדם', maxLength: 120, contentDirection: 'rtl' };
 
 const categoryById = Object.fromEntries(RECOMMENDATION_CATEGORIES.map((item) => [item.id, item]));
 const subcategoryById = Object.fromEntries(RECOMMENDATION_SUBCATEGORIES.map((item) => [item.id, item]));
@@ -190,6 +191,8 @@ function catalogFormComparable({
   description,
   budget,
   details,
+  needs,
+  practicalFacts,
   eventSchedule,
   imageUris,
 }) {
@@ -207,6 +210,8 @@ function catalogFormComparable({
     description,
     budget,
     details: cleanDetails(details),
+    needs: [...(needs || [])].sort(),
+    practicalFacts: [...(practicalFacts || [])].sort(),
     eventSchedule: eventSchedule.trim(),
     imageUris: [...(imageUris || [])],
   });
@@ -266,7 +271,12 @@ export default function CreateRecommendationScreen({ navigation, route }) {
   const [description, setDescription] = useState('');
   const [budget, setBudget] = useState('');
   const [details, setDetails] = useState({});
+  const [recommendationNeeds, setRecommendationNeeds] = useState([]);
+  const [practicalFacts, setPracticalFacts] = useState([]);
   const [activeOptionalField, setActiveOptionalField] = useState('');
+  const [contactDetailsOpen, setContactDetailsOpen] = useState(false);
+  const [categoryUndo, setCategoryUndo] = useState(null);
+  const [categoryChangeOrigin, setCategoryChangeOrigin] = useState(null);
   const [eventSchedule, setEventSchedule] = useState('');
   const [editableMedia, setEditableMedia] = useState([]);
   const [showAlternativeLocations, setShowAlternativeLocations] = useState(false);
@@ -435,6 +445,8 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     description,
     budget,
     details,
+    needs: recommendationNeeds,
+    practicalFacts,
     eventSchedule,
     imageUris: editableImageUris,
   }), [
@@ -443,6 +455,8 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     description,
     budget,
     details,
+    recommendationNeeds,
+    practicalFacts,
     editableImageUris,
     eventSchedule,
     locationMode,
@@ -461,7 +475,8 @@ export default function CreateRecommendationScreen({ navigation, route }) {
   const createDirty = Boolean(
     title.trim() || description.trim() || budget || categoryId || subcategoryIds.length ||
     selectedCountry?.id || generalDestination?.cityId || editableImageUris.length ||
-    locationQuery.trim() || Object.keys(cleanDetails(details)).length || eventSchedule.trim()
+    locationQuery.trim() || Object.keys(cleanDetails(details)).length || eventSchedule.trim() ||
+    recommendationNeeds.length || practicalFacts.length
   );
   const dirty = isEdit
     ? Boolean(editSnapshotBaseline && editSnapshotBaseline !== formComparable)
@@ -486,13 +501,15 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     description,
     budget,
     details,
+    needs: recommendationNeeds,
+    practicalFacts,
     eventSchedule,
     media: serverMedia,
     localMediaCount: Math.max(0, editableImageUris.length - serverMedia.length),
   }), [
     budget, categoryId, customSubcategoryLabel, description, details, editableImageUris.length,
     eventSchedule, generalDestination, locationMode, locationQuery, manualCoordinate, selectedCity,
-    selectedCountry, selectedPlace, serverMedia, step, subcategoryIds, title,
+    practicalFacts, recommendationNeeds, selectedCountry, selectedPlace, serverMedia, step, subcategoryIds, title,
   ]);
   latestDraftRef.current = draftPayload;
   latestComparableRef.current = draftComparable;
@@ -782,6 +799,8 @@ export default function CreateRecommendationScreen({ navigation, route }) {
       .map((asset) => getMediaVariantUrl(asset, 'feed'))
       .filter(Boolean);
     const initialDetails = { ...(editItem.details || {}) };
+    const initialNeeds = Array.isArray(editItem.facets?.needs) ? editItem.facets.needs : [];
+    const initialPracticalFacts = Array.isArray(editItem.facets?.practicalFacts) ? editItem.facets.practicalFacts : [];
     const initialSchedule = initialDetails.eventSchedule || '';
     delete initialDetails.eventSchedule;
 
@@ -798,6 +817,9 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     setDescription(editItem.description || '');
     setBudget(editItem.budget || '');
     setDetails(cleanDetails(initialDetails));
+    setRecommendationNeeds(initialNeeds);
+    setPracticalFacts(initialPracticalFacts);
+    setContactDetailsOpen(['contactName', 'phone', 'externalUrl'].some((key) => Boolean(initialDetails[key])));
     setEventSchedule(initialSchedule);
     setSourceMedia(Array.isArray(editItem.media) ? editItem.media : []);
     setEditableMedia(imageUris.map((uri) => createTravelMediaDescriptor({
@@ -823,6 +845,8 @@ export default function CreateRecommendationScreen({ navigation, route }) {
       description: editItem.description || '',
       budget: editItem.budget || '',
       details: initialDetails,
+      needs: initialNeeds,
+      practicalFacts: initialPracticalFacts,
       eventSchedule: initialSchedule,
       imageUris,
     }));
@@ -880,6 +904,9 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     setDescription(draft.description || '');
     setBudget(draft.budget || '');
     setDetails(cleanDetails(draft.details));
+    setRecommendationNeeds(Array.isArray(draft.needs) ? draft.needs : []);
+    setPracticalFacts(Array.isArray(draft.practicalFacts) ? draft.practicalFacts : []);
+    setContactDetailsOpen(['contactName', 'phone', 'externalUrl'].some((key) => Boolean(draft.details?.[key])));
     setEventSchedule(draft.eventSchedule || '');
     setEditableMedia(mediaItems);
     hydrateSelection({
@@ -901,6 +928,8 @@ export default function CreateRecommendationScreen({ navigation, route }) {
       description: draft.description || '',
       budget: draft.budget || '',
       details: draft.details || {},
+      needs: draft.needs || [],
+      practicalFacts: draft.practicalFacts || [],
       eventSchedule: draft.eventSchedule || '',
       imageUris,
     });
@@ -1050,36 +1079,85 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     });
   }, [hydrateSelection]);
 
-  const selectCategory = (nextCategoryId) => {
+  const changeClassification = (nextCategoryId, nextSubcategoryIds = []) => {
+    const currentClassification = categoryChangeOrigin || {
+      categoryId,
+      subcategoryIds,
+      customSubcategoryLabel,
+      needs: recommendationNeeds,
+      practicalFacts,
+    };
+    if (!nextCategoryId) {
+      setCategoryChangeOrigin(currentClassification);
+      classificationEditedByUserRef.current = true;
+      setCategoryId('');
+      setSubcategoryIds([]);
+      setCustomSubcategoryLabel('');
+      setShowAllSubcategories(false);
+      setSubcategorySearch('');
+      setValidationMessage('');
+      return;
+    }
+    const allowedTokens = new Set(getRecommendationPracticalAllowedTokens(nextCategoryId, nextSubcategoryIds));
+    const nextNeeds = currentClassification.needs.filter((value) => allowedTokens.has(`need:${value}`));
+    const nextPracticalFacts = currentClassification.practicalFacts.filter((value) => allowedTokens.has(`fact:${value}`));
+    const removedInformation = nextNeeds.length !== currentClassification.needs.length ||
+      nextPracticalFacts.length !== currentClassification.practicalFacts.length;
+    setCategoryUndo(removedInformation ? currentClassification : null);
+    setCategoryChangeOrigin(null);
     classificationEditedByUserRef.current = true;
     setCategoryId(nextCategoryId);
-    setSubcategoryIds([]);
+    setSubcategoryIds(nextSubcategoryIds);
     setCustomSubcategoryLabel('');
+    setRecommendationNeeds(nextNeeds);
+    setPracticalFacts(nextPracticalFacts);
     setShowAllSubcategories(false);
     setSubcategorySearch('');
     setValidationMessage('');
   };
 
+  const selectCategory = (nextCategoryId) => changeClassification(nextCategoryId);
+
+  const undoCategoryChange = () => {
+    if (!categoryUndo) return;
+    setCategoryId(categoryUndo.categoryId);
+    setSubcategoryIds(categoryUndo.subcategoryIds);
+    setCustomSubcategoryLabel(categoryUndo.customSubcategoryLabel);
+    setRecommendationNeeds(categoryUndo.needs);
+    setPracticalFacts(categoryUndo.practicalFacts);
+    setCategoryUndo(null);
+    setCategoryChangeOrigin(null);
+  };
+
   const toggleSubcategory = (subcategoryId) => {
     classificationEditedByUserRef.current = true;
-    setSubcategoryIds((current) => {
-      const next = current.includes(subcategoryId)
-        ? current.filter((id) => id !== subcategoryId)
-        : current.length >= 3
-          ? current
-          : [...current, subcategoryId];
-      if (!next.some((id) => subcategoryById[id]?.isOther)) setCustomSubcategoryLabel('');
-      return next;
-    });
+    const next = subcategoryIds.includes(subcategoryId)
+      ? subcategoryIds.filter((id) => id !== subcategoryId)
+      : subcategoryIds.length >= 3
+        ? subcategoryIds
+        : [...subcategoryIds, subcategoryId];
+    const allowedTokens = new Set(getRecommendationPracticalAllowedTokens(categoryId, next));
+    const nextNeeds = recommendationNeeds.filter((value) => allowedTokens.has(`need:${value}`));
+    const nextPracticalFacts = practicalFacts.filter((value) => allowedTokens.has(`fact:${value}`));
+    const removedInformation = nextNeeds.length !== recommendationNeeds.length ||
+      nextPracticalFacts.length !== practicalFacts.length;
+    setCategoryUndo(removedInformation ? {
+      categoryId,
+      subcategoryIds,
+      customSubcategoryLabel,
+      needs: recommendationNeeds,
+      practicalFacts,
+    } : null);
+    setSubcategoryIds(next);
+    setRecommendationNeeds(nextNeeds);
+    setPracticalFacts(nextPracticalFacts);
+    if (!next.some((id) => subcategoryById[id]?.isOther)) setCustomSubcategoryLabel('');
     setValidationMessage('');
   };
 
   const applySuggestion = () => {
     if (!primarySuggestion) return;
-    classificationEditedByUserRef.current = true;
-    setCategoryId(primarySuggestion.categoryId);
-    setSubcategoryIds(primarySuggestion.subcategoryIds);
-    setCustomSubcategoryLabel('');
+    changeClassification(primarySuggestion.categoryId, primarySuggestion.subcategoryIds);
     setDismissedSuggestion(true);
   };
 
@@ -1587,6 +1665,30 @@ export default function CreateRecommendationScreen({ navigation, route }) {
           testIDPrefix="recommendation-budget"
         />
 
+        <TouchableOpacity
+          style={styles.moreButton}
+          onPress={() => setActiveOptionalField((current) => current === PRICE_FIELD.id ? '' : PRICE_FIELD.id)}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: activeOptionalField === PRICE_FIELD.id }}
+          testID="recommendation-optional-priceNote"
+        >
+          <Ionicons name={activeOptionalField === PRICE_FIELD.id ? 'chevron-up' : 'add'} size={17} color={colors.primary} />
+          <AppText style={styles.moreText}>{details.priceNote ? `מחיר מדויק: ${details.priceNote}` : 'הוספת מחיר מדויק'}</AppText>
+        </TouchableOpacity>
+        {activeOptionalField === PRICE_FIELD.id || details.priceNote ? (
+          <View style={styles.optionalField}>
+            <FocusClearingFormInput
+              label={PRICE_FIELD.label}
+              value={details.priceNote || ''}
+              onChangeText={(nextValue) => setDetails((current) => ({ ...current, priceNote: nextValue }))}
+              placeholder={PRICE_FIELD.placeholder}
+              maxLength={PRICE_FIELD.maxLength}
+              rtl
+              testID="recommendation-optional-input-priceNote"
+            />
+          </View>
+        ) : null}
+
         {categoryId === 'events' ? (
           <View style={styles.optionalField}>
             <FocusClearingFormInput
@@ -1602,45 +1704,82 @@ export default function CreateRecommendationScreen({ navigation, route }) {
           </View>
         ) : null}
 
-        <AppText style={styles.optionalTitle}>{CONTENT_COMPOSER_COPY.optionalDetails}</AppText>
-        <View style={styles.chipWrap}>
-          {OPTIONAL_FIELDS.map((field) => {
-            const selected = activeOptionalField === field.id || Boolean(details[field.id]);
-            return (
-              <TouchableOpacity
-                key={field.id}
-                style={[styles.chip, selected && styles.chipSelected]}
-                onPress={() => setActiveOptionalField(field.id)}
-                accessibilityRole="button"
-                testID={`recommendation-optional-${field.id}`}
-              >
-                <AppText style={[styles.chipText, selected && styles.chipTextSelected]}>{field.label}</AppText>
+        <RecommendationPracticalInfo
+          categoryId={categoryId}
+          subcategoryIds={subcategoryIds}
+          needs={recommendationNeeds}
+          practicalFacts={practicalFacts}
+          note={details.accessibilityNote || ''}
+          onNeedsChange={setRecommendationNeeds}
+          onPracticalFactsChange={setPracticalFacts}
+          onNoteChange={(nextValue) => setDetails((current) => ({ ...current, accessibilityNote: nextValue }))}
+        />
+
+        {categoryUndo ? (
+          <View style={styles.suggestionPanel} testID="recommendation-practical-category-undo">
+            <AppText style={styles.suggestionText}>הוסר מידע שלא מתאים לבחירה החדשה.</AppText>
+            <View style={styles.suggestionActions}>
+              <TouchableOpacity onPress={undoCategoryChange} accessibilityRole="button" testID="recommendation-practical-category-undo-action">
+                <AppText style={styles.textAction}>ביטול השינוי</AppText>
               </TouchableOpacity>
-            );
-          })}
-        </View>
-        {optionalField ? (
-          <View style={styles.optionalField}>
-            <FocusClearingFormInput
-              label={optionalField.label}
-              value={optionalValue}
-              onChangeText={(nextValue) => setDetails((current) => ({
-                ...current,
-                [optionalField.id]: optionalField.id === 'externalUrl'
-                  ? normalizeExternalUrl(nextValue)
-                  : nextValue,
-              }))}
-              placeholder={optionalField.placeholder}
-              keyboardType={optionalField.keyboardType}
-              multiline={optionalField.multiline}
-              maxLength={optionalField.maxLength}
-              autoCapitalize={optionalField.id === 'externalUrl' ? 'none' : undefined}
-              autoCorrect={optionalField.id !== 'externalUrl'}
-              rtl={optionalContentDirection === 'rtl'}
-              style={optionalContentDirection === 'ltr' ? styles.ltrInput : undefined}
-              testID={`recommendation-optional-input-${optionalField.id}`}
-            />
+            </View>
           </View>
+        ) : null}
+
+        <TouchableOpacity
+          style={styles.moreButton}
+          onPress={() => {
+            setContactDetailsOpen((current) => !current);
+            if (contactDetailsOpen && OPTIONAL_FIELDS.some((field) => field.id === activeOptionalField)) setActiveOptionalField('');
+          }}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: contactDetailsOpen }}
+          testID="recommendation-contact-details-toggle"
+        >
+          <Ionicons name={contactDetailsOpen ? 'chevron-up' : 'add'} size={17} color={colors.primary} />
+          <AppText style={styles.moreText}>פרטי קשר וקישור · לא חובה</AppText>
+        </TouchableOpacity>
+        {contactDetailsOpen ? (
+          <>
+            <View style={styles.chipWrap}>
+              {OPTIONAL_FIELDS.map((field) => {
+                const selected = activeOptionalField === field.id || Boolean(details[field.id]);
+                return (
+                  <TouchableOpacity
+                    key={field.id}
+                    style={[styles.chip, selected && styles.chipSelected]}
+                    onPress={() => setActiveOptionalField(field.id)}
+                    accessibilityRole="button"
+                    testID={`recommendation-optional-${field.id}`}
+                  >
+                    <AppText style={[styles.chipText, selected && styles.chipTextSelected]}>{field.label}</AppText>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            {optionalField ? (
+              <View style={styles.optionalField}>
+                <FocusClearingFormInput
+                  label={optionalField.label}
+                  value={optionalValue}
+                  onChangeText={(nextValue) => setDetails((current) => ({
+                    ...current,
+                    [optionalField.id]: optionalField.id === 'externalUrl'
+                      ? normalizeExternalUrl(nextValue)
+                      : nextValue,
+                  }))}
+                  placeholder={optionalField.placeholder}
+                  keyboardType={optionalField.keyboardType}
+                  maxLength={optionalField.maxLength}
+                  autoCapitalize={optionalField.id === 'externalUrl' ? 'none' : undefined}
+                  autoCorrect={optionalField.id !== 'externalUrl'}
+                  rtl={optionalContentDirection === 'rtl'}
+                  style={optionalContentDirection === 'ltr' ? styles.ltrInput : undefined}
+                  testID={`recommendation-optional-input-${optionalField.id}`}
+                />
+              </View>
+            ) : null}
+          </>
         ) : null}
       </>
     );

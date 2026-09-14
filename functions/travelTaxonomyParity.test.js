@@ -32,6 +32,7 @@ test('taxonomy IDs and cross-references are unique and valid', () => {
     ['travelerStyles', taxonomy.travelerStyles],
     ['paces', taxonomy.paces],
     ['needs', taxonomy.needs],
+    ['practicalFacts', taxonomy.practicalFacts],
     ['seasons', taxonomy.seasons],
     ['environments', taxonomy.environments],
     ['routeDifficulties', taxonomy.routeDifficulties],
@@ -144,6 +145,41 @@ test('recommendation catalog is complete, ordered, and active for creation', () 
     } else {
       assert.equal(item.groupId, undefined, `${item.id} unexpectedly has a service group`);
     }
+  }
+});
+
+test('recommendation practical-info rules reference canonical values and matching subcategories', () => {
+  const taxonomy = require('./travelTaxonomy.generated.json');
+  const catalog = taxonomy.recommendationCatalog;
+  const practicalInfo = catalog.practicalInfo;
+  const needIds = new Set(taxonomy.needs.map((item) => item.id));
+  const factIds = new Set(taxonomy.practicalFacts.map((item) => item.id));
+  const categoryIds = new Set(catalog.categories.map((item) => item.id));
+  const subcategoryById = Object.fromEntries(catalog.subcategories.map((item) => [item.id, item]));
+  const validateTokens = (owner, tokens) => {
+    assert.ok(Array.isArray(tokens), `${owner} must be an array`);
+    assert.equal(new Set(tokens).size, tokens.length, `${owner} must not contain duplicates`);
+    for (const token of tokens) {
+      const [kind, id] = token.split(':');
+      assert.ok(
+        (kind === 'need' && needIds.has(id)) || (kind === 'fact' && factIds.has(id)),
+        `${owner} contains invalid token ${token}`
+      );
+    }
+  };
+
+  assert.equal(practicalInfo.maxSuggested, 4);
+  assert.deepEqual(Object.keys(practicalInfo.categoryRules).sort(), [...categoryIds].sort());
+  for (const [categoryId, rule] of Object.entries(practicalInfo.categoryRules)) {
+    validateTokens(`${categoryId}.suggested`, rule.suggested);
+    validateTokens(`${categoryId}.more`, rule.more);
+    assert.ok(rule.suggested.length <= practicalInfo.maxSuggested);
+    assert.ok(typeof rule.notePlaceholder === 'string' && rule.notePlaceholder.length > 0);
+  }
+  for (const [subcategoryId, rule] of Object.entries(practicalInfo.subcategoryRules)) {
+    assert.ok(subcategoryById[subcategoryId], `unknown practical-info subcategory ${subcategoryId}`);
+    validateTokens(`${subcategoryId}.suggested`, rule.suggested);
+    assert.ok(rule.suggested.length <= practicalInfo.maxSuggested);
   }
 });
 

@@ -2,6 +2,7 @@ import {
   ENVIRONMENTS,
   INTERESTS,
   NEEDS,
+  PRACTICAL_FACTS,
   SEASONS,
   TRAVELER_STYLES,
   TRAVEL_PARTIES,
@@ -21,6 +22,7 @@ describe('getRecommendationDetailSections', () => {
         vibes: [VIBES[0].value],
         environments: [ENVIRONMENTS[0].value],
         needs: [NEEDS[0].value],
+        practicalFacts: [PRACTICAL_FACTS[0].value],
         interests: [INTERESTS[0].value],
         travelerStyles: [TRAVELER_STYLES[0].value],
         seasons: [SEASONS[0].value],
@@ -39,6 +41,7 @@ describe('getRecommendationDetailSections', () => {
       value: TRAVEL_PARTIES[0].label,
     });
     expect(result.needs).toEqual([NEEDS[0].label]);
+    expect(result.practicalFacts).toEqual([PRACTICAL_FACTS[0].label]);
     expect(result.extras.map((group) => group.id)).toEqual([
       'interests', 'travelerStyles', 'seasons',
     ]);
@@ -66,6 +69,7 @@ describe('getRecommendationDetailSections', () => {
     ]);
     expect(result.tags).toEqual([]);
     expect(result.needs).toEqual([]);
+    expect(result.practicalFacts).toEqual([]);
     expect(result.extras).toEqual([]);
   });
 

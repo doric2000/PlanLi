@@ -8,7 +8,13 @@ const {
   normalizePublishRequestId,
   saveRecommendation,
 } = require('./recommendationService');
-const { RECOMMENDATION_CATALOG, taxonomy } = require('./travelTaxonomy');
+const {
+  NEED_IDS,
+  PRACTICAL_FACT_IDS,
+  RECOMMENDATION_CATALOG,
+  recommendationPracticalAllowed,
+  taxonomy,
+} = require('./travelTaxonomy');
 const { consumeRateLimit } = require('./socialService');
 const { renewResolvedPlaceTokenLeases } = require('./placesGatewayService');
 
@@ -42,6 +48,16 @@ function cleanString(value, field, { max = 5000, optional = true } = {}) {
 function cleanId(value, field, optional = true) {
   const result = cleanString(value, field, { max: 180, optional });
   assert(!result || !result.includes('/'), 'invalid-argument', 'RECOMMENDATION_DRAFT_INVALID', `${field} is invalid.`);
+  return result;
+}
+
+function cleanSelection(value, field, allowed, maximum) {
+  const entries = value == null ? [] : value;
+  assert(Array.isArray(entries) && entries.length <= maximum,
+    'invalid-argument', 'RECOMMENDATION_DRAFT_INVALID', `${field} is invalid.`);
+  const result = Array.from(new Set(entries.map((entry) => cleanId(entry, field, false))));
+  assert(result.every((entry) => allowed.includes(entry)),
+    'invalid-argument', 'RECOMMENDATION_DRAFT_INVALID', `${field} is invalid.`);
   return result;
 }
 
@@ -169,6 +185,16 @@ function sanitizeRecommendationDraft(value) {
     'invalid-argument', 'RECOMMENDATION_DRAFT_INVALID', 'localMediaCount is invalid.');
   assert(media.length + localMediaCount <= 5,
     'invalid-argument', 'RECOMMENDATION_DRAFT_INVALID', 'Too many images.');
+  const categoryId = cleanId(input.categoryId || '', 'categoryId');
+  const needs = cleanSelection(input.needs, 'needs', NEED_IDS, NEED_IDS.length);
+  const practicalFacts = cleanSelection(input.practicalFacts, 'practicalFacts', PRACTICAL_FACT_IDS, 12);
+  if (needs.length || practicalFacts.length) {
+    assert(categoryId, 'invalid-argument', 'RECOMMENDATION_DRAFT_INVALID', 'Practical information requires a category.');
+    const applicable = recommendationPracticalAllowed(categoryId, subcategoryIds);
+    assert(needs.every((entry) => applicable.needs.includes(entry)) &&
+      practicalFacts.every((entry) => applicable.practicalFacts.includes(entry)),
+    'invalid-argument', 'RECOMMENDATION_DRAFT_INVALID', 'Practical information is not applicable.');
+  }
   return {
     composerKind: 'catalog-v1',
     step,
@@ -179,13 +205,15 @@ function sanitizeRecommendationDraft(value) {
     selectedCity: cleanCity(input.selectedCity),
     selectedPlace: cleanPlace(input.selectedPlace),
     locationQuery: cleanString(input.locationQuery || '', 'locationQuery', { max: 500 }),
-    categoryId: cleanId(input.categoryId || '', 'categoryId'),
+    categoryId,
     subcategoryIds: Array.from(new Set(subcategoryIds.map((entry) => cleanId(entry, 'subcategoryId', false)))),
     customSubcategoryLabel: cleanString(input.customSubcategoryLabel || '', 'customSubcategoryLabel', { max: 40 }),
     title: cleanString(input.title || '', 'title', { max: 120 }),
     description: cleanString(input.description || '', 'description', { max: 5000 }),
     budget: cleanId(input.budget || '', 'budget'),
     details: cleanDetails(input.details),
+    needs,
+    practicalFacts,
     eventSchedule: cleanString(input.eventSchedule || '', 'eventSchedule', { max: 160 }),
     media,
     localMediaCount,
@@ -402,6 +430,10 @@ function publishData(pointer, draft) {
       subcategoryIds: draft.subcategoryIds,
       ...(draft.customSubcategoryLabel ? { customSubcategoryLabel: draft.customSubcategoryLabel } : {}),
       details,
+      facets: {
+        needs: draft.needs || [],
+        practicalFacts: draft.practicalFacts || [],
+      },
       media: draft.media,
     },
   };

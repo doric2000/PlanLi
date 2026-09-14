@@ -77,6 +77,31 @@
     { "id": "reduced_walking", "label": "מעט הליכה" },
     { "id": "stroller_accessible", "label": "נגיש לעגלות" }
   ],
+  "practicalFacts": [
+    { "id": "step_free_access", "label": "כניסה ללא מדרגות" },
+    { "id": "elevator_available", "label": "יש מעלית" },
+    { "id": "accessible_restroom", "label": "שירותים נגישים" },
+    { "id": "accessible_parking", "label": "חניה נגישה" },
+    { "id": "accessible_seating", "label": "ישיבה נגישה" },
+    { "id": "wheelchair_boarding", "label": "עלייה נגישה לכלי התחבורה" },
+    { "id": "stairs", "label": "יש מדרגות" },
+    { "id": "demanding_walk", "label": "הליכה מאומצת" },
+    { "id": "long_walk", "label": "הליכה מעל 30 דקות" },
+    { "id": "uneven_terrain", "label": "שטח לא אחיד" },
+    { "id": "vehicle_required", "label": "נדרש רכב" },
+    { "id": "ride_recommended", "label": "מומלץ רכב או הסעה" },
+    { "id": "rough_road", "label": "דרך משובשת" },
+    { "id": "high_clearance_recommended", "label": "מומלץ רכב גבוה" },
+    { "id": "seasonal_access", "label": "גישה עונתית" },
+    { "id": "high_altitude", "label": "גובה רב" },
+    { "id": "motion_sickness", "label": "עלול לגרום למחלת ים" },
+    { "id": "parking_available", "label": "יש חניה" },
+    { "id": "free_parking", "label": "חניה חינמית" },
+    { "id": "shabbat_entry", "label": "כניסה מותאמת לשבת" },
+    { "id": "shabbat_meals", "label": "ארוחות שבת" },
+    { "id": "chabad_nearby", "label": "קרוב לבית כנסת או חב״ד" },
+    { "id": "advance_booking", "label": "נדרשת הזמנה מראש" }
+  ],
   "seasons": [
     { "id": "all_year", "label": "כל השנה" },
     { "id": "spring", "label": "אביב" },
@@ -211,6 +236,82 @@
       "category": { "min": 1, "max": 1 },
       "subcategories": { "min": 1, "max": 3 },
       "customLabel": { "minLength": 2, "maxLength": 40 }
+    },
+    "practicalInfo": {
+      "maxSuggested": 4,
+      "categoryRules": {
+        "food": {
+          "suggested": ["need:kosher", "need:vegetarian", "need:vegan", "need:gluten_free"],
+          "more": ["need:halal", "fact:step_free_access", "fact:accessible_restroom", "fact:accessible_parking"],
+          "notePlaceholder": "למשל: אפשרויות לאלרגיות, כניסה נגישה או שעות שכדאי להכיר"
+        },
+        "nature": {
+          "suggested": ["fact:demanding_walk", "fact:long_walk", "fact:uneven_terrain", "fact:vehicle_required"],
+          "more": ["fact:stairs", "fact:ride_recommended", "fact:rough_road", "fact:high_clearance_recommended", "fact:seasonal_access", "fact:high_altitude", "fact:parking_available", "fact:free_parking", "fact:step_free_access", "need:stroller_accessible"],
+          "notePlaceholder": "למשל: זמן הליכה מדויק, נקודת התחלה או חלופה קלה יותר"
+        },
+        "culture": {
+          "suggested": ["fact:step_free_access", "fact:elevator_available", "fact:accessible_restroom", "fact:accessible_parking"],
+          "more": ["fact:accessible_seating", "fact:stairs", "fact:long_walk", "fact:uneven_terrain", "fact:parking_available", "fact:free_parking", "need:stroller_accessible"],
+          "notePlaceholder": "למשל: באילו אזורים יש גישה, מדרגות או מידע למבקרים"
+        },
+        "activities": {
+          "suggested": ["fact:step_free_access", "fact:accessible_restroom", "fact:accessible_parking", "fact:advance_booking"],
+          "more": ["fact:elevator_available", "fact:accessible_seating", "fact:stairs", "fact:demanding_walk", "fact:long_walk", "fact:uneven_terrain", "fact:vehicle_required", "fact:motion_sickness", "fact:seasonal_access", "need:stroller_accessible"],
+          "notePlaceholder": "למשל: מאמץ נדרש, ציוד, מגבלה בריאותית או הזמנה מראש"
+        },
+        "nightlife": {
+          "suggested": ["fact:step_free_access", "fact:accessible_restroom", "fact:accessible_parking", "fact:advance_booking"],
+          "more": ["fact:elevator_available", "fact:accessible_seating", "fact:stairs", "fact:parking_available"],
+          "notePlaceholder": "למשל: נגישות, הזמנה מראש או פרט שחשוב לדעת לפני ההגעה"
+        },
+        "shopping": {
+          "suggested": ["fact:step_free_access", "fact:elevator_available", "fact:accessible_restroom", "fact:accessible_parking"],
+          "more": ["fact:stairs", "fact:parking_available", "fact:free_parking", "need:stroller_accessible"],
+          "notePlaceholder": "למשל: חניה, נגישות או שעות שבהן המקום עמוס פחות"
+        },
+        "events": {
+          "suggested": ["fact:step_free_access", "fact:accessible_seating", "fact:accessible_restroom", "fact:accessible_parking"],
+          "more": ["fact:elevator_available", "fact:stairs", "fact:advance_booking", "fact:parking_available", "need:stroller_accessible"],
+          "notePlaceholder": "למשל: סידורי נגישות, כניסה, ישיבה או הזמנה מראש"
+        },
+        "stay": {
+          "suggested": ["fact:step_free_access", "fact:elevator_available", "fact:parking_available", "fact:shabbat_entry"],
+          "more": ["fact:accessible_restroom", "fact:accessible_parking", "fact:free_parking", "fact:shabbat_meals", "fact:chabad_nearby", "need:kosher", "need:vegetarian", "need:vegan", "need:gluten_free", "need:halal", "need:stroller_accessible"],
+          "notePlaceholder": "למשל: איזה חדר נגיש, מגבלות כניסה או מידע לשומרי שבת"
+        },
+        "transportation": {
+          "suggested": ["fact:step_free_access", "fact:wheelchair_boarding", "fact:elevator_available", "fact:advance_booking"],
+          "more": ["fact:accessible_restroom", "fact:accessible_parking", "fact:motion_sickness", "fact:seasonal_access", "fact:parking_available"],
+          "notePlaceholder": "למשל: מאיפה עולים, החלפות, נגישות הרציף או צורך בהזמנה"
+        },
+        "services": {
+          "suggested": [],
+          "more": [],
+          "notePlaceholder": "למשל: שעות פעילות, שפה, אופן יצירת קשר או פרט שימושי אחר"
+        }
+      },
+      "subcategoryRules": {
+        "street_art": { "suggested": ["fact:long_walk", "fact:uneven_terrain", "fact:stairs", "fact:step_free_access"] },
+        "historic_site": { "suggested": ["fact:stairs", "fact:uneven_terrain", "fact:long_walk", "fact:step_free_access"] },
+        "archaeology": { "suggested": ["fact:stairs", "fact:uneven_terrain", "fact:long_walk", "fact:step_free_access"] },
+        "castle_palace_fortress": { "suggested": ["fact:stairs", "fact:uneven_terrain", "fact:elevator_available", "fact:step_free_access"] },
+        "neighborhood": { "suggested": ["fact:long_walk", "fact:uneven_terrain", "fact:stairs", "fact:step_free_access"] },
+        "old_town": { "suggested": ["fact:long_walk", "fact:uneven_terrain", "fact:stairs", "fact:step_free_access"] },
+        "square_street": { "suggested": ["fact:long_walk", "fact:uneven_terrain", "fact:step_free_access", "need:stroller_accessible"] },
+        "guided_tour": { "suggested": ["fact:demanding_walk", "fact:long_walk", "fact:uneven_terrain", "fact:advance_booking"] },
+        "day_trip": { "suggested": ["fact:demanding_walk", "fact:long_walk", "fact:vehicle_required", "fact:advance_booking"] },
+        "adventure": { "suggested": ["fact:demanding_walk", "fact:uneven_terrain", "fact:vehicle_required", "fact:advance_booking"] },
+        "water_sports": { "suggested": ["fact:motion_sickness", "fact:advance_booking", "fact:vehicle_required", "fact:step_free_access"] },
+        "boat_tour": { "suggested": ["fact:motion_sickness", "fact:advance_booking", "fact:step_free_access", "fact:accessible_restroom"] },
+        "winter_sports": { "suggested": ["fact:demanding_walk", "fact:vehicle_required", "fact:seasonal_access", "fact:advance_booking"] },
+        "cycling": { "suggested": ["fact:demanding_walk", "fact:uneven_terrain", "fact:advance_booking", "fact:vehicle_required"] },
+        "horse_riding": { "suggested": ["fact:demanding_walk", "fact:uneven_terrain", "fact:advance_booking", "fact:vehicle_required"] },
+        "ferry": { "suggested": ["fact:wheelchair_boarding", "fact:motion_sickness", "fact:advance_booking", "fact:accessible_restroom"] },
+        "cruise": { "suggested": ["fact:wheelchair_boarding", "fact:motion_sickness", "fact:advance_booking", "fact:accessible_restroom"] },
+        "public_toilets": { "suggested": ["fact:step_free_access", "fact:accessible_restroom"] },
+        "chabad_religious_services": { "suggested": ["fact:shabbat_meals", "need:kosher", "fact:step_free_access"] }
+      }
     },
     "interests": [
       { "id": "food", "label": "אוכל ושתייה" },
