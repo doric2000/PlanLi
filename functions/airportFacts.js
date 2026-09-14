@@ -11,8 +11,7 @@ function resetAirportDownloadCacheForTests() {
   airportDownloadCache.promise = null;
 }
 
-function parseCsvRows(text) {
-  const rows = [];
+function* iterateCsvRows(text) {
   let row = [];
   let field = '';
   let quoted = false;
@@ -34,7 +33,7 @@ function parseCsvRows(text) {
       field = '';
     } else if (character === '\n') {
       row.push(field.replace(/\r$/, ''));
-      rows.push(row);
+      yield row;
       row = [];
       field = '';
     } else {
@@ -43,14 +42,19 @@ function parseCsvRows(text) {
   }
   if (field || row.length) {
     row.push(field.replace(/\r$/, ''));
-    rows.push(row);
+    yield row;
   }
-  return rows;
+}
+
+function parseCsvRows(text) {
+  return Array.from(iterateCsvRows(text));
 }
 
 function parseOurAirportsCsv(text) {
-  const rows = parseCsvRows(text);
-  const headers = rows.shift() || [];
+  // Discard irrelevant rows as they are parsed. Keeping the entire global CSV
+  // as arrays of strings exceeded the destination trigger's memory limit.
+  const rows = iterateCsvRows(text);
+  const headers = rows.next().value || [];
   const headerIndexes = Object.fromEntries(
     headers.map((header, index) => [header, index])
   );
@@ -67,23 +71,25 @@ function parseOurAirportsCsv(text) {
     throw new Error('OurAirports CSV is missing required columns.');
   }
 
-  return rows.map((row) => {
+  const airports = [];
+  for (const row of rows) {
     const type = row[headerIndexes.type];
     const iataCode = String(row[headerIndexes.iata_code] || '').trim().toUpperCase();
     const latitude = Number(row[headerIndexes.latitude_deg]);
     const longitude = Number(row[headerIndexes.longitude_deg]);
-    if (!ALLOWED_AIRPORT_TYPES.has(type)) return null;
-    if (row[headerIndexes.scheduled_service] !== 'yes') return null;
-    if (!/^[A-Z0-9]{3}$/.test(iataCode)) return null;
-    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
-    return {
+    if (!ALLOWED_AIRPORT_TYPES.has(type)) continue;
+    if (row[headerIndexes.scheduled_service] !== 'yes') continue;
+    if (!/^[A-Z0-9]{3}$/.test(iataCode)) continue;
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) continue;
+    airports.push({
       ident: String(row[headerIndexes.ident] || '').trim(),
       type,
       name: String(row[headerIndexes.name] || '').trim(),
       iataCode,
       coordinates: { lat: latitude, lng: longitude },
-    };
-  }).filter(Boolean);
+    });
+  }
+  return airports;
 }
 
 function radians(value) {
