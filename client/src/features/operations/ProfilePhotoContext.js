@@ -52,6 +52,7 @@ export function ProfilePhotoProvider({ children }) {
     await operationStore.update({
       id: job.id, ownerUid: job.ownerUid, kind: 'avatar', source: 'avatar', targetId: job.ownerUid,
       serverOperationId: job.background?.operationId,
+      attempt: Math.max(job.feedbackAttempt || 1, job.background?.attempt || 1),
       status: job.status, stage: job.status, createdAt: job.createdAt, updatedAt: job.updatedAt,
       ...patch,
     }, { durable }).catch(() => {});
@@ -195,6 +196,7 @@ export function ProfilePhotoProvider({ children }) {
   const retry = useCallback(async (id) => {
     const job = jobsRef.current.find((entry) => entry.id === id && entry.ownerUid === user?.uid);
     if (job?.status === 'failed') await change(id, { status: 'queued', message: null, code: null, dismissed: false, acknowledged: false,
+      feedbackAttempt: Math.max(job.feedbackAttempt || 1, job.background?.attempt || 1) + 1,
       ...(job.background ? { background: { ...job.background, retryRequested: true } } : {}) });
   }, [change, user?.uid]);
   const discard = useCallback(async (id) => {

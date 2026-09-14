@@ -5,9 +5,10 @@ import AppText from '../../components/AppText';
 import styles from '../../styles/operations';
 import { operationCopy, operationLabel, TERMINAL_STATES } from './operationModel';
 
-export function OperationButton({ children, onPress, testID, label }) {
-  return <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={styles.button} testID={testID}>
-    <AppText style={styles.buttonText}>{children}</AppText>
+export function OperationButton({ children, onPress, testID, label, busy = false }) {
+  return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled: busy, busy }}
+    disabled={busy} onPress={onPress} style={styles.button} testID={testID}>
+    {busy ? <ActivityIndicator color="#1E3A5F" /> : <AppText style={styles.buttonText}>{children}</AppText>}
   </Pressable>;
 }
 

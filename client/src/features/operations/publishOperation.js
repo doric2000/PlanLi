@@ -10,6 +10,7 @@ export function publishOperation(job) {
   return {
     id: `publish:${job.id}`, ownerUid: job.ownerUid, kind: job.contentType || 'recommendation',
     serverOperationId: job.background?.operationId,
+    attempt: Math.max(job.feedbackAttempt || 1, job.background?.attempt || 1),
     source: 'publish', status, stage: job.stage, createdAt: job.createdAt, updatedAt: job.updatedAt,
     legacyEditor: job.contentType !== 'route' && !job.payload?.draftId,
     discoveryRegionIds: job.contentType === 'route' ? job.result?.discoveryRegionIds : [job.result?.discoveryRegionId].filter(Boolean),
@@ -26,11 +27,5 @@ export function publishOperation(job) {
 export async function syncPublishOperation(job, durable = true) {
   await operationStore.hydrate();
   const value = publishOperation(job);
-  const previous = operationStore.getSnapshot().find((entry) => entry.id === value.id && entry.ownerUid === job.ownerUid);
-  if (previous?.status !== value.status) {
-    value.acknowledged = false;
-    value.dismissed = false;
-    value.visibleMs = 0;
-  }
   return operationStore.update(value, { durable });
 }
