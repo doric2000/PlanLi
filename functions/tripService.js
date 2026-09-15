@@ -201,6 +201,7 @@ async function createPrivateTrip({ admin, auth, data, idempotencyKey }) {
     transaction.set(firstDayRef, dayDocument({ kind: 'day', title: 'יום 1', order: 1, now }));
     if (seedStopRef) transaction.set(seedStopRef, recommendationStop(seedSnapshot, 0, now));
     transaction.set(quotaRef, {
+      ownerId: uid,
       activeTripCount: count + 1,
       updatedAt: now,
       ...(quota ? {} : { createdAt: now }),
@@ -571,6 +572,7 @@ async function deletePrivateTrip({ admin, auth, data, idempotencyKey }) {
       const now = timestamp(admin);
       transaction.update(tripRef, { state: 'deleting', updatedAt: now });
       transaction.set(quotaRef, {
+        ownerId: auth.uid,
         activeTripCount: Math.max(0, count - 1),
         updatedAt: now,
         ...(quota ? {} : { createdAt: now }),
@@ -716,6 +718,7 @@ async function copySharedTrip({ admin, auth, data, idempotencyKey }) {
       });
     });
     transaction.set(quotaRef, {
+      ownerId: auth.uid,
       activeTripCount: count + 1,
       updatedAt: now,
       ...(quota ? {} : { createdAt: now }),

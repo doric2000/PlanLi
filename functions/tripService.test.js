@@ -194,6 +194,9 @@ test('private trip creation builds ideas and first-day containers and can seed a
   assert.equal(admin.documents.get(
     `system/tripPlannerQuotas/accounts/${tripQuotaId('owner', 'test-key')}`
   ).activeTripCount, 1);
+  assert.equal(admin.documents.get(
+    `system/tripPlannerQuotas/accounts/${tripQuotaId('owner', 'test-key')}`
+  ).ownerId, 'owner');
 });
 
 test('active trip quota rejects new allocation before any trip document is written', async () => {
@@ -278,6 +281,7 @@ test('copying a shared trip uses the same atomic destination-account quota', asy
   });
   assert.equal(admin.documents.get(`trips/${copied.tripId}`).ownerId, copyAuth.uid);
   assert.equal(admin.documents.get(quotaPath).activeTripCount, 1);
+  assert.equal(admin.documents.get(quotaPath).ownerId, copyAuth.uid);
 });
 
 test('idempotent operations add mixed stops once and reject stale revisions', async () => {
