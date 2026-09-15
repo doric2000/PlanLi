@@ -25,6 +25,98 @@ The existing Text Search quota remains zero. See
 
 ## Current environment status
 
+### Private live Trip Planner flagship rollout (2026-09-15)
+
+PlanLi's private live Trip Planner is implemented and released for iOS. The
+centered floating plus now opens three focused actions: publish a route, publish
+a recommendation, or create a personal trip; notifications remain available in
+the existing Profile overflow. A signed-in user can create and resume private
+trips, discover and add existing PlanLi recommendations, mix in custom stops,
+organize days and drag stops into order, switch driving/walking route calculation,
+inspect the route and numbered stops on the map, autosave, recover queued edits,
+share a revocable read-only trip, and copy a shared trip into an independent
+private plan. The interaction system covers loading, empty, retry, conflict,
+offline, route-unavailable and read-only states. Limits are 14 days, 150 stops
+per trip and 40 stops per day.
+
+The approved Figma source is
+[Trip Planner / Flagship](https://www.figma.com/design/tBs3j3G9lD12Q1qlpaLpSK?node-id=106-2)
+with the reusable component set at node `208:2`. It follows the current PlanLi
+RTL visual system and the 390 x 844 iPhone surface, with the planner's map,
+three-snap itinerary sheet, day rail, stop cards, creation/discovery/custom-stop
+flows, share/copy states and My Trips library reviewed for overflow and 44-point
+targets.
+
+PR [#382](https://github.com/doric2000/PlanLi/pull/382) delivered the system and
+merged as `431a804a800f9fc8b504590a8685f6e3aec25a86`. PR
+[#383](https://github.com/doric2000/PlanLi/pull/383), merged as
+`28e601d87ff3af1e49f5d5867153bf2b4fbd6946`, completed account-deletion cleanup.
+PR [#384](https://github.com/doric2000/PlanLi/pull/384), merged as
+`f71c5ace60854df6f194b78c14ad1e5582581657`, isolated all legacy public-trip
+triggers from private planner autosaves. PR
+[#385](https://github.com/doric2000/PlanLi/pull/385), merged as the release source
+`ef8ecccd1793d75e2fcc6da611aae380f28d2ad8`, renewed the fail-closed optional-native
+receipt without enabling `PlanLiTransfers`. All required GitHub validation and
+security checks passed. The unrelated untracked root `app.json` was preserved and
+excluded from every commit and release archive.
+
+Backend rollout completed in Firebase project `planli-f0b12`, Firestore `eur3`,
+at `2026-09-15T01:42:32Z`-`01:42:43Z`. All 18 selected v2 Functions are ACTIVE on
+Node.js 22 in `europe-west1`, default `minInstances: 0`, Firebase source hash
+`2c384e5dfe797b02df4abbb4728ebfaaf4e1699a`. They are `createPrivateTrip`,
+`listMyTrips`, `getPrivateTrip`, `applyPrivateTripOperations`, `deletePrivateTrip`,
+`createTripShare`, `revokeTripShare`, `getSharedTrip`, `copySharedTrip`,
+`discoverTripRecommendations`, `computePrivateTripRoute`, decommissioned legacy
+`saveTrip`, three isolated legacy trip triggers, daily runtime cleanup, and both
+account-deletion entry points. The representative planner revision is
+`createprivatetrip-00001-lok`. Google Routes API is enabled; route computation is
+server-owned, authenticated, rate-limited, bounded and returns only normalized
+route data. Unauthenticated planner probes returned 401 and the post-deploy query
+found zero relevant production errors.
+
+Firestore Rules release `cloud.firestore` uses ruleset
+`2fdfdde6-d1b3-491c-9f17-53e83f7fbf66`, updated at
+`2026-09-15T01:34:40Z`. Private trip roots and descendants deny all direct client
+access; writes and reads use the authenticated callable boundary. Composite index
+`CICAgLio34IK` for `trips(ownerId,state,updatedAt)` is READY. TTL on
+`tripOperationReceipts.expireAt` and `tripShareTokens.expireAt` is ACTIVE, with a
+scheduled cleanup fallback. Active-trip quota state and all private trip receipts,
+share tokens and descendants are included in account deletion. Hosting version
+`491a7389342af206`, release `1789436604543000`, went live at
+`2026-09-15T01:43:24Z` on [Firebase Hosting](https://planli-f0b12.web.app). Its
+`/trip/<token>` landing page returned 200, carried `noindex`, and exposed no token
+or trip content in the HTML.
+
+iOS production OTA was published at `2026-09-15T02:10:08.598Z` from release
+source `ef8ecccd1793d75e2fcc6da611aae380f28d2ad8`. Verified staging candidate
+`b3c8f31c-b59b-4793-83a2-87342604c909` was republished without another export to
+[production group 8a22bdda](https://expo.dev/accounts/doric2000/projects/client/updates/8a22bdda-c841-43a8-8d8b-4bf73725cac9), update
+`01a0a2d4-2a56-7760-9856-6ff65b8a8e67`, channel/environment `production`, runtime
+`1.3.0`. The immutable iOS launch bundle is 10,898,884 bytes, SHA-256
+`D052DECFB1E1D3E7899723A885BEEE3CFE03D2EE50A82C1321D147657D2A7983`.
+EAS independently returned the same group, update, runtime, iOS platform and clean
+Git commit. Target remains TestFlight **1.1.1 (30)**, build
+`b16eca67-6291-4520-82b6-10cb1af190f5`. No native build, app-version change,
+Apple submission/review or Android OTA was performed. Physical iPhone download,
+application and map/drag/share smoke testing remain unverified.
+
+Release validation passed the 128-test unchanged client receipt, 53 related
+Functions tests, Functions production audit and Firestore Rules emulator. The
+follow-up release guard passed six fallback suites / 48 tests and 23 EAS workflow
+tests; final GitHub affected-client, validation, secret scan and security
+invariants passed. A pre-merge security review found trip-count exhaustion,
+expired operation/share retention and unbounded shared-copy storage; the released
+system closes them with transactional 50-trip quotas, seven-day TTL plus scheduled
+cleanup, capped copies, complete deletion and trigger isolation. No auth bypass,
+private-data exposure, IDOR, provider credential leak or client-write path was
+found after remediation.
+
+Whole-client OTA rollback target is the preceding verified production group
+`61dfaa40-3579-4bde-b875-ff23081f3953`, source
+`9e499bbc2a31aacd7ebec836fa5bc56817c05e77`. OTA rollback does not revert the
+deployed Functions, Rules, indexes, TTL configuration or Hosting; those require a
+separate reviewed backend rollback. No rollback occurred.
+
 ### Destination resolution and reviewed catalog rollout (2026-09-14)
 
 PR [#377](https://github.com/doric2000/PlanLi/pull/377) merged as
@@ -4661,3 +4753,13 @@ part of this follow-up.
 - Public channel delivery and immutable bundle verified at `2026-09-14T18:29:29.294Z`; physical iPhone application and map checks remain unverified.
 - Backend/catalog rollout and the separate airport-memory fix are recorded in Current environment status above.
 - Rollback: iOS group `5df5a17d-d574-415f-968d-7d8a747b55db`; OTA rollback does not revert Functions or catalog data.
+
+## iOS production OTA release
+
+- Source commit: `ef8ecccd1793d75e2fcc6da611aae380f28d2ad8`.
+- EAS Update group: `8a22bdda-c841-43a8-8d8b-4bf73725cac9`; channel `production`; runtime `1.3.0`.
+- EAS environment: `production`; published at `2026-09-15T02:10:08.598Z`.
+- Immutable iOS launch bundle: update `01a0a2d4-2a56-7760-9856-6ff65b8a8e67`; 10898884 bytes; SHA-256 `D052DECFB1E1D3E7899723A885BEEE3CFE03D2EE50A82C1321D147657D2A7983`.
+- Message: PlanLi private live trip planner
+- Device application and post-update security smoke tests: pending.
+- Rollback: republish the immediately preceding verified production group; never change the runtime URL or channel in-app.
