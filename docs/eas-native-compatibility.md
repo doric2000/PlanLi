@@ -92,6 +92,19 @@ same. Unknown fingerprint changes are never automatically added to the record.
 The guard reports `reviewed-optional-module`, not `exact`, and does not activate
 the unavailable native feature. The real fingerprint remains visible in EAS.
 
+The fallback-source receipt was renewed for feedback-state commit
+`45be111b01f3154af4b1bb859d4b8090f9474f69`. The reviewed changes only persist
+the server attempt number, retain an acknowledged result, advance the local
+feedback attempt on an explicit retry, and move dismissal behind the existing
+store action. They do not call or enable `PlanLiTransfers`. A focused test loads
+the real optional bridge with `requireOptionalNativeModule` returning `null` and
+verifies that `backgroundTransfersAvailable()` remains false on iOS. The
+recommendation and profile-photo suites continue to execute their foreground
+fallbacks with background transfers unavailable. The production fingerprint
+remains the already-reviewed optional delta
+`f5fac23f11fb1f2c0b1adbaf545b164644c461d3`; no new native input is accepted by
+this receipt.
+
 When an authorized native build replaces build 30, inspect its source,
 fingerprint, environment and installed/tested status, then update the baseline
 and retire the old optional-module assessment in a reviewed change. Enabling

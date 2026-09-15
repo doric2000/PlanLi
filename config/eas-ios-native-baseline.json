@@ -16,14 +16,14 @@
     "fingerprint": "f5fac23f11fb1f2c0b1adbaf545b164644c461d3",
     "module": "PlanLiTransfers",
     "review": "docs/eas-native-compatibility.md",
-    "sourceCommit": "7c420beef68f9b61c41f9bf544e5891af99ba29e",
+    "sourceCommit": "45be111b01f3154af4b1bb859d4b8090f9474f69",
     "requiredSources": {
       "client/modules/planli-transfers/index.js": "ad518ab214c8ce8a2d106175d9869ab21137ff8a19a1cc9cc0941961968cfb01",
-      "client/src/features/operations/BackgroundMediaService.js": "8876a91fc293c168ec9f4f7d1e99f34f165097db9aad68d10f7ee95f66094969",
+      "client/src/features/operations/BackgroundMediaService.js": "0c318285942355c63ac07946990722fcca97b7c9ff5423ebb780a31604b53d8d",
       "client/src/features/operations/OperationContext.js": "6b6702fbf19bb7fffeb015adda70d369d807c64cdf124aefbac101aae0754da4",
-      "client/src/features/operations/ProfilePhotoContext.js": "7684592a46b8655f3377ed92c82034b9e8a77d8099f5fadc01d6ded0174f20c8",
-      "client/src/features/operations/ActivityScreen.js": "e03af328e65d0c570831fc9404938f86209b22d0e7c658f0bec7ba8b2327f6af",
-      "client/src/features/community/publishing/RecommendationPublishContext.js": "73f59ded60116b80d5c1f4b6b839a275ad4e8591435f321b6fa6c6bbcf07f221"
+      "client/src/features/operations/ProfilePhotoContext.js": "2d33c44135a5eec68715907f62fe3f98fa3ea79812163692f194c02cbbefa795",
+      "client/src/features/operations/ActivityScreen.js": "92374e7de9927b4cd0b8ca37edf4a69318c8ff4e9d7356ba02ce47dbdb19ad21",
+      "client/src/features/community/publishing/RecommendationPublishContext.js": "07c65110518c5e448b61810a67ffeffa0266d39c890392cf877e34fc8430fbed"
     }
   }
 }
