@@ -1347,7 +1347,12 @@ exports.onRouteMediaCleanup = firestoreWritten(
 );
 exports.onTripMediaCleanup = firestoreWritten(
   'trips/{tripId}',
-  (event) => handleMediaCleanup(event, 'trips'),
+  (event) => {
+    const before = event.data?.before.exists ? event.data.before.data() : null;
+    const after = event.data?.after.exists ? event.data.after.data() : null;
+    if (before?.kind === 'private_planner' || after?.kind === 'private_planner') return null;
+    return handleMediaCleanup(event, 'trips');
+  },
   { serviceAccount: MEDIA_SERVICE_ACCOUNT }
 );
 exports.onUserMediaCleanup = firestoreWritten(

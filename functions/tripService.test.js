@@ -420,3 +420,17 @@ test('legacy public trip publishing is decommissioned', async () => {
     && error.details?.reason === 'PRIVATE_TRIP_PLANNER_REQUIRED'
   ));
 });
+
+test('legacy trip projection and media triggers ignore private planner writes', () => {
+  const source = require('node:fs').readFileSync(require.resolve('./index'), 'utf8');
+  for (const exportName of [
+    'onTripMediaCleanup',
+    'onTripFavoriteProjection',
+    'onTripAdminSearchWritten',
+  ]) {
+    const start = source.indexOf(`exports.${exportName}`);
+    assert.notEqual(start, -1, `Missing ${exportName}`);
+    const block = source.slice(start, source.indexOf('\n);', start) + 3);
+    assert.match(block, /kind === 'private_planner'/u, `${exportName} must ignore private trips`);
+  }
+});
