@@ -66,6 +66,22 @@ async function deleteRecommendationDraftsForUser({ admin, uid }) {
   await deleteDocumentStrict(ownerRef);
 }
 
+async function deletePrivateTripRuntimeStateForUser({ admin, uid }) {
+  const db = admin.firestore();
+  let deleted = 0;
+  for (const [collectionPath, ownerField] of [
+    ['system/runtime/tripOperationReceipts', 'uid'],
+    ['system/runtime/tripShareTokens', 'ownerId'],
+    ['system/tripPlannerQuotas/accounts', 'ownerId'],
+  ]) {
+    deleted += await deleteQueryInBatches(
+      db,
+      () => db.collection(collectionPath).where(ownerField, '==', uid)
+    );
+  }
+  return deleted;
+}
+
 async function removeReporterModerationData({ admin, uid }) {
   const db = admin.firestore();
   const reports = await db.collectionGroup('reports').where('reporterId', '==', uid).get();
@@ -419,7 +435,8 @@ async function deleteAccountInternal({
   }
   await deleteDocumentStrict(db.doc(`system/operations/owners/${uid}`));
   const ownedContent = await deleteOwnedContent({ admin, uid, mediaBucket });
-  await updateJob('interactions', { ownedContent });
+  const privateTripRuntimeState = await deletePrivateTripRuntimeStateForUser({ admin, uid });
+  await updateJob('interactions', { ownedContent, privateTripRuntimeState });
   const interactions = await removeAuthoredInteractions({ admin, uid });
   const purgedReports = await removeReporterModerationData({ admin, uid });
   await updateJob('public-profile', { interactions, purgedReports });
@@ -484,6 +501,7 @@ module.exports = {
   deleteContent,
   deleteContentInternal,
   deleteOwnedContent,
+  deletePrivateTripRuntimeStateForUser,
   deleteRecommendationDraftsForUser,
   deleteNotificationDevicesForUser,
   deleteQueryInBatches,

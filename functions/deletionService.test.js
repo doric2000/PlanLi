@@ -7,6 +7,7 @@ const {
   deleteContentInternal,
   deleteDocumentStrict,
   deleteNotificationDevicesForUser,
+  deletePrivateTripRuntimeStateForUser,
   deleteRecommendationDraftsForUser,
   removeReporterModerationData,
   requestAccountDeletion,
@@ -233,6 +234,58 @@ test('account deletion recursively removes only the recommendation draft owner n
   };
   await deleteRecommendationDraftsForUser({ admin: { firestore: () => db }, uid: 'user-1' });
   assert.deepEqual(deleted, ['system/recommendationDrafts/owners/user-1']);
+});
+
+test('account deletion removes private trip receipts, shares and quota state', async () => {
+  const rows = new Map([
+    ['system/runtime/tripOperationReceipts', [{ ref: { path: 'receipts/one' } }]],
+    ['system/runtime/tripShareTokens', [{ ref: { path: 'shares/one' } }]],
+    ['system/tripPlannerQuotas/accounts', [{ ref: { path: 'quotas/one' } }]],
+  ]);
+  const filters = [];
+  const deleted = [];
+  const db = {
+    collection: (collectionPath) => ({
+      where: (field, operator, value) => {
+        filters.push([collectionPath, field, operator, value]);
+        return {
+          limit: () => ({
+            get: async () => {
+              const docs = rows.get(collectionPath) || [];
+              return { empty: docs.length === 0, size: docs.length, docs };
+            },
+          }),
+        };
+      },
+    }),
+    batch: () => {
+      const pending = [];
+      return {
+        delete: (ref) => pending.push(ref),
+        commit: async () => {
+          pending.forEach((ref) => {
+            deleted.push(ref.path);
+            for (const [collectionPath, docs] of rows) {
+              rows.set(collectionPath, docs.filter((entry) => entry.ref.path !== ref.path));
+            }
+          });
+        },
+      };
+    },
+  };
+
+  const count = await deletePrivateTripRuntimeStateForUser({
+    admin: { firestore: () => db },
+    uid: 'user-1',
+  });
+
+  assert.equal(count, 3);
+  assert.deepEqual(filters, [
+    ['system/runtime/tripOperationReceipts', 'uid', '==', 'user-1'],
+    ['system/runtime/tripShareTokens', 'ownerId', '==', 'user-1'],
+    ['system/tripPlannerQuotas/accounts', 'ownerId', '==', 'user-1'],
+  ]);
+  assert.deepEqual(deleted, ['receipts/one', 'shares/one', 'quotas/one']);
 });
 
 test('account cleanup deletes every global notification device owned by the user', async () => {
