@@ -31,7 +31,20 @@ const {
   publishRecommendationDraft,
   saveRecommendationDraft,
 } = require('./recommendationDraftService');
-const { saveTrip } = require('./tripService');
+const {
+  applyPrivateTripOperations,
+  computePrivateTripRoute,
+  copySharedTrip,
+  createPrivateTrip,
+  createTripShare,
+  deletePrivateTrip,
+  discoverTripRecommendations,
+  getPrivateTrip,
+  getSharedTrip,
+  listMyTrips,
+  revokeTripShare,
+  saveTrip,
+} = require('./tripService');
 const { listMyPendingContent } = require('./myPendingContentService');
 const { completeAccountSetup, registerUser, updateProfile } = require('./profileService');
 const { authorizeRequest } = require('./authPolicy');
@@ -213,6 +226,10 @@ const CALLABLE_OPTIONS = {
 const PUBLIC_READ_OPTIONS = {
   concurrency: 10,
   maxInstances: 1,
+};
+const PRIVATE_TRIP_WRITE_OPTIONS = {
+  concurrency: 4,
+  maxInstances: 2,
 };
 
 function callable(options, handler) {
@@ -568,12 +585,89 @@ exports.loadRouteDetails = callable(
 );
 
 exports.saveTrip = callable(
-  { access: 'active', timeoutSeconds: 120, memory: '1GiB' },
-  (request) => saveTrip({
+  { access: 'active', timeoutSeconds: 30 },
+  () => saveTrip()
+);
+
+exports.createPrivateTrip = callable(
+  {
+    access: 'active', timeoutSeconds: 60, memory: '512MiB',
+    secrets: [publicRateLimitKey], ...PRIVATE_TRIP_WRITE_OPTIONS,
+  },
+  (request) => createPrivateTrip({
+    admin, auth: request.auth, data: request.data,
+    idempotencyKey: publicRateLimitKey.value(),
+  })
+);
+exports.listMyTrips = callable(
+  { access: 'active', timeoutSeconds: 30 },
+  (request) => listMyTrips({ admin, auth: request.auth, data: request.data })
+);
+exports.getPrivateTrip = callable(
+  { access: 'active', timeoutSeconds: 30, memory: '512MiB' },
+  (request) => getPrivateTrip({ admin, auth: request.auth, data: request.data })
+);
+exports.applyPrivateTripOperations = callable(
+  {
+    access: 'active', timeoutSeconds: 90, memory: '512MiB',
+    secrets: [publicRateLimitKey], ...PRIVATE_TRIP_WRITE_OPTIONS,
+  },
+  (request) => applyPrivateTripOperations({
     admin,
     auth: request.auth,
     data: request.data,
-    mediaBucket: mediaStorageBucket.value(),
+    idempotencyKey: publicRateLimitKey.value(),
+  })
+);
+exports.deletePrivateTrip = callable(
+  {
+    access: 'active', timeoutSeconds: 300, memory: '512MiB',
+    secrets: [publicRateLimitKey], ...PRIVATE_TRIP_WRITE_OPTIONS,
+  },
+  (request) => deletePrivateTrip({
+    admin, auth: request.auth, data: request.data,
+    idempotencyKey: publicRateLimitKey.value(),
+  })
+);
+exports.createTripShare = callable(
+  { access: 'active', timeoutSeconds: 30, ...PRIVATE_TRIP_WRITE_OPTIONS },
+  (request) => createTripShare({ admin, auth: request.auth, data: request.data })
+);
+exports.revokeTripShare = callable(
+  { access: 'active', timeoutSeconds: 30, ...PRIVATE_TRIP_WRITE_OPTIONS },
+  (request) => revokeTripShare({ admin, auth: request.auth, data: request.data })
+);
+exports.getSharedTrip = callable(
+  { access: 'signedIn', timeoutSeconds: 30, memory: '512MiB' },
+  (request) => getSharedTrip({ admin, data: request.data })
+);
+exports.copySharedTrip = callable(
+  {
+    access: 'active', timeoutSeconds: 90, memory: '512MiB',
+    secrets: [publicRateLimitKey], ...PRIVATE_TRIP_WRITE_OPTIONS,
+  },
+  (request) => copySharedTrip({
+    admin, auth: request.auth, data: request.data,
+    idempotencyKey: publicRateLimitKey.value(),
+  })
+);
+exports.discoverTripRecommendations = callable(
+  { access: 'active', timeoutSeconds: 30, memory: '512MiB' },
+  (request) => discoverTripRecommendations({ admin, auth: request.auth, data: request.data })
+);
+exports.computePrivateTripRoute = callable(
+  {
+    access: 'active',
+    timeoutSeconds: 60,
+    memory: '512MiB',
+    secrets: [publicRateLimitKey],
+    ...PROVIDER_ROUTE_CALLABLE_LIMITS,
+  },
+  (request) => computePrivateTripRoute({
+    admin,
+    auth: request.auth,
+    data: request.data,
+    providerRateLimitKey: publicRateLimitKey.value(),
   })
 );
 
@@ -1363,7 +1457,12 @@ exports.onRouteFavoriteProjection = firestoreWritten(
 );
 exports.onTripFavoriteProjection = firestoreWritten(
   'trips/{tripId}',
-  projectionHandler('trip', 'tripId')
+  async (event) => {
+    const before = event.data?.before.exists ? event.data.before.data() : null;
+    const after = event.data?.after.exists ? event.data.after.data() : null;
+    if (before?.kind === 'private_planner' || after?.kind === 'private_planner') return null;
+    return projectionHandler('trip', 'tripId')(event);
+  }
 );
 exports.onCityFavoriteProjection = firestoreWritten(
   'countries/{countryId}/destinations/{cityId}',
@@ -1391,7 +1490,12 @@ exports.onRouteAdminSearchWritten = firestoreWritten(
 );
 exports.onTripAdminSearchWritten = firestoreWritten(
   'trips/{tripId}',
-  adminSearchProjectionHandler
+  (event) => {
+    const before = event.data?.before.exists ? event.data.before.data() : null;
+    const after = event.data?.after.exists ? event.data.after.data() : null;
+    if (before?.kind === 'private_planner' || after?.kind === 'private_planner') return null;
+    return adminSearchProjectionHandler(event);
+  }
 );
 exports.onPublicProfileAdminSearchWritten = firestoreWritten(
   'publicProfiles/{userId}',

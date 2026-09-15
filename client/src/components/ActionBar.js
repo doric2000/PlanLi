@@ -3,6 +3,9 @@ import { useCommentsCount } from "../features/community/hooks/useCommentsCount";
 import { useState } from 'react';
 import LikesModal from './LikesModal';
 import { RecommendationActionBar } from './RecommendationActionBar';
+import AddToTripModal from '../features/tripPlanner/components/AddToTripModal';
+import { useAuthUser } from '../hooks/useAuthUser';
+import { CAPABILITIES } from '../constants/authPolicy';
 
 /**
  * ActionBar - Stateful card wrapper around RecommendationActionBar.
@@ -34,6 +37,11 @@ import { RecommendationActionBar } from './RecommendationActionBar';
  */
 const ActionBar = ({ item, onCommentPress, collectionName = 'recommendations', onReadMore }) => {
 	const [showLikesModal, setShowLikesModal] = useState(false);
+	const [showAddToTrip, setShowAddToTrip] = useState(false);
+	const { ensureCapability } = useAuthUser();
+	const handleAddToTrip = async () => {
+		if (await ensureCapability(CAPABILITIES.ACTIVE, { name: 'TripPlanner' })) setShowAddToTrip(true);
+	};
 
 	const { isLiked, likeCount, toggleLike } = useLikes(
 		collectionName,
@@ -65,6 +73,7 @@ const ActionBar = ({ item, onCommentPress, collectionName = 'recommendations', o
 				onLikesListPress={() => setShowLikesModal(true)}
 				contentLabel={contentLabel}
 				onReadMore={onReadMore}
+				onAddToTrip={collectionName === 'recommendations' ? handleAddToTrip : undefined}
 			/>
 
 			<LikesModal
@@ -73,6 +82,11 @@ const ActionBar = ({ item, onCommentPress, collectionName = 'recommendations', o
 				collectionName={collectionName}
 				itemId={item.id}
 				likeCount={likeCount}
+			/>
+			<AddToTripModal
+				visible={showAddToTrip}
+				recommendationId={item.id}
+				onClose={() => setShowAddToTrip(false)}
 			/>
 		</>
 	);

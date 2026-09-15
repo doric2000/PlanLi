@@ -8,6 +8,8 @@ const RUNTIME_COLLECTIONS = Object.freeze([
   'system/runtime/placeSearchSessions',
   'system/runtime/resolvedPlaceTokens',
   'system/runtime/destinationResolutionChoices',
+  'system/runtime/tripOperationReceipts',
+  'system/runtime/tripShareTokens',
 ]);
 
 const EXPIRY_FIELDS = Object.freeze({

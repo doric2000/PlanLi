@@ -55,6 +55,11 @@ import GuestPersonalizationBridge from "./src/features/profile/components/GuestP
 import { PersonalizationFeedbackProvider } from "./src/features/profile/context/PersonalizationFeedbackContext";
 import RegionSelectorScreen from "./src/features/region/screens/RegionSelectorScreen";
 import { RegionSelectionProvider } from "./src/features/region/context/RegionSelectionContext";
+import TripPlannerScreen from "./src/features/tripPlanner/screens/TripPlannerScreen";
+import TripDiscoveryScreen from "./src/features/tripPlanner/screens/TripDiscoveryScreen";
+import TripCustomStopScreen from "./src/features/tripPlanner/screens/TripCustomStopScreen";
+import MyTripsScreen from "./src/features/tripPlanner/screens/MyTripsScreen";
+import SharedTripScreen from "./src/features/tripPlanner/screens/SharedTripScreen";
 
 
 const Stack = createStackNavigator();
@@ -72,6 +77,16 @@ const BlockedUsersAuthed = withRequireAuth(BlockedUsersScreen);
 const AdminPanelAuthed = withRequireAuth(AdminPanelScreen);
 const AddRecommendationActive = withRequireAuth(AddRecommendationScreen, CAPABILITIES.ACTIVE);
 const AddRoutesActive = withRequireAuth(AddRoutesScreen, CAPABILITIES.ACTIVE);
+const TripPlannerActive = withRequireAuth(TripPlannerScreen, CAPABILITIES.ACTIVE);
+const TripDiscoveryActive = withRequireAuth(TripDiscoveryScreen, CAPABILITIES.ACTIVE);
+const TripCustomStopActive = withRequireAuth(TripCustomStopScreen, CAPABILITIES.ACTIVE);
+const MyTripsActive = withRequireAuth(MyTripsScreen, CAPABILITIES.ACTIVE);
+const SharedTripAuthed = withRequireAuth(SharedTripScreen);
+
+const linking = {
+	prefixes: ['com.planli.planlitravels://'],
+	config: { screens: { SharedTrip: 'shared-trip/:token' } },
+};
 
 /**
  * Main App Component.
@@ -127,6 +142,7 @@ export default function App() {
 				 <NoyaTourProvider currentRouteName={currentRouteName === 'CommunityFeed' ? 'Community' : currentRouteName} navigationReady={navigationReady} navigationRef={navigationRef}>
 				<NavigationContainer
 					ref={navigationRef}
+					linking={linking}
 					onReady={() => {
 						setNavigationReady(true);
 						recordCurrentRoute();
@@ -158,6 +174,11 @@ export default function App() {
 					<Stack.Screen name='Route' component={LegacyRoutesScreen} />
                     <Stack.Screen name='Routes' component={LegacyRoutesScreen} />
                     <Stack.Screen name='Notifications' component={NotificationsAuthed} options={profileStackScreenOptions} />
+                    <Stack.Screen name='TripPlanner' component={TripPlannerActive} options={{ headerShown: false }} />
+                    <Stack.Screen name='TripDiscovery' component={TripDiscoveryActive} options={{ headerShown: false }} />
+                    <Stack.Screen name='TripCustomStop' component={TripCustomStopActive} options={{ headerShown: false }} />
+                    <Stack.Screen name='MyTrips' component={MyTripsActive} options={{ headerShown: false }} />
+                    <Stack.Screen name='SharedTrip' component={SharedTripAuthed} options={{ headerShown: false }} />
                     <Stack.Screen
                       name='CreateMenu'
                       component={CreateMenuScreen}

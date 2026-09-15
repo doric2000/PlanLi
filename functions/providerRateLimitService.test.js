@@ -34,6 +34,7 @@ test('provider costs and budgets are explicit', () => {
   assert.equal(PROVIDER_COSTS.bilingualResolution, 2);
   assert.equal(PROVIDER_COSTS.localityResolution, 3);
   assert.equal(PROVIDER_COSTS.fullResolution, 5);
+  assert.equal(PROVIDER_COSTS.routeComputation, 1);
   assert.equal(MINUTE_MAXIMUM, 30);
   assert.equal(DAY_MAXIMUM, 120);
   assert.equal(PROVIDER_BUDGET_VERSION, 6);

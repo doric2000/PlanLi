@@ -24,6 +24,8 @@ import { recommendationDetailStyles as styles } from '../components/recommendati
 import { useCommentsCount } from '../hooks/useCommentsCount';
 import { useLikes } from '../hooks/useLikes';
 import { markNoyaContentViewed } from '../../profile/services/NoyaOnboardingStorage';
+import AddToTripModal from '../../tripPlanner/components/AddToTripModal';
+import { CAPABILITIES } from '../../../constants/authPolicy';
 
 export default function RecommendationDetailScreen({ route, navigation }) {
   const initialItem = route?.params?.item || route?.params?.recommendation || null;
@@ -68,7 +70,7 @@ function RecommendationDetailLoaded({ item, postId, navigation, initialCommentsO
   const insets = useSafeAreaInsets();
   const author = useUserData(item.ownerId);
   const { isAdmin } = useAdminClaim();
-  const { isActive } = useAuthUser();
+  const { isActive, ensureCapability } = useAuthUser();
   const { isLiked, likeCount, toggleLike } = useLikes(
     'recommendations',
     postId,
@@ -78,6 +80,7 @@ function RecommendationDetailLoaded({ item, postId, navigation, initialCommentsO
   const [likesModalVisible, setLikesModalVisible] = useState(false);
   const [commentsModalVisible, setCommentsModalVisible] = useState(initialCommentsOpen);
   const [gallery, setGallery] = useState({ visible: false, index: 0 });
+  const [addToTripVisible, setAddToTripVisible] = useState(false);
   const canEdit = isActive && canManageRecommendation({
     user: auth.currentUser,
     ownerId: item.ownerId,
@@ -132,6 +135,9 @@ function RecommendationDetailLoaded({ item, postId, navigation, initialCommentsO
       Alert.alert('השיתוף לא זמין', 'לא הצלחנו לפתוח את אפשרויות השיתוף כרגע.');
     }
   };
+  const handleAddToTrip = async () => {
+    if (await ensureCapability(CAPABILITIES.ACTIVE, { name: 'TripPlanner' })) setAddToTripVisible(true);
+  };
 
   return (
     <SafeAreaView style={styles.screen} edges={['left', 'right']}>
@@ -171,6 +177,7 @@ function RecommendationDetailLoaded({ item, postId, navigation, initialCommentsO
             onLikePress={toggleLike}
             onLikesListPress={() => setLikesModalVisible(true)}
             onSharePress={handleShare}
+            onAddToTrip={handleAddToTrip}
           />
         </View>
       </View>
@@ -194,6 +201,11 @@ function RecommendationDetailLoaded({ item, postId, navigation, initialCommentsO
         items={galleryItems}
         initialIndex={gallery.index}
         onClose={() => setGallery((current) => ({ ...current, visible: false }))}
+      />
+      <AddToTripModal
+        visible={addToTripVisible}
+        recommendationId={postId}
+        onClose={() => setAddToTripVisible(false)}
       />
     </SafeAreaView>
   );

@@ -34,6 +34,7 @@
       }
     ],
     "rewrites": [
+      { "source": "/trip/**", "destination": "/trip/index.html" },
       { "source": "/admin/**", "destination": "/admin/index.html" }
     ]
   },

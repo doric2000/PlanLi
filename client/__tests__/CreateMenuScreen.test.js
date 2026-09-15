@@ -7,7 +7,7 @@ jest.mock('../src/hooks/useAuthUser', () => ({ useAuthUser: () => ({ ensureCapab
 jest.mock('@expo/vector-icons', () => ({ Ionicons: 'Icon' }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ bottom: 34 }) }));
 beforeEach(() => jest.clearAllMocks());
-it.each([['recommendation', 'AddRecommendation'], ['route', 'AddRoutesScreen']])('gates %s publishing', async (id, destination) => {
+it.each([['trip', 'TripPlanner'], ['recommendation', 'AddRecommendation'], ['route', 'AddRoutesScreen']])('gates %s creation', async (id, destination) => {
   mockEnsure.mockResolvedValue(true);
   const navigation = { goBack: jest.fn(), navigate: jest.fn() };
   const s = render(<CreateMenuScreen navigation={navigation} />);
@@ -24,11 +24,12 @@ it('does not navigate when denied and ignores duplicate taps', async () => {
   await waitFor(() => expect(mockEnsure).toHaveBeenCalledTimes(1));
   expect(navigation.navigate).not.toHaveBeenCalled(); expect(navigation.goBack).toHaveBeenCalledTimes(1);
 });
-it('marks planning as coming soon and dismisses without changing tabs', () => {
+it('opens trip planning from the flagship action', async () => {
+  mockEnsure.mockResolvedValue(true);
   const navigation = { goBack: jest.fn(), navigate: jest.fn() };
   const s = render(<CreateMenuScreen navigation={navigation} />);
   const plan = s.getByTestId('create-trip');
-  expect(plan.props.accessibilityState.disabled).toBe(true); fireEvent.press(plan);
-  expect(mockEnsure).not.toHaveBeenCalled(); expect(navigation.navigate).not.toHaveBeenCalled();
-  fireEvent.press(s.getByTestId('create-menu-close')); expect(navigation.goBack).toHaveBeenCalledTimes(1);
+  fireEvent.press(plan);
+  await waitFor(() => expect(navigation.navigate).toHaveBeenCalledWith('TripPlanner'));
+  expect(s.getByText('חדש')).toBeTruthy();
 });

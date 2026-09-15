@@ -1,8 +1,16 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Assumed data model: public active content lives in recommendations/routes/trips
+    // Assumed data model: public active content lives in recommendations/routes
     // with server-written likes/comments children; route revisions are immutable.
+    // trips/{tripId} is the callable-only private planner root: schemaVersion (number),
+    // kind=private_planner (string), ownerId/title/state/ideasDayId (bounded strings),
+    // dayCount/stopCount/revision/nextDayOrder (bounded numbers), optional
+    // activeShareHash (string), and server timestamps. days/{dayId} contains the
+    // bounded day schedule and days/{dayId}/stops/{stopId} contains a bounded
+    // recommendation snapshot or custom private stop. Clients cannot directly read
+    // or write any trip path; owner/share authorization and full validation happen
+    // in active/signed-in callable Functions.
     // countries/destinations expose only active catalog data, publicProfiles contains
     // approved public identity, and users/{uid} is private. Favorites, blocked users,
     // notifications and notification state are owner-scoped and server-written.
@@ -192,21 +200,11 @@ service cloud.firestore {
       }
     }
 
-    match /trips/{contentId} {
-      allow get: if admin() || activePublicContent();
-      allow list: if admin() || (bounded(50) && activePublicContent());
-      allow write: if false;
+    match /trips/{tripId} {
+      allow read, write: if false;
 
-      match /likes/{userId} {
-        allow get: if admin() || activeParent('trips', contentId);
-        allow list: if admin() || (bounded(30) && activeParent('trips', contentId));
-        allow write: if false;
-      }
-
-      match /comments/{commentId} {
-        allow get: if admin() || activeComment('trips', contentId);
-        allow list: if admin() || (bounded(30) && activeComment('trips', contentId));
-        allow write: if false;
+      match /{privateTripDocument=**} {
+        allow read, write: if false;
       }
     }
 

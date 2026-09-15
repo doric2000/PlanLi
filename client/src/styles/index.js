@@ -19,6 +19,7 @@ export { adminStyles } from "./admin";
 export { rtlHorizontalStyles } from "./rtlHorizontal";
 export { recommendationComposerStyles } from "./recommendationComposer";
 export { routeBuilderStyles } from "./routeBuilder";
+export { tripPlannerStyles } from "./tripPlanner";
 export { commentStyles } from "./comments";
 export {
   detailHeaderStyles,

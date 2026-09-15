@@ -11,6 +11,8 @@ const PROVIDER_COSTS = Object.freeze({
   // Charge them atomically so a failed second budget transaction cannot leave
   // a user partially charged.
   fullResolution: 5,
+  // One bounded Google Routes request. Trip days are chunked before charging.
+  routeComputation: 1,
 });
 const MINUTE_WINDOW_MS = 60 * 1000;
 const DAY_WINDOW_MS = 24 * 60 * 60 * 1000;
