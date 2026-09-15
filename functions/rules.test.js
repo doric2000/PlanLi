@@ -9,6 +9,7 @@ const {
 const {
   collection,
   collectionGroup,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -146,6 +147,31 @@ test.beforeEach(async () => {
     });
     await setDoc(doc(db, 'routes', 'route-active', 'revisions', 'revision-old', 'days', 'day-1'), {
       position: 0, title: 'Old day',
+    });
+    await setDoc(doc(db, 'trips', 'private-trip'), {
+      schemaVersion: 1,
+      kind: 'private_planner',
+      ownerId: 'owner',
+      title: 'Private trip',
+      state: 'active',
+      ideasDayId: 'ideas',
+      dayCount: 1,
+      stopCount: 1,
+      revision: 1,
+      nextDayOrder: 2,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      lastOpenedAt: new Date(),
+    });
+    await setDoc(doc(db, 'trips', 'private-trip', 'days', 'ideas'), {
+      kind: 'ideas', title: 'רעיונות', order: 0, date: null,
+      travelMode: 'DRIVE', stopCount: 1, nextStopOrder: 1,
+      createdAt: new Date(), updatedAt: new Date(),
+    });
+    await setDoc(doc(db, 'trips', 'private-trip', 'days', 'ideas', 'stops', 'stop-1'), {
+      sourceType: 'custom', order: 0, title: 'Private stop', subtitle: '', note: '',
+      locationMode: 'pin', coordinates: { lat: 32.08, lng: 34.78 },
+      createdAt: new Date(), updatedAt: new Date(),
     });
     await setDoc(doc(db, 'users', 'owner', 'favorites', 'favorite-hash'), {
       ownerId: 'owner', type: 'recommendation', target: { id: 'rec-active' },
@@ -437,6 +463,38 @@ test('business documents and interactions are server-only', {
   await assertFails(setDoc(doc(db, 'countries', 'cty_fr'), {
     name: 'France', code: 'FR', status: 'active',
   }));
+});
+
+test('private trip roots, days, and stops are callable-only for every client role', {
+  skip: !hasEmulators,
+}, async () => {
+  const anonymousDb = env.unauthenticatedContext().firestore();
+  const ownerDb = env.authenticatedContext('owner', verifiedClaims).firestore();
+  const otherDb = env.authenticatedContext('other', verifiedClaims).firestore();
+  const adminDb = env.authenticatedContext('active-admin', { ...verifiedClaims, admin: true }).firestore();
+  const paths = [
+    ['trips', 'private-trip'],
+    ['trips', 'private-trip', 'days', 'ideas'],
+    ['trips', 'private-trip', 'days', 'ideas', 'stops', 'stop-1'],
+  ];
+  for (const parts of paths) {
+    await assertFails(getDoc(doc(anonymousDb, ...parts)));
+    await assertFails(getDoc(doc(ownerDb, ...parts)));
+    await assertFails(getDoc(doc(otherDb, ...parts)));
+    await assertFails(getDoc(doc(adminDb, ...parts)));
+  }
+  await assertFails(getDocs(query(collection(ownerDb, 'trips'), limit(50))));
+  await assertFails(getDocs(query(collection(ownerDb, 'trips', 'private-trip', 'days'), limit(14))));
+  await assertFails(setDoc(doc(ownerDb, 'trips', 'direct'), {
+    kind: 'private_planner', ownerId: 'owner', title: 'Injected', state: 'active',
+  }));
+  await assertFails(setDoc(doc(ownerDb, 'trips', 'private-trip'), {
+    ownerId: 'other', title: 'Hijacked', extraData: 'schema pollution',
+  }, { merge: true }));
+  await assertFails(setDoc(doc(ownerDb, 'trips', 'private-trip', 'days', 'ideas', 'stops', 'huge'), {
+    title: 'x'.repeat(1_000_000), sourceType: 'custom',
+  }));
+  await assertFails(deleteDoc(doc(ownerDb, 'trips', 'private-trip')));
 });
 
 test('legacy mutable route day and stop paths are no longer public', {

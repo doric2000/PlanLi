@@ -8,7 +8,7 @@ import { CAPABILITIES } from '../constants/authPolicy';
 import { mainNavigationStyles as styles, navigationPalette as c } from '../styles/mainNavigationStyles';
 
 const ACTIONS = [
-  { id: 'trip', title: 'תכנון טיול', description: 'שלבו המלצות ועצירות משלכם · נשמר פרטי', icon: 'location-outline', comingSoon: true },
+  { id: 'trip', title: 'תכנון טיול', description: 'שלבו המלצות ועצירות משלכם · נשמר פרטי', icon: 'location-outline', screen: 'TripPlanner' },
   { id: 'recommendation', title: 'פרסום המלצה', description: 'מקום שאהבת ושווה להכיר', icon: 'people-outline', screen: 'AddRecommendation' },
   { id: 'route', title: 'פרסום מסלול', description: 'מסלול שהקהילה תוכל לגלות', icon: 'map-outline', screen: 'AddRoutesScreen' },
 ];
@@ -18,7 +18,7 @@ export default function CreateMenuScreen({ navigation }) {
   const { ensureCapability } = useAuthUser();
   const opening = useRef(false);
   const open = async (action) => {
-    if (action.comingSoon || opening.current) return;
+    if (opening.current) return;
     opening.current = true;
     // This is a JS stack sheet, so it can close before the native auth gate opens.
     navigation.goBack();
@@ -44,19 +44,17 @@ export default function CreateMenuScreen({ navigation }) {
           <Pressable
             key={action.id} testID={`create-${action.id}`}
             accessibilityRole="button"
-            accessibilityLabel={action.comingSoon ? `${action.title}, בקרוב` : action.title}
+            accessibilityLabel={action.title}
             accessibilityHint={action.description}
-            accessibilityState={{ disabled: Boolean(action.comingSoon) }}
-            disabled={action.comingSoon}
             onPress={() => open(action)}
-            style={({ pressed }) => [styles.action, action.comingSoon && styles.planAction, pressed && styles.pressed]}
+            style={({ pressed }) => [styles.action, action.id === 'trip' && styles.planAction, pressed && styles.pressed]}
           >
-            <View style={[styles.actionIcon, action.comingSoon && styles.planIcon]}><Ionicons name={action.icon} size={22} color={c.navy} /></View>
+            <View style={[styles.actionIcon, action.id === 'trip' && styles.planIcon]}><Ionicons name={action.icon} size={22} color={c.navy} /></View>
             <View style={styles.copy}>
               <AppText style={styles.actionTitle}>{action.title}</AppText>
               <AppText style={styles.description}>{action.description}</AppText>
             </View>
-            {action.comingSoon ? <AppText style={styles.soon}>בקרוב</AppText> : <Ionicons name="arrow-back" size={20} color={c.navy} />}
+            {action.id === 'trip' ? <AppText style={styles.soon}>חדש</AppText> : <Ionicons name="arrow-back" size={20} color={c.navy} />}
           </Pressable>
         ))}
       </ScrollView>

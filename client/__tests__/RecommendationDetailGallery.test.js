@@ -47,6 +47,7 @@ jest.mock('../src/components/MediaGalleryModal', () => {
 });
 jest.mock('../src/features/community/components/RecommendationDetailContent', () => () => null);
 jest.mock('../src/components/RecommendationActionBar', () => ({ RecommendationActionBar: () => null }));
+jest.mock('../src/features/tripPlanner/components/AddToTripModal', () => () => null);
 jest.mock('../src/components/LikesModal', () => () => null);
 jest.mock('../src/components/CommentsModal', () => {
   const ReactModule = require('react');

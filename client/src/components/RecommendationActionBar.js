@@ -14,6 +14,7 @@ export const RecommendationActionBar = ({
   onLikePress,
   onLikesListPress,
   onSharePress,
+  onAddToTrip,
   onReadMore,
   contentLabel = 'ההמלצה',
   style,
@@ -78,6 +79,18 @@ export const RecommendationActionBar = ({
           >
             <Ionicons name="share-social-outline" size={22} color={colors.primary} style={styles.icon} />
             <AppText style={styles.shareText}>שיתוף</AppText>
+          </TouchableOpacity>
+        ) : null}
+        {onAddToTrip ? (
+          <TouchableOpacity
+            style={styles.addToTrip}
+            onPress={press(onAddToTrip)}
+            accessibilityRole="button"
+            accessibilityLabel={`הוספת ${contentLabel} לטיול`}
+            testID="recommendation-action-add-to-trip"
+          >
+            <Ionicons name="map-outline" size={20} color={colors.accentAction} />
+            <AppText style={styles.addToTripText}>לטיול</AppText>
           </TouchableOpacity>
         ) : null}
         {onReadMore && <TouchableOpacity style={styles.readMore} onPress={press(onReadMore)} accessibilityRole="button"

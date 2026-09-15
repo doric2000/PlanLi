@@ -98,7 +98,7 @@ describe('drawer transition handoff', () => {
       closeDrawer: jest.fn(() => { events.push('close'); state.history = []; }),
     };
   });
-  it.each([['editProfile', 'EditProfile'], ['settings', 'Settings'], ['notifications', 'Notifications'], ['adminPanel', 'AdminPanel']])('opens %s only after the actual drawer-key closing event', (key, destination) => {
+  it.each([['myTrips', 'MyTrips'], ['editProfile', 'EditProfile'], ['settings', 'Settings'], ['notifications', 'Notifications'], ['adminPanel', 'AdminPanel']])('opens %s only after the actual drawer-key closing event', (key, destination) => {
     const s = render(<Harness />);
     fireEvent.press(s.getByTestId('drawer-menu-item-' + key));
     expect(root.navigate).not.toHaveBeenCalled();

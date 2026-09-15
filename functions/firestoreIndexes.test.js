@@ -90,13 +90,16 @@ test('destination search indexes include canonical approval guard and every scop
   ]) assert.ok(catalogIndexes.includes(signature), `Missing approved destination search index: ${signature}`);
 });
 
-test('pending trip content has a stable owner/status/time index', () => {
+test('legacy pending content and private trip planner lists have stable owner/time indexes', () => {
   const config = JSON.parse(fs.readFileSync(indexesPath, 'utf8'));
   const tripIndexes = config.indexes
     .filter((entry) => entry.collectionGroup === 'trips')
     .map(fieldSignature);
   assert.ok(tripIndexes.includes(
     'ownerId:ASCENDING|status:ASCENDING|createdAt:DESCENDING'
+  ));
+  assert.ok(tripIndexes.includes(
+    'ownerId:ASCENDING|state:ASCENDING|updatedAt:DESCENDING'
   ));
 });
 
@@ -237,6 +240,19 @@ test('guest-session security state has TTL cleanup policies', () => {
       && entry.fieldPath === 'expireAt'
       && entry.ttl === true
     )), `Missing guest-session TTL policy for ${collectionGroup}`);
+  }
+});
+
+test('private trip receipts and revoked shares have TTL cleanup policies', () => {
+  const config = JSON.parse(fs.readFileSync(indexesPath, 'utf8'));
+  for (const collectionGroup of ['tripOperationReceipts', 'tripShareTokens']) {
+    assert.ok(config.fieldOverrides.some((entry) => (
+      entry.collectionGroup === collectionGroup
+      && entry.fieldPath === 'expireAt'
+      && entry.ttl === true
+      && Array.isArray(entry.indexes)
+      && entry.indexes.length === 0
+    )), `Missing private trip TTL policy for ${collectionGroup}`);
   }
 });
 

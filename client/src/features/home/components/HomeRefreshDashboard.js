@@ -90,6 +90,7 @@ export default function HomeRefreshDashboard({
   regionId, mode, showRegion, isGuest, favoriteCities, onOpenProfile, onOpenFavorites,
   onOpenCommunity, onChangeRegion, onOpenDestination, continuation, routes, recommendations,
   preferencePrompt, onCreateRoute,
+  onCreateTrip,
 }) {
   const actions = [
     { id: 'favorites', icon: 'bookmark-outline', label: 'השמורים שלי', onPress: onOpenFavorites },
@@ -110,9 +111,13 @@ export default function HomeRefreshDashboard({
       <HomeSavedDestinations {...favoriteCities} isGuest={isGuest} onOpenFavorites={onOpenFavorites} onOpenDestination={onOpenDestination} />
       <View style={styles.section}>
         <HomeContinuationCard {...continuation} appearanceStyles={homeRefreshRailStyles} />
-        <Pressable onPress={onCreateRoute} accessibilityRole="button" style={styles.createRoute} testID="home-quick-action-route">
-          <Ionicons name="add-outline" size={22} color={colors.primary} />
-          <AppText style={styles.quickText}>בניית מסלול חדש</AppText>
+        <Pressable onPress={onCreateTrip} accessibilityRole="button" style={styles.createRoute} testID="home-quick-action-trip">
+          <Ionicons name="map-outline" size={22} color={colors.accentAction} />
+          <AppText style={styles.quickText}>תכנון טיול מהמלצות</AppText>
+        </Pressable>
+        <Pressable onPress={onCreateRoute} accessibilityRole="button" style={[styles.createRoute, { marginTop: 8 }]} testID="home-quick-action-route">
+          <Ionicons name="people-outline" size={21} color={colors.primary} />
+          <AppText style={styles.quickText}>פרסום מסלול לקהילה</AppText>
         </Pressable>
       </View>
       {preferencePrompt}

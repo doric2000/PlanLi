@@ -23,6 +23,7 @@ import useDrawerCloseAction from './useDrawerCloseAction';
 const Drawer = createProfileDrawerNavigator();
 
 const MENU_ITEMS = [
+  { key: 'myTrips', icon: 'map-outline', label: 'הטיולים שלי' },
   { key: 'editProfile', icon: 'person-outline', label: 'עריכת פרופיל' },
   { key: 'settings', icon: 'settings-outline', label: 'הגדרות' },
   { key: 'notifications', icon: 'notifications-outline', label: 'התראות' },
@@ -120,6 +121,10 @@ export function CustomDrawerContent(props) {
 
       if (key === 'editProfile') {
         rootStackNav?.navigate?.('EditProfile');
+        return;
+      }
+      if (key === 'myTrips') {
+        rootStackNav?.navigate?.('MyTrips');
         return;
       }
       if (key === 'notifications') {

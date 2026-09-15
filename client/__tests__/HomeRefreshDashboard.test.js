@@ -67,18 +67,20 @@ describe('refreshed Home discovery', () => {
     const community = jest.fn();
     const resume = jest.fn();
     const create = jest.fn();
+    const plan = jest.fn();
     const screen = render(<HomeRefreshDashboard
       favoriteCities={{ favorites: [] }}
       continuation={{ draft: { title: 'הטיוטה שלי', days: [{ stops: [] }] }, onPress: resume }}
       routes={{ items: [] }} recommendations={{ items: [] }}
-      onOpenProfile={profile} onOpenFavorites={favorites} onOpenCommunity={community} onCreateRoute={create}
+      onOpenProfile={profile} onOpenFavorites={favorites} onOpenCommunity={community} onCreateRoute={create} onCreateTrip={plan}
     />);
     fireEvent.press(screen.getByTestId('home-quick-action-profile'));
     fireEvent.press(screen.getByTestId('home-quick-action-favorites'));
     fireEvent.press(screen.getByTestId('home-quick-action-community'));
     fireEvent.press(screen.getByTestId('home-continuation-action'));
     fireEvent.press(screen.getByTestId('home-quick-action-route'));
-    [profile, favorites, community, resume, create].forEach((callback) => expect(callback).toHaveBeenCalledTimes(1));
+    fireEvent.press(screen.getByTestId('home-quick-action-trip'));
+    [profile, favorites, community, resume, create, plan].forEach((callback) => expect(callback).toHaveBeenCalledTimes(1));
     expect(screen.queryByText('תכנון מסלול אישי')).toBeNull();
     expect(screen.queryByText('חזרה לעיצוב הקודם')).toBeNull();
   });

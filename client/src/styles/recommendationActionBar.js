@@ -76,6 +76,22 @@ export const recommendationActionBarStyles = StyleSheet.create({
     writingDirection: 'rtl',
     flexShrink: 1,
   },
+  addToTrip: {
+    minWidth: 70,
+    minHeight: 44,
+    paddingHorizontal: 6,
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    flexShrink: 0,
+  },
+  addToTripText: {
+    color: colors.accentAction,
+    fontSize: 13,
+    fontFamily: fontFamilies.bold,
+    writingDirection: 'rtl',
+  },
   divider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.divider,

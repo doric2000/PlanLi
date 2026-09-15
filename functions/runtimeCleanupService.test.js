@@ -14,6 +14,8 @@ test('runtime cleanup covers public/provider limiters and private place sessions
     'system/runtime/placeSearchSessions',
     'system/runtime/resolvedPlaceTokens',
     'system/runtime/destinationResolutionChoices',
+    'system/runtime/tripOperationReceipts',
+    'system/runtime/tripShareTokens',
   ]);
 });
 

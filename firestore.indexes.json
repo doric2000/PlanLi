@@ -179,6 +179,15 @@
       ]
     },
     {
+      "collectionGroup": "trips",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "ownerId", "order": "ASCENDING" },
+        { "fieldPath": "state", "order": "ASCENDING" },
+        { "fieldPath": "updatedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "destinationCatalog",
       "queryScope": "COLLECTION",
       "fields": [
@@ -1400,6 +1409,18 @@
     },
     {
       "collectionGroup": "providerGlobalLimits",
+      "fieldPath": "expireAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "tripOperationReceipts",
+      "fieldPath": "expireAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "tripShareTokens",
       "fieldPath": "expireAt",
       "ttl": true,
       "indexes": []

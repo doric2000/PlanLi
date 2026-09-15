@@ -38,6 +38,9 @@ const leaves = [
   'admin/screens/AdminPanelScreen', 'publishing/ContentPublishBanner', 'auth/components/AuthGateModal',
   'noya/NoyaTourOverlay', 'profile/components/GuestPersonalizationBridge', 'region/screens/RegionSelectorScreen',
   'operations/OperationBanner', 'operations/ActivityScreen',
+  'tripPlanner/screens/TripPlannerScreen', 'tripPlanner/screens/TripDiscoveryScreen',
+  'tripPlanner/screens/TripCustomStopScreen', 'tripPlanner/screens/MyTripsScreen',
+  'tripPlanner/screens/SharedTripScreen',
 ];
 for (const leaf of leaves) jest.doMock('../src/features/' + leaf, () => () => null);
 jest.mock('../src/navigation/PreferenceSetupGate', () => () => null);
