@@ -25,6 +25,53 @@ The existing Text Search quota remains zero. See
 
 ## Current environment status
 
+### Android cumulative app and modal safe-area OTA (2026-09-18)
+
+The Android production channel now delivers the current application, including
+the photo-gallery and expanded-map safe-area fix. This is the first Android OTA
+for runtime `1.3.0`, so it includes the accumulated app changes since build 10.
+PR [#396](https://github.com/doric2000/PlanLi/pull/396) added Android support to the
+guarded publication workflow and merged after all applicable GitHub checks passed.
+Release source is `0c2a1013b9d22ac7ba7a654b81a470c3f4bcc3c4`.
+
+Verified staging candidate `59d68146-a933-4673-ba65-72ad22f9ffbc` was republished
+unchanged to [production group e7a9dcf4](https://expo.dev/accounts/doric2000/projects/client/updates/e7a9dcf4-074b-4ed5-9d6d-3ba983ec2f20)
+at `2026-09-18T19:17:21.715Z`, update `01a0b5f3-b0b3-7996-9164-2f879ce9795f`.
+Platform is Android, channel/environment `production`, runtime `1.3.0`. The
+10,845,096-byte bundle has SHA-256
+`E4DAD6359D3FCD70AE3B703B5BF86ABBF747525EA23045BC3F44DF7239E23916`.
+Independent EAS readback, public Android-channel delivery and immutable-bundle
+verification passed at `2026-09-18T19:18:09.435Z`. The same readback confirmed iOS
+still receives group `55bfcf70-1b1a-4320-aabd-a1939c83bbcb`; no iOS republish occurred.
+
+Target remains Google Play internal-test Android **1.1.0 (10)**, EAS build
+`b0648036-61d6-4af6-b659-442a22b603dc`. Fresh EAS metadata confirms the finished
+production build, runtime/channel and reviewed source
+`890d70110de37ad1814b79c7c1b2106e42b74a54`. The Play track's last recorded status
+is available to internal testers (September 9); no new Play submission, store
+review, native build, version change or Firebase deployment occurred. Installed
+tester OTA and physical Android rendering/touch behavior remain unverified.
+
+Native compatibility accepted only the reviewed fingerprint
+`acae1d5dac2ec822e7b09bcb8ebdac44dfe66220` against build fingerprint
+`ffa38603c423e70296ac74e695750ff8d59701db`. EAS comparison found only the optional
+PlanLiTransfers Android source/registration and the iOS-only version field.
+The absent module stays disabled and foreground queues remain available; see
+[Android compatibility review](docs/eas-native-compatibility.md#android-ota-compatibility).
+
+Validation passed 155 affected client suites / 1,050 tests against build-10 source,
+42 release-tool tests, and 39 focused fallback/foreground-queue tests (overlapping
+selections). Selected Functions tests, Rules and Android config checks also passed.
+Build-style readiness was not fully green: `expo install --check` recommends newer
+SDK patch versions. The package manifest/lock and native dependencies are unchanged
+from build 10; no dependency upgrade was applied. Runtime UI validation remains
+unverified after the earlier Maestro startup/file-lock failure. Manual final review
+completed; CLI review could not start because its configured model requires a newer
+CLI. The unrelated untracked root `app.json` was preserved and excluded from release.
+
+There is no preceding Android OTA for runtime 1.3.0. An authorized rollback would
+target the embedded build for Android only; no rollback occurred.
+
 ### Photo gallery and location map safe-area OTA (2026-09-18)
 
 The photo gallery and expanded location map now measure safe areas within their
@@ -5014,3 +5061,16 @@ part of this follow-up.
 - Previous verified production group: `5bcc513c-93de-4c26-83f2-afb4c59df47c`.
 - Device application and post-update security smoke tests: pending.
 - Rollback: republish the immediately preceding verified production group; never change the runtime URL or channel in-app.
+
+## Android production OTA release
+
+- Source commit: `0c2a1013b9d22ac7ba7a654b81a470c3f4bcc3c4`.
+- EAS Update group: `e7a9dcf4-074b-4ed5-9d6d-3ba983ec2f20`; channel `production`; runtime `1.3.0`.
+- EAS environment: `production`; published at `2026-09-18T19:17:21.715Z`.
+- Immutable Android launch bundle: update `01a0b5f3-b0b3-7996-9164-2f879ce9795f`; 10845096 bytes; SHA-256 `E4DAD6359D3FCD70AE3B703B5BF86ABBF747525EA23045BC3F44DF7239E23916`.
+- Message: Android: sync current app improvements and fix photo and map safe-area controls
+- Target: Google Play internal-test Android `1.1.0 (10)`, build `b0648036-61d6-4af6-b659-442a22b603dc`; no new native build or store submission/review.
+- Verified staging candidate: `59d68146-a933-4673-ba65-72ad22f9ffbc`; identical production bundle.
+- Public Android-channel delivery and immutable bundle independently verified at `2026-09-18T19:18:09.435Z`; iOS group `55bfcf70-1b1a-4320-aabd-a1939c83bbcb` unchanged.
+- Device application and post-update security smoke tests: pending.
+- Rollback: no previous android OTA; an authorized rollback must target the embedded build for runtime 1.3.0.
