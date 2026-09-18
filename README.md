@@ -25,6 +25,40 @@ The existing Text Search quota remains zero. See
 
 ## Current environment status
 
+### Photo gallery and location map safe-area OTA (2026-09-18)
+
+The photo gallery and expanded location map now measure safe areas within their
+own native modal hierarchy, keeping close controls clear of system UI. Gallery
+pages fit the measured content viewport and preserve the active photo on resize.
+
+PR [#394](https://github.com/doric2000/PlanLi/pull/394) merged after all applicable
+GitHub checks passed, as release source
+`e9a911a3c292d92b8cf3dc6ebde059fb2543815c`. Verified staging candidate
+`b2981700-a3a4-4d29-a092-8de645c433d2` was republished unchanged to
+[production group 55bfcf70](https://expo.dev/accounts/doric2000/projects/client/updates/55bfcf70-1b1a-4320-aabd-a1939c83bbcb)
+at `2026-09-18T18:42:31.889Z`, update `01a0b5d3-cd51-728a-9fa0-9827047c0953`.
+Channel/environment is `production`, runtime `1.3.0`. The 10,843,748-byte bundle
+has SHA-256 `64E76F79FC7D4B829BC85558E67A49CC209E8350A9AEB38ABB77A9C9B44DF4F3`.
+Independent EAS readback, public production-channel delivery and immutable bundle
+verification passed at `2026-09-18T18:43:24.572Z`.
+
+Target remains TestFlight **1.1.1 (30)**, build
+`b16eca67-6291-4520-82b6-10cb1af190f5`. Native compatibility passed the existing
+reviewed fingerprint `f5fac23f11fb1f2c0b1adbaf545b164644c461d3`, with
+`PlanLiTransfers` disabled. No new native build, app-version change, Apple
+submission/review, Android OTA or Firebase deployment occurred. Installed tester
+OTA and physical iPhone safe-area rendering/touch behavior remain unverified.
+
+Validation: iOS OTA readiness passed 83 affected client suites / 571 tests against
+prior deployed source `d6a628de07d4a037c62c5848338749de58da68a4`, including the 22
+focused tests. Android gallery/location validation was attempted using the existing
+local development binary; it was stopped during app startup while Maestro reported
+Windows file-lock errors, before either flow completed. Android runtime behavior
+is unverified. Manual final diff review passed; CLI review could not start because
+the installed CLI does not support its configured model. Previous production group
+`5bcc513c-93de-4c26-83f2-afb4c59df47c` is the rollback target; no rollback occurred.
+The unrelated untracked root `app.json` was preserved and excluded from release.
+
 ### Profile content scroll preservation OTA (2026-09-18)
 
 Switching between profile recommendations, routes and pending content preserves
@@ -4964,5 +4998,19 @@ part of this follow-up.
 - Verified staging candidate: `2d5c7234-186f-4f7c-811a-f0985734b924`; identical production bundle.
 - Public production-channel delivery and immutable bundle independently verified at `2026-09-18T17:45:35.380Z`.
 - Previous verified production group: `11aee9ca-cb5a-4f15-baf3-7cc962150a71`.
+- Device application and post-update security smoke tests: pending.
+- Rollback: republish the immediately preceding verified production group; never change the runtime URL or channel in-app.
+
+## iOS production OTA release
+
+- Source commit: `e9a911a3c292d92b8cf3dc6ebde059fb2543815c`.
+- EAS Update group: `55bfcf70-1b1a-4320-aabd-a1939c83bbcb`; channel `production`; runtime `1.3.0`.
+- EAS environment: `production`; published at `2026-09-18T18:42:31.889Z`.
+- Immutable iOS launch bundle: update `01a0b5d3-cd51-728a-9fa0-9827047c0953`; 10843748 bytes; SHA-256 `64E76F79FC7D4B829BC85558E67A49CC209E8350A9AEB38ABB77A9C9B44DF4F3`.
+- Message: Fix safe-area boundaries and close controls in photo gallery and location map
+- Target: TestFlight `1.1.1 (30)`, build `b16eca67-6291-4520-82b6-10cb1af190f5`; no new native build or Apple submission/review.
+- Verified staging candidate: `b2981700-a3a4-4d29-a092-8de645c433d2`; identical production bundle.
+- Public production-channel delivery and immutable bundle independently verified at `2026-09-18T18:43:24.572Z`.
+- Previous verified production group: `5bcc513c-93de-4c26-83f2-afb4c59df47c`.
 - Device application and post-update security smoke tests: pending.
 - Rollback: republish the immediately preceding verified production group; never change the runtime URL or channel in-app.
