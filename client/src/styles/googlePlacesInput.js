@@ -109,6 +109,14 @@ export const googlePlacesInput = StyleSheet.create({
 	formListContainer: {
 		top: 52 + spacing.sm,
 	},
+	inlineListContainer: {
+		position: 'relative',
+		top: 0,
+		left: 0,
+		right: 0,
+		marginTop: spacing.sm,
+		maxHeight: 200,
+	},
 	dropdownStatusRow: {
 		flexDirection: 'row-reverse',
 		alignItems: 'center',

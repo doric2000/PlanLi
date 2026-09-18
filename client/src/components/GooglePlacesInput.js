@@ -47,6 +47,7 @@ export default function GooglePlacesInput({
   loaderStyle,
   rightAccessory,
   listContainerStyle,
+  dropdownLayout = 'overlay',
   explicitSearch = false,
   variant = 'default',
   error = false,
@@ -56,6 +57,7 @@ export default function GooglePlacesInput({
 }) {
   const copy = locationCopy(locale);
   const formVariant = variant === 'form';
+  const inlineDropdown = dropdownLayout === 'inline';
   const isGoogleMode = mode === 'google';
   const isControlled = typeof value === 'string' && typeof onChangeValue === 'function';
 
@@ -336,7 +338,7 @@ export default function GooglePlacesInput({
   // On web, zIndex often fails due to stacking contexts in ScrollView.
   // We position the dropdown using window coordinates.
   useEffect(() => {
-    if (Platform.OS !== 'web') return;
+    if (Platform.OS !== 'web' || inlineDropdown) return;
     if (!showDropdown) return;
     if (!inputWrapperRef.current?.measureInWindow) return;
 
@@ -349,7 +351,7 @@ export default function GooglePlacesInput({
     }, 0);
 
     return () => clearTimeout(timer);
-  }, [showDropdown, query]);
+  }, [showDropdown, query, inlineDropdown]);
 
   const handleSelect = (place) => {
     settleSearchAfterSelection();
@@ -475,17 +477,19 @@ export default function GooglePlacesInput({
       )}
 
       {/* Suggestions List */}
-      {Platform.OS !== 'web' && shouldShowAnyDropdown && (
+      {(Platform.OS !== 'web' || inlineDropdown) && shouldShowAnyDropdown && (
           <View
+            testID={inputTestID ? `${inputTestID}-results` : 'google-places-results'}
             style={[
               googlePlacesInput.listContainer,
               explicitSearch && googlePlacesInput.explicitListContainer,
               formVariant && googlePlacesInput.formListContainer,
               listContainerStyle,
+              inlineDropdown && googlePlacesInput.inlineListContainer,
             ]}
           >
           {showIdleLocalResults ? (
-            <ScrollView keyboardShouldPersistTaps="handled">
+            <ScrollView keyboardShouldPersistTaps="handled" nestedScrollEnabled={inlineDropdown}>
               <AppText style={googlePlacesInput.groupTitle}>{idleLocalTitle}</AppText>
               {normalizedIdleLocalResults.map((city) => (
                 <TouchableOpacity
@@ -514,7 +518,7 @@ export default function GooglePlacesInput({
               ))}
             </ScrollView>
           ) : normalizedLocalResults.length > 0 ? (
-            <ScrollView keyboardShouldPersistTaps="handled">
+            <ScrollView keyboardShouldPersistTaps="handled" nestedScrollEnabled={inlineDropdown}>
               {normalizedLocalResults.map((city) => (
                 <TouchableOpacity
                   key={`${city.countryId || 'country'}:${city.id}`}
@@ -556,7 +560,7 @@ export default function GooglePlacesInput({
               <AppText style={googlePlacesInput.dropdownStatusText}>{visibleSearchError}</AppText>
             </View>
           ) : predictions.length > 0 ? (
-            <ScrollView keyboardShouldPersistTaps="handled">
+            <ScrollView keyboardShouldPersistTaps="handled" nestedScrollEnabled={inlineDropdown}>
               {predictions.map((item) => (
                 <TouchableOpacity
                   key={item.place_id}
@@ -584,7 +588,7 @@ export default function GooglePlacesInput({
         </View>
       )}
 
-      {Platform.OS === 'web' && showDropdown && (
+      {Platform.OS === 'web' && !inlineDropdown && showDropdown && (
         <WebPortal>
           <View
             style={[

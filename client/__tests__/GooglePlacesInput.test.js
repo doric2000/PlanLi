@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
+import { Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -122,6 +122,58 @@ describe('GooglePlacesInput recent destinations', () => {
 
     expect(onSelect).toHaveBeenCalledWith('place-1');
     expect(screen.queryByTestId('google-places-loading')).toBeNull();
+  });
+
+  it.each(['ios', 'android', 'web'])('keeps inline results in the form and selects the last result on %s', async (platform) => {
+    const originalPlatform = Platform.OS;
+    Platform.OS = platform;
+    const predictions = Array.from({ length: 8 }, (_, index) => ({
+      place_id: `place-${index}`,
+      description: `New York result ${index}`,
+    }));
+    const onSelect = jest.fn();
+    const googleSearchFn = jest.fn(async () => predictions);
+    let screen;
+    try {
+      screen = render(
+        <View testID="location-card">
+          <ControlledInput dropdownLayout="inline" variant="form" returnSelection
+            googleFallbackDelayMs={0} googleSearchFn={googleSearchFn} onSelect={onSelect} />
+        </View>
+      );
+      fireEvent(screen.getByTestId('places-input'), 'focus');
+      fireEvent.changeText(screen.getByTestId('places-input'), 'new york');
+      await screen.findByTestId('google-place-result-place-7');
+
+      const results = within(screen.getByTestId('location-card')).getByTestId('places-input-results');
+      expect(StyleSheet.flatten(results.props.style)).toMatchObject({ position: 'relative', top: 0, maxHeight: 200 });
+      const list = within(results).UNSAFE_getByType(ScrollView);
+      expect(list.props.keyboardShouldPersistTaps).toBe('handled');
+      expect(list.props.nestedScrollEnabled).toBe(true);
+      fireEvent.press(screen.getByTestId('google-place-result-place-7'));
+      expect(onSelect).toHaveBeenCalledWith(predictions[7]);
+      expect(screen.queryByTestId('places-input-results')).toBeNull();
+      expect(screen.getByTestId('places-input').props.value).toBe(predictions[7].description);
+
+      fireEvent(screen.getByTestId('places-input'), 'focus');
+      fireEvent.changeText(screen.getByTestId('places-input'), 'new york cafe');
+      await screen.findByTestId('google-place-result-place-7');
+      expect(googleSearchFn).toHaveBeenLastCalledWith('new york cafe', expect.any(Object));
+      fireEvent(screen.getByTestId('places-input'), 'blur');
+      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 220)); });
+      await waitFor(() => expect(screen.queryByTestId('places-input-results')).toBeNull());
+    } finally {
+      screen?.unmount();
+      Platform.OS = originalPlatform;
+    }
+  });
+
+  it('preserves overlay positioning unless inline results are requested', () => {
+    const screen = render(<ControlledInput variant="form" idleLocalResults={recent} onSelectLocal={jest.fn()} />);
+    fireEvent(screen.getByTestId('places-input'), 'focus');
+    expect(StyleSheet.flatten(screen.getByTestId('places-input-results').props.style)).toMatchObject({
+      position: 'absolute', maxHeight: 200,
+    });
   });
 
   it('does not call Google for punctuation-only input or a tolerant local match', async () => {
