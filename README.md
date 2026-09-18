@@ -25,6 +25,54 @@ The existing Text Search quota remains zero. See
 
 ## Current environment status
 
+### Immediate map opening and explicit refresh OTA (2026-09-18)
+
+The iOS map opens immediately while location is acquired in the background.
+Recent, sufficiently accurate cached locations are checked alongside a Balanced
+measurement and a High-accuracy watcher. Location feedback is nonblocking, retry
+is available after eight seconds, and late fixes do not recenter a map that the
+user has moved or a focused recommendation. Explicit recommendation refresh now
+bypasses cache/backoff, deduplicates concurrent requests and retains existing
+markers when a refresh fails.
+
+PR [#387](https://github.com/doric2000/PlanLi/pull/387) merged as release source
+`afcaf386f54f06dda61c3808e1966f1841f4032d` after all applicable GitHub checks passed.
+The guarded EAS workflow verified candidate
+`e4349d73-6c29-42d7-9800-2478da4adc99` and republished the identical iOS launch
+bundle to [production group cab8b637](https://expo.dev/accounts/doric2000/projects/client/updates/cab8b637-1885-4130-9e74-41a2de1934d4)
+at `2026-09-18T13:57:54.801Z`, update
+`01a0b4cf-39f1-7d57-8701-a2c1f5ea35bd`, channel/environment `production`, runtime
+`1.3.0`. The bundle is 10,900,968 bytes with SHA-256
+`907C97545FFB3EC0A4E485BDA166475E58C349A6AACBBD49C8BEB24903C41E05`.
+At `2026-09-18T13:59:19.468Z`, independent EAS readback and the public production
+channel manifest returned the exact source, update, runtime and group above;
+the authenticated immutable bundle download matched that SHA-256.
+
+Target remains TestFlight **1.1.1 (30)**, EAS build
+`b16eca67-6291-4520-82b6-10cb1af190f5`. Native compatibility passed the existing
+reviewed optional-module fingerprint
+`f5fac23f11fb1f2c0b1adbaf545b164644c461d3`; `PlanLiTransfers` remains disabled on
+that binary. No new native build, app-version change, Apple submission/review,
+Android OTA, Hosting or Firebase deployment occurred. Physical iPhone download,
+application and map smoke testing remain pending; Android runtime testing is
+also unverified. The unrelated untracked root `app.json` was preserved and
+excluded from the release archive.
+
+The production recommendation-loading incident is **not yet resolved**: both
+missing active/approved geohash indexes are declared in source, but their
+Firestore deployment and READY-state validation still require separate release
+authorization. The OTA alone does not create indexes, so recommendation loading
+may continue to fail while map-opening/location behavior can be tested.
+
+Validation passed 59 selected client suites / 557 tests and two Functions suites /
+21 tests, including query/index correspondence. iOS OTA readiness reused the
+unchanged successful client receipt against deployed source
+`ef8ecccd1793d75e2fcc6da611aae380f28d2ad8`. The Web list regression test passed.
+Final diff review was manual; the CLI review could not start because the installed
+CLI did not support its configured model. The previous production group
+`8a22bdda-c841-43a8-8d8b-4bf73725cac9` is the whole-client rollback target; no
+rollback occurred.
+
 ### Private live Trip Planner flagship rollout (2026-09-15)
 
 PlanLi's private live Trip Planner is implemented and released for iOS. The
@@ -4761,5 +4809,18 @@ part of this follow-up.
 - EAS environment: `production`; published at `2026-09-15T02:10:08.598Z`.
 - Immutable iOS launch bundle: update `01a0a2d4-2a56-7760-9856-6ff65b8a8e67`; 10898884 bytes; SHA-256 `D052DECFB1E1D3E7899723A885BEEE3CFE03D2EE50A82C1321D147657D2A7983`.
 - Message: PlanLi private live trip planner
+- Device application and post-update security smoke tests: pending.
+- Rollback: republish the immediately preceding verified production group; never change the runtime URL or channel in-app.
+
+## iOS production OTA release
+
+- Source commit: `afcaf386f54f06dda61c3808e1966f1841f4032d`.
+- EAS Update group: `cab8b637-1885-4130-9e74-41a2de1934d4`; channel `production`; runtime `1.3.0`.
+- EAS environment: `production`; published at `2026-09-18T13:57:54.801Z`.
+- Immutable iOS launch bundle: update `01a0b4cf-39f1-7d57-8701-a2c1f5ea35bd`; 10900968 bytes; SHA-256 `907C97545FFB3EC0A4E485BDA166475E58C349A6AACBBD49C8BEB24903C41E05`.
+- Message: Fix immediate map opening and recommendation retries
+- Target: TestFlight `1.1.1 (30)`, build `b16eca67-6291-4520-82b6-10cb1af190f5`; no new binary or store submission.
+- Public production-channel delivery and immutable bundle independently verified at `2026-09-18T13:59:19.468Z`.
+- Firestore indexes are declared but not deployed; the production recommendation-loading incident remains open.
 - Device application and post-update security smoke tests: pending.
 - Rollback: republish the immediately preceding verified production group; never change the runtime URL or channel in-app.
