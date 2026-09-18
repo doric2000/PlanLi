@@ -3,6 +3,8 @@ import { StyleSheet } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 import CommunityInlineMap from '../src/features/community/components/CommunityInlineMap';
+import { colors, community } from '../src/styles';
+import { MaterialIcons } from '@expo/vector-icons';
 
 const mockStartTracking = jest.fn(() => Promise.resolve(null));
 const mockStopTracking = jest.fn();
@@ -106,6 +108,46 @@ describe('CommunityInlineMap', () => {
     await act(async () => {});
     expect(screen.queryByTestId('community-map-loading')).toBeNull();
     expect(screen.getByText('אין המלצות באזור המוצג')).toBeTruthy();
+  });
+
+  it('hides provider place labels without hiding road or park geometry', async () => {
+    const screen = render(<MapUnderTest recommendations={recommendations} />);
+    await act(async () => {});
+    const map = screen.getByTestId('community-inline-map');
+    expect(map.props.customMapStyle).toEqual([
+      { featureType: 'poi', elementType: 'labels', stylers: [{ visibility: 'off' }] },
+      { featureType: 'transit', elementType: 'labels', stylers: [{ visibility: 'off' }] },
+    ]);
+    expect(map.props.poiClickEnabled).toBe(false);
+  });
+
+  it('keeps branded accessible markers visible while the icon font is pending', async () => {
+    MaterialIcons.loadFont.mockImplementationOnce(() => new Promise(() => {}));
+    const screen = render(<MapUnderTest recommendations={recommendations} />);
+    await act(async () => {});
+    expect(screen.getAllByText('PlanLi')).toHaveLength(2);
+    const marker = screen.getByTestId('recommendation-map-marker-rec-1');
+    expect(marker.props.accessibilityLabel).toMatch(/^המלצת PlanLi, Local restaurant,/);
+    expect(marker.props.accessibilityRole).toBe('button');
+    expect(marker.props.anchor).toEqual({ x: 0.5, y: 1 });
+    expect(StyleSheet.flatten(community.mapMarkerTouchTarget)).toMatchObject({ width: 84, height: 44 });
+    expect(StyleSheet.flatten(community.mapMarkerTail)).toMatchObject({ borderTopWidth: 8 });
+    expect(StyleSheet.flatten(community.mapMarkerBrand).writingDirection).toBe('ltr');
+  });
+
+  it('highlights the selected branded badge without changing its size and clears on background press', async () => {
+    const screen = render(<MapUnderTest recommendations={recommendations} />);
+    await act(async () => {});
+    const badge = (id) => StyleSheet.flatten(screen.getByTestId(`recommendation-map-badge-${id}`).props.style);
+    expect(badge('rec-1')).toMatchObject({ width: 84, height: 36, backgroundColor: colors.primary, borderColor: colors.white });
+    expect(badge('rec-2').backgroundColor).toBe(colors.primary);
+    fireEvent.press(screen.getByTestId('recommendation-map-marker-rec-1'));
+    expect(badge('rec-1')).toMatchObject({ width: 84, height: 36, borderColor: colors.brandOrange });
+    expect(screen.getByTestId('recommendation-map-marker-rec-1').props.zIndex).toBe(1000);
+    expect(screen.getByTestId('mock-map-preview')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('community-inline-map'));
+    expect(badge('rec-1').borderColor).toBe(colors.white);
+    expect(screen.queryByTestId('mock-map-preview')).toBeNull();
   });
 
   it('times out a blank basemap and remounts it for an explicit retry', async () => {

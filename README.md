@@ -54,8 +54,11 @@ were recorded. This verifies actual index availability, not the callable's
 device authentication or the final map rendering.
 
 The post-READY log window through `2026-09-18T16:29:29Z` contained no new index
-errors and no new `getMapRecommendations` requests. Physical iPhone retry and
-marker rendering remain pending; Android runtime behavior remains unverified.
+errors and no new `getMapRecommendations` requests. The user subsequently
+confirmed that recommendations load again and supplied an iPhone screenshot with
+markers. This is user-reported recovery; the exact OTA applied on the device and
+Android runtime behavior remain unverified. The screenshot also identified poor
+visual distinction between PlanLi recommendations and Google places.
 Existing focused tests and release receipts were unchanged and reused. The
 unrelated untracked root `app.json` remains untouched.
 
@@ -95,7 +98,8 @@ excluded from the release archive.
 At OTA publication, the missing active/approved geohash indexes had not yet been
 deployed, so the recommendation-loading incident remained open. The subsequent
 authorized index repair above verifies both indexes READY and successful live
-queries. Physical app retry and marker rendering still require device evidence.
+queries. The user subsequently confirmed loading recovery, as recorded above;
+the exact OTA installed on the device and location behavior remain unverified.
 
 Validation passed 59 selected client suites / 557 tests and two Functions suites /
 21 tests, including query/index correspondence. iOS OTA readiness reused the
@@ -4865,5 +4869,5 @@ part of this follow-up.
 - CLI completed at `2026-09-18T16:22:50Z`; global `CICAgLjohJMK` and regional `CICAgLiKqYoK` independently READY at `2026-09-18T16:27:59.806Z`.
 - Inventory: 136 existing composite indexes preserved, two added, all 138 matching source; field overrides and TTL unchanged.
 - Live verification: 22 bounded, read-only geohash queries passed at `2026-09-18T16:28:15Z`, including global, regional and empty-result cases.
-- Post-READY logs through `2026-09-18T16:29:29Z`: no new index errors; no new callable requests observed in that window. Physical app retry remains pending.
+- Post-READY logs through `2026-09-18T16:29:29Z`: no new index errors; no new callable requests observed in that window. The user subsequently confirmed restored loading and shared an iPhone screenshot with markers; the exact installed OTA remains unverified.
 - Client release stays iOS production group `cab8b637-1885-4130-9e74-41a2de1934d4`, TestFlight `1.1.1 (30)`, runtime `1.3.0`; no new client build/update or store submission.
