@@ -25,6 +25,39 @@ The existing Text Search quota remains zero. See
 
 ## Current environment status
 
+### Profile content scroll preservation OTA (2026-09-18)
+
+Switching between profile recommendations, routes and pending content preserves
+the scroll position, including short or empty categories. The list no longer
+remounts or explicitly scrolls to the top on a category change. Main-tab re-press
+continues to scroll to the top or refresh; window resizing clears preserved space.
+
+PR [#392](https://github.com/doric2000/PlanLi/pull/392) merged as release source
+`d6a628de07d4a037c62c5848338749de58da68a4` after all applicable GitHub checks passed.
+Verified staging candidate `2d5c7234-186f-4f7c-811a-f0985734b924` was republished
+without changing its bundle to
+[production group 5bcc513c](https://expo.dev/accounts/doric2000/projects/client/updates/5bcc513c-93de-4c26-83f2-afb4c59df47c)
+at `2026-09-18T17:44:56.312Z`, update `01a0b59f-12f8-780f-93a7-e9b6e53e777d`.
+Channel/environment is `production`, runtime `1.3.0`. The 10,901,832-byte bundle
+has SHA-256 `2D61E6EABC1F4286221D24D6E1F647AFA89D27E8896A714C8507EFBA19FF6353`.
+Independent EAS readback, public production-channel delivery and immutable bundle
+verification passed at `2026-09-18T17:45:35.380Z`.
+
+Target remains TestFlight **1.1.1 (30)**, build
+`b16eca67-6291-4520-82b6-10cb1af190f5`. Native compatibility passed the existing
+reviewed fingerprint `f5fac23f11fb1f2c0b1adbaf545b164644c461d3`, with
+`PlanLiTransfers` disabled. No new native build, version change, Apple submission
+or review, Android OTA, or Firebase deployment occurred. Installed tester OTA,
+physical iPhone rendering/scroll preservation and Android runtime remain unverified.
+
+Validation: 28 focused tests passed; iOS OTA readiness passed 6 affected suites /
+54 tests against prior deployed source `1af4bcde8586c04b7d5a26cc7da274ff7ba9fb7c`.
+These selections overlap. The final diff was reviewed manually; CLI review could
+not start because the installed CLI does not support its configured model.
+Previous production group `11aee9ca-cb5a-4f15-baf3-7cc962150a71` is the rollback
+target; no rollback occurred. The unrelated untracked root `app.json` was preserved
+and excluded from the release archive.
+
 ### Branded recommendation markers OTA (2026-09-18)
 
 The community map now uses fixed-size navy PlanLi badges with white category
@@ -4917,5 +4950,19 @@ part of this follow-up.
 - Target: TestFlight `1.1.1 (30)`, build `b16eca67-6291-4520-82b6-10cb1af190f5`; no new binary or store submission.
 - Public production-channel delivery and immutable bundle independently verified at `2026-09-18T17:20:37.815Z`.
 - Previous verified production group: `cab8b637-1885-4130-9e74-41a2de1934d4`.
+- Device application and post-update security smoke tests: pending.
+- Rollback: republish the immediately preceding verified production group; never change the runtime URL or channel in-app.
+
+## iOS production OTA release
+
+- Source commit: `d6a628de07d4a037c62c5848338749de58da68a4`.
+- EAS Update group: `5bcc513c-93de-4c26-83f2-afb4c59df47c`; channel `production`; runtime `1.3.0`.
+- EAS environment: `production`; published at `2026-09-18T17:44:56.312Z`.
+- Immutable iOS launch bundle: update `01a0b59f-12f8-780f-93a7-e9b6e53e777d`; 10901832 bytes; SHA-256 `2D61E6EABC1F4286221D24D6E1F647AFA89D27E8896A714C8507EFBA19FF6353`.
+- Message: Preserve profile scroll position when switching content categories
+- Target: TestFlight 1.1.1 (30), build `b16eca67-6291-4520-82b6-10cb1af190f5`; no new native build or Apple submission/review.
+- Verified staging candidate: `2d5c7234-186f-4f7c-811a-f0985734b924`; identical production bundle.
+- Public production-channel delivery and immutable bundle independently verified at `2026-09-18T17:45:35.380Z`.
+- Previous verified production group: `11aee9ca-cb5a-4f15-baf3-7cc962150a71`.
 - Device application and post-update security smoke tests: pending.
 - Rollback: republish the immediately preceding verified production group; never change the runtime URL or channel in-app.
