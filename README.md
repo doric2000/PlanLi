@@ -25,6 +25,41 @@ The existing Text Search quota remains zero. See
 
 ## Current environment status
 
+### Branded recommendation markers OTA (2026-09-18)
+
+The community map now uses fixed-size navy PlanLi badges with white category
+icons and an orange selection outline. Missing marker container styles caused
+recommendations to resemble ordinary map icons. Google POI and transit labels
+are hidden on this map while streets, cities and park geometry remain visible.
+The Web recommendation list is unchanged.
+
+PR [#390](https://github.com/doric2000/PlanLi/pull/390) merged as release source
+`1af4bcde8586c04b7d5a26cc7da274ff7ba9fb7c` after all applicable GitHub checks passed.
+The guarded workflow verified candidate `730aac69-17ca-46e5-be74-fb505b4e6726`
+and republished its identical iOS bundle to
+[production group 11aee9ca](https://expo.dev/accounts/doric2000/projects/client/updates/11aee9ca-cb5a-4f15-baf3-7cc962150a71)
+at `2026-09-18T17:19:49.114Z`, update `01a0b588-137a-79d6-90f7-c31192bc6f41`.
+Channel/environment is `production`, runtime `1.3.0`. The bundle is 10,901,636
+bytes, SHA-256 `DDF93AF87F972F1E566E27DE629449F936935A98CB5410470D23C1C33583CEBA`.
+Independent EAS readback, public channel manifest and immutable bundle verification
+passed at `2026-09-18T17:20:37.815Z`.
+
+Target remains TestFlight **1.1.1 (30)**, build
+`b16eca67-6291-4520-82b6-10cb1af190f5`. Native compatibility passed the existing
+reviewed optional-module fingerprint `f5fac23f11fb1f2c0b1adbaf545b164644c461d3`;
+`PlanLiTransfers` remains disabled. No new native build, app-version change,
+Apple submission/review, Android OTA or Firebase deployment occurred.
+
+Validation passed **82 affected client suites / 563 tests**, including marker
+selection, accessibility, preview interaction and the Web list regression.
+iOS release readiness reused that unchanged receipt against the prior deployed
+source `afcaf386f54f06dda61c3808e1966f1841f4032d`. Final diff review was manual;
+the automated CLI review could not start because its installed version did not
+support the configured model. Physical iPhone application/rendering and Android
+runtime checks remain unverified. The previous production group
+`cab8b637-1885-4130-9e74-41a2de1934d4` is the rollback target; no rollback occurred.
+The unrelated untracked root `app.json` was preserved and excluded from release.
+
 ### Map recommendation index production repair (2026-09-18)
 
 The production missing-index failure is corrected at the Firestore query layer.
@@ -42,7 +77,7 @@ receipt is `2026-09-18T16:22:50Z`; both new indexes were independently observed
 The live inventory now matches all **138** declared composite indexes. The
 previous 136 indexes were preserved, with no index removals or field-override/TTL
 changes. No Functions, Rules, Hosting, native build or additional OTA was deployed.
-The iOS production update remains `cab8b637-1885-4130-9e74-41a2de1934d4`, targeting
+At this index deployment, the iOS update was `cab8b637-1885-4130-9e74-41a2de1934d4`, targeting
 TestFlight **1.1.1 (30)** / runtime `1.3.0`, as recorded below.
 
 At `2026-09-18T16:28:15Z`, read-only queries against the live database passed all
@@ -4870,4 +4905,17 @@ part of this follow-up.
 - Inventory: 136 existing composite indexes preserved, two added, all 138 matching source; field overrides and TTL unchanged.
 - Live verification: 22 bounded, read-only geohash queries passed at `2026-09-18T16:28:15Z`, including global, regional and empty-result cases.
 - Post-READY logs through `2026-09-18T16:29:29Z`: no new index errors; no new callable requests observed in that window. The user subsequently confirmed restored loading and shared an iPhone screenshot with markers; the exact installed OTA remains unverified.
-- Client release stays iOS production group `cab8b637-1885-4130-9e74-41a2de1934d4`, TestFlight `1.1.1 (30)`, runtime `1.3.0`; no new client build/update or store submission.
+- At this index deployment, the client release was iOS production group `cab8b637-1885-4130-9e74-41a2de1934d4`, TestFlight `1.1.1 (30)`, runtime `1.3.0`; no new client build/update or store submission.
+
+## iOS production OTA release
+
+- Source commit: `1af4bcde8586c04b7d5a26cc7da274ff7ba9fb7c`.
+- EAS Update group: `11aee9ca-cb5a-4f15-baf3-7cc962150a71`; channel `production`; runtime `1.3.0`.
+- EAS environment: `production`; published at `2026-09-18T17:19:49.114Z`.
+- Immutable iOS launch bundle: update `01a0b588-137a-79d6-90f7-c31192bc6f41`; 10901636 bytes; SHA-256 `DDF93AF87F972F1E566E27DE629449F936935A98CB5410470D23C1C33583CEBA`.
+- Message: Distinct PlanLi recommendation markers and cleaner map
+- Target: TestFlight `1.1.1 (30)`, build `b16eca67-6291-4520-82b6-10cb1af190f5`; no new binary or store submission.
+- Public production-channel delivery and immutable bundle independently verified at `2026-09-18T17:20:37.815Z`.
+- Previous verified production group: `cab8b637-1885-4130-9e74-41a2de1934d4`.
+- Device application and post-update security smoke tests: pending.
+- Rollback: republish the immediately preceding verified production group; never change the runtime URL or channel in-app.
