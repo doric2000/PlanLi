@@ -25,6 +25,40 @@ The existing Text Search quota remains zero. See
 
 ## Current environment status
 
+### Map recommendation index production repair (2026-09-18)
+
+The production missing-index failure is corrected at the Firestore query layer.
+The latest pre-deploy app failures at `2026-09-18T14:05:29Z` were
+`FAILED_PRECONDITION: The query requires an index`. Under explicit release
+authorization, Firebase CLI **15.30.2** deployed only `firestore:indexes` from
+synchronized `main` source `ee963f8be1a74039eb25d626d1d6923d707013a9` to
+`planli-f0b12`, database `(default)`, Standard edition, `eur3`. The CLI completion
+receipt is `2026-09-18T16:22:50Z`; both new indexes were independently observed
+**READY** at `2026-09-18T16:27:59.806Z`:
+
+- Global approved/active geohash query: `CICAgLjohJMK`.
+- Regional approved/active geohash query: `CICAgLiKqYoK`.
+
+The live inventory now matches all **138** declared composite indexes. The
+previous 136 indexes were preserved, with no index removals or field-override/TTL
+changes. No Functions, Rules, Hosting, native build or additional OTA was deployed.
+The iOS production update remains `cab8b637-1885-4130-9e74-41a2de1934d4`, targeting
+TestFlight **1.1.1 (30)** / runtime `1.3.0`, as recorded below.
+
+At `2026-09-18T16:28:15Z`, read-only queries against the live database passed all
+**22 geohash subqueries** across Tirana/global, Albania/global, Albania/regional
+and an empty Pacific viewport. Nonempty scenarios returned candidates and the
+empty scenario returned zero; active/approved filters and existing query bounds
+were retained. Only document-name projections were read and aggregate counts
+were recorded. This verifies actual index availability, not the callable's
+device authentication or the final map rendering.
+
+The post-READY log window through `2026-09-18T16:29:29Z` contained no new index
+errors and no new `getMapRecommendations` requests. Physical iPhone retry and
+marker rendering remain pending; Android runtime behavior remains unverified.
+Existing focused tests and release receipts were unchanged and reused. The
+unrelated untracked root `app.json` remains untouched.
+
 ### Immediate map opening and explicit refresh OTA (2026-09-18)
 
 The iOS map opens immediately while location is acquired in the background.
@@ -58,11 +92,10 @@ application and map smoke testing remain pending; Android runtime testing is
 also unverified. The unrelated untracked root `app.json` was preserved and
 excluded from the release archive.
 
-The production recommendation-loading incident is **not yet resolved**: both
-missing active/approved geohash indexes are declared in source, but their
-Firestore deployment and READY-state validation still require separate release
-authorization. The OTA alone does not create indexes, so recommendation loading
-may continue to fail while map-opening/location behavior can be tested.
+At OTA publication, the missing active/approved geohash indexes had not yet been
+deployed, so the recommendation-loading incident remained open. The subsequent
+authorized index repair above verifies both indexes READY and successful live
+queries. Physical app retry and marker rendering still require device evidence.
 
 Validation passed 59 selected client suites / 557 tests and two Functions suites /
 21 tests, including query/index correspondence. iOS OTA readiness reused the
@@ -4821,6 +4854,16 @@ part of this follow-up.
 - Message: Fix immediate map opening and recommendation retries
 - Target: TestFlight `1.1.1 (30)`, build `b16eca67-6291-4520-82b6-10cb1af190f5`; no new binary or store submission.
 - Public production-channel delivery and immutable bundle independently verified at `2026-09-18T13:59:19.468Z`.
-- Firestore indexes are declared but not deployed; the production recommendation-loading incident remains open.
+- At OTA publication, Firestore indexes were declared but not deployed; the subsequent deployment is recorded below.
 - Device application and post-update security smoke tests: pending.
 - Rollback: republish the immediately preceding verified production group; never change the runtime URL or channel in-app.
+
+## Firestore map index deployment (2026-09-18)
+
+- Source: `ee963f8be1a74039eb25d626d1d6923d707013a9` on synchronized `main`; map changes from PR #387 / `afcaf386f54f06dda61c3808e1966f1841f4032d`.
+- Target: only `firestore:indexes`, Firebase project `planli-f0b12`, `(default)` Standard database in `eur3`, Firebase CLI `15.30.2`.
+- CLI completed at `2026-09-18T16:22:50Z`; global `CICAgLjohJMK` and regional `CICAgLiKqYoK` independently READY at `2026-09-18T16:27:59.806Z`.
+- Inventory: 136 existing composite indexes preserved, two added, all 138 matching source; field overrides and TTL unchanged.
+- Live verification: 22 bounded, read-only geohash queries passed at `2026-09-18T16:28:15Z`, including global, regional and empty-result cases.
+- Post-READY logs through `2026-09-18T16:29:29Z`: no new index errors; no new callable requests observed in that window. Physical app retry remains pending.
+- Client release stays iOS production group `cab8b637-1885-4130-9e74-41a2de1934d4`, TestFlight `1.1.1 (30)`, runtime `1.3.0`; no new client build/update or store submission.
