@@ -215,9 +215,13 @@ jest.mock('../src/hooks/useRecommendationDraftMedia', () => ({
 // D. Mock GooglePlacesInput Component
 // Replaces the complex Google Autocomplete component with a simple TextInput and a Button.
 // This allows us to "type" and "select" a location programmatically.
+const mockGooglePlacesInputProps = jest.fn();
 jest.mock('../src/components/GooglePlacesInput', () => {
   const { View, TextInput, Button } = require('react-native');
-  return ({ onSelect, placeholder, onChangeValue, inputTestID }) => (
+  return (props) => {
+    mockGooglePlacesInputProps(props);
+    const { onSelect, placeholder, onChangeValue, inputTestID } = props;
+    return (
     <View>
       <TextInput 
         placeholder={placeholder} 
@@ -231,7 +235,8 @@ jest.mock('../src/components/GooglePlacesInput', () => {
         testID="google-result-select"
       />
     </View>
-  );
+    );
+  };
 });
 
 const mockSingleDestinationPickerProps = jest.fn();
@@ -367,6 +372,9 @@ describe('AddRecommendationScreen Integration Test', () => {
 
     await screen.findByTestId('recommendation-image-picker');
     expect(screen.getByTestId('recommendation-exact-location-search')).toBeTruthy();
+    expect(mockGooglePlacesInputProps).toHaveBeenLastCalledWith(expect.objectContaining({
+      inputTestID: 'recommendation-exact-location-search', dropdownLayout: 'inline',
+    }));
     expect(screen.getByTestId('recommendation-category-food')).toBeTruthy();
     expect(screen.getByTestId('recommendation-title-input')).toBeTruthy();
     fireEvent.press(screen.getByTestId('recommendation-next'));

@@ -1410,6 +1410,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
               googleFallbackDelayMs={3000}
               showSearchErrors={false}
               variant="form"
+              dropdownLayout="inline"
               error={Boolean(locationResolveError)}
               returnSelection
               clearPlaceholderOnFocus
