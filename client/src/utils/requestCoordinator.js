@@ -22,7 +22,7 @@ export function createRequestCoordinator({
     }
   };
 
-  const request = (key, loader) => {
+  const request = (key, loader, { forceRefresh = false } = {}) => {
     if (!key || typeof loader !== 'function') {
       throw new TypeError('A request key and loader are required.');
     }
@@ -30,9 +30,12 @@ export function createRequestCoordinator({
     const requestedAt = now();
     const existing = entries.get(key);
     if (existing?.promise) {
+      // A manual retry must see a network failure even when it joins an
+      // automatic refresh that would otherwise return stale data.
+      if (forceRefresh) existing.allowStaleOnError = false;
       return { requested: false, source: 'in-flight', promise: existing.promise };
     }
-    if (existing?.hasValue && existing.freshUntil > requestedAt) {
+    if (!forceRefresh && existing?.hasValue && existing.freshUntil > requestedAt) {
       touch(key, existing);
       return {
         requested: false,
@@ -40,7 +43,7 @@ export function createRequestCoordinator({
         promise: Promise.resolve(existing.value),
       };
     }
-    if (existing?.retryAfter > requestedAt) {
+    if (!forceRefresh && existing?.retryAfter > requestedAt) {
       touch(key, existing);
       if (existing.hasValue && existing.staleUntil > requestedAt) {
         return {
@@ -57,6 +60,7 @@ export function createRequestCoordinator({
     }
 
     const entry = existing || { hasValue: false };
+    entry.allowStaleOnError = !forceRefresh;
     let loaded;
     try {
       loaded = loader();
@@ -87,7 +91,7 @@ export function createRequestCoordinator({
           promise: null,
         };
         if (entries.get(key) === entry) touch(key, failed);
-        if (entry.hasValue && entry.staleUntil > failedAt) return entry.value;
+        if (entry.allowStaleOnError && entry.hasValue && entry.staleUntil > failedAt) return entry.value;
         throw error;
       });
 
