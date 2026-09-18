@@ -50,7 +50,7 @@ export default function ProfileView({
   profileUid,
 }) {
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const gridColumns = getContentGridColumns(width);
   const styles = useMemo(() => {
     const classic = createProfileStyles(insets, width, gridColumns);
@@ -59,6 +59,9 @@ export default function ProfileView({
   const [contentTab, setContentTab] = useState('recommendations');
   const [bioModalVisible, setBioModalVisible] = useState(false);
   const profileListRef = useRef(null);
+  const scrollOffset = useRef(0);
+  const viewportHeight = useRef(0);
+  const [contentMinHeight, setContentMinHeight] = useState(0);
   const activeData = contentTab === 'recommendations'
     ? recommendations
     : contentTab === 'routes'
@@ -71,16 +74,27 @@ export default function ProfileView({
   );
 
   useEffect(() => {
-    profileListRef.current?.scrollToOffset?.({ offset: 0, animated: false });
-  }, [contentTab]);
+    setContentMinHeight(0);
+  }, [width, height]);
+
+  useEffect(() => {
+    scrollOffset.current = 0;
+  }, [gridColumns]);
 
   const { onScroll } = useTabPressScrollOrRefresh({
     variant: 'flatlist',
     scrollRef: profileListRef,
     onRefresh,
     enabled: !contentLoading,
-    scrollYResetKey: contentTab,
+    scrollYResetKey: gridColumns,
   });
+
+  const handleChangeTab = (nextTab) => {
+    if (nextTab === contentTab) return;
+    // Keep enough scrollable space even when the next category is empty.
+    setContentMinHeight(Math.ceil(viewportHeight.current + scrollOffset.current));
+    setContentTab(nextTab);
+  };
 
   const title = isOwner
     ? 'התוכן שלי'
@@ -100,7 +114,7 @@ export default function ProfileView({
 
       <FlatList
         style={styles.list}
-        key={`profile-${contentTab}-${gridColumns}`}
+        key={`profile-${gridColumns}`}
         ref={profileListRef}
         data={contentLoading || refreshing || confirming ? [] : activeData}
         keyExtractor={(item, index) => String(item?.id || `${contentTab}-${index}`)}
@@ -110,9 +124,15 @@ export default function ProfileView({
         maxToRenderPerBatch={9}
         windowSize={7}
         columnWrapperStyle={styles.gridRow}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[styles.listContent, { minHeight: contentMinHeight }]}
         ListHeaderComponentStyle={styles.headerBlock}
-        onScroll={onScroll}
+        onLayout={(event) => {
+          viewportHeight.current = event.nativeEvent.layout.height;
+        }}
+        onScroll={(event) => {
+          scrollOffset.current = Math.max(0, event.nativeEvent.contentOffset.y);
+          onScroll(event);
+        }}
         scrollEventThrottle={16}
         refreshControl={<CenteredRefreshControl
           refreshing={refreshing || confirming}
@@ -139,7 +159,7 @@ export default function ProfileView({
             <ProfileContentHeader
               styles={styles}
               contentTab={contentTab}
-              onChangeTab={setContentTab}
+              onChangeTab={handleChangeTab}
               contentLoading={contentLoading}
               recommendationsCount={stats?.recommendations ?? 0}
               routesCount={stats?.routes ?? 0}

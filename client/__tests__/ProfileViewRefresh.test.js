@@ -1,15 +1,12 @@
 import React from 'react';
-import { FlatList, StyleSheet } from 'react-native';
-import { fireEvent, render } from '@testing-library/react-native';
+import { Dimensions, FlatList, StyleSheet } from 'react-native';
+import { act, fireEvent, render } from '@testing-library/react-native';
+import { NavigationContext } from '@react-navigation/native';
 
 import ProfileView from '../src/features/profile/components/ProfileView';
 
 jest.mock('../src/components/ContentTile', () => ({
   getContentGridColumns: () => 3,
-}));
-
-jest.mock('../src/hooks/useTabPressScrollOrRefresh', () => ({
-  useTabPressScrollOrRefresh: () => ({ onScroll: jest.fn() }),
 }));
 
 jest.mock('../src/features/profile/components/ProfileHeader', () => {
@@ -20,9 +17,21 @@ jest.mock('../src/features/profile/components/ProfileHeader', () => {
 
 jest.mock('../src/features/profile/components/ProfileContentGrid', () => {
   const ReactModule = require('react');
-  const { Text: MockText, View: MockView } = require('react-native');
+  const { Text: MockText, View: MockView, Pressable: MockPressable } = require('react-native');
   return {
-    ProfileContentHeader: () => ReactModule.createElement(MockView, { testID: 'profile-content-tabs' }),
+    ProfileContentHeader: ({ contentTab, onChangeTab, showPending }) => ReactModule.createElement(
+      MockView,
+      { testID: 'profile-content-tabs' },
+      (showPending ? ['recommendations', 'routes', 'pending'] : ['recommendations', 'routes']).map((tab) => (
+        ReactModule.createElement(MockPressable, {
+          key: tab,
+          accessibilityRole: 'tab',
+          accessibilityLabel: tab,
+          accessibilityState: { selected: tab === contentTab },
+          onPress: () => onChangeTab(tab),
+        })
+      ))
+    ),
     ProfileContentEmpty: () => ReactModule.createElement(MockView, { testID: 'profile-content-empty' }),
     ProfileGridTile: ({ item }) => ReactModule.createElement(
       MockText,
@@ -66,6 +75,91 @@ const baseProps = {
 };
 
 describe('ProfileView refresh behavior', () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  it.each([true, false])('preserves the list across content switches (owner: %s)', (isOwner) => {
+    const scroll = jest.spyOn(FlatList.prototype, 'scrollToOffset').mockImplementation(() => {});
+    const screen = render(<ProfileView {...baseProps} isOwner={isOwner} routes={[{ id: 'route-1' }]} />);
+    const list = screen.UNSAFE_getByType(FlatList).instance;
+    const header = screen.getByTestId('profile-identity-header');
+    fireEvent(screen.UNSAFE_getByType(FlatList), 'layout', { nativeEvent: { layout: { height: 600 } } });
+    fireEvent.scroll(screen.UNSAFE_getByType(FlatList), { nativeEvent: { contentOffset: { y: 250 } } });
+    fireEvent.press(screen.getByRole('tab', { name: 'routes' }));
+
+    expect(screen.UNSAFE_getByType(FlatList).instance).toBe(list);
+    expect(screen.getByTestId('profile-identity-header')).toBe(header);
+    expect(screen.getByTestId('profile-item-route-1')).toBeTruthy();
+    expect(screen.queryByTestId('profile-item-rec-1')).toBeNull();
+    expect(StyleSheet.flatten(screen.UNSAFE_getByType(FlatList).props.contentContainerStyle).minHeight).toBe(850);
+
+    if (isOwner) {
+      fireEvent.press(screen.getByRole('tab', { name: 'pending' }));
+      expect(screen.getByTestId('profile-content-empty')).toBeTruthy();
+      expect(StyleSheet.flatten(screen.UNSAFE_getByType(FlatList).props.contentContainerStyle).minHeight).toBe(850);
+    }
+    fireEvent.press(screen.getByRole('tab', { name: 'recommendations' }));
+    expect(screen.getByTestId('profile-item-rec-1')).toBeTruthy();
+    expect(screen.UNSAFE_getByType(FlatList).instance).toBe(list);
+    expect(scroll).not.toHaveBeenCalled();
+  });
+
+  it('recalculates space only on a different category and clamps negative bounce offsets', () => {
+    const screen = render(<ProfileView {...baseProps} />);
+    const list = () => screen.UNSAFE_getByType(FlatList);
+    const minHeight = () => StyleSheet.flatten(list().props.contentContainerStyle).minHeight;
+    fireEvent(list(), 'layout', { nativeEvent: { layout: { height: 600 } } });
+    fireEvent.scroll(list(), { nativeEvent: { contentOffset: { y: 250 } } });
+    fireEvent.press(screen.getByRole('tab', { name: 'routes' }));
+    expect(minHeight()).toBe(850);
+    fireEvent.scroll(list(), { nativeEvent: { contentOffset: { y: 100 } } });
+    fireEvent.press(screen.getByRole('tab', { name: 'routes' }));
+    expect(minHeight()).toBe(850);
+    fireEvent.press(screen.getByRole('tab', { name: 'pending' }));
+    expect(minHeight()).toBe(700);
+    fireEvent.scroll(list(), { nativeEvent: { contentOffset: { y: -20 } } });
+    fireEvent.press(screen.getByRole('tab', { name: 'recommendations' }));
+    expect(minHeight()).toBe(600);
+  });
+
+  it('clears preserved space when the window changes size', () => {
+    const originalWindow = Dimensions.get('window');
+    const originalScreen = Dimensions.get('screen');
+    const screen = render(<ProfileView {...baseProps} />);
+    fireEvent(screen.UNSAFE_getByType(FlatList), 'layout', { nativeEvent: { layout: { height: 600 } } });
+    fireEvent.scroll(screen.UNSAFE_getByType(FlatList), { nativeEvent: { contentOffset: { y: 250 } } });
+    fireEvent.press(screen.getByRole('tab', { name: 'routes' }));
+    try {
+      act(() => Dimensions.set({ window: { ...originalWindow, width: originalWindow.width + 100 } }));
+      expect(StyleSheet.flatten(screen.UNSAFE_getByType(FlatList).props.contentContainerStyle).minHeight).toBe(0);
+    } finally {
+      act(() => Dimensions.set({ window: originalWindow, screen: originalScreen }));
+    }
+  });
+
+  it('still scrolls to top on a main-tab re-press after changing category, then refreshes at top', () => {
+    let pressTab;
+    const navigation = {
+      isFocused: () => true,
+      addListener: (event, handler) => { pressTab = handler; return () => {}; },
+    };
+    const onRefresh = jest.fn();
+    const scroll = jest.spyOn(FlatList.prototype, 'scrollToOffset').mockImplementation(() => {});
+    const screen = render(
+      <NavigationContext.Provider value={navigation}>
+        <ProfileView {...baseProps} onRefresh={onRefresh} />
+      </NavigationContext.Provider>
+    );
+    fireEvent.scroll(screen.UNSAFE_getByType(FlatList), { nativeEvent: { contentOffset: { y: 250 } } });
+    fireEvent.press(screen.getByRole('tab', { name: 'routes' }));
+    expect(scroll).not.toHaveBeenCalled();
+    act(() => pressTab());
+    expect(scroll).toHaveBeenCalledWith({ offset: 0, animated: true });
+    expect(onRefresh).not.toHaveBeenCalled();
+    fireEvent.scroll(screen.UNSAFE_getByType(FlatList), { nativeEvent: { contentOffset: { y: 0 } } });
+    act(() => pressTab());
+    expect(onRefresh).toHaveBeenCalledTimes(1);
+  });
+
   it('routes the visible toolbar to the owner menu or public-profile back action', () => {
     const menu = jest.fn();
     const back = jest.fn();
