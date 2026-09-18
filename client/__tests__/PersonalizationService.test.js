@@ -36,6 +36,7 @@ jest.mock('../src/features/profile/services/GuestPersonalizationStorage', () => 
 }));
 
 import { auth as mockAuth } from '../src/config/firebase';
+import { getMapRecommendations } from '../src/services/MapRecommendationsService';
 import {
   DISCOVERY_CACHE_TTL_MS,
   DISCOVERY_ERROR_RETRY_MS,
@@ -115,6 +116,53 @@ describe('PersonalizationService discovery cache', () => {
     resolveRequest({ data: { items: [{ id: 'route-1' }] } });
     await expect(first).resolves.toEqual({ items: [{ id: 'route-1' }] });
     await expect(second).resolves.toEqual({ items: [{ id: 'route-1' }] });
+  });
+
+  const mapRequest = { viewport: { north: 33, south: 32, west: 34, east: 35, zoom: 12 } };
+
+  it('retries a failed map immediately while retaining other viewport and feed caches', async () => {
+    const otherRequest = { ...mapRequest, regionId: 'europe' };
+    mockCallable.mockResolvedValueOnce({ data: { items: [{ id: 'other' }] } });
+    await getMapRecommendations(otherRequest);
+    mockCallable.mockResolvedValueOnce({ data: { items: [{ id: 'feed' }] } });
+    await getPersonalizedRecommendations({});
+    mockCallable.mockRejectedValueOnce(new Error('offline'));
+    await expect(getMapRecommendations(mapRequest)).rejects.toThrow('offline');
+    await expect(getMapRecommendations(mapRequest)).rejects.toThrow('offline');
+    expect(mockCallable).toHaveBeenCalledTimes(3);
+
+    mockCallable.mockResolvedValueOnce({ data: { items: [{ id: 'recovered' }] } });
+    await expect(getMapRecommendations(mapRequest, { forceRefresh: true }))
+      .resolves.toEqual({ items: [{ id: 'recovered' }] });
+    await expect(getMapRecommendations(otherRequest)).resolves.toEqual({ items: [{ id: 'other' }] });
+    await expect(getPersonalizedRecommendations({})).resolves.toEqual({ items: [{ id: 'feed' }] });
+    expect(mockCallable).toHaveBeenCalledTimes(4);
+    expect(mockCallPublicCallable).toHaveBeenLastCalledWith('getMapRecommendations', mapRequest);
+  });
+
+  it('refreshes fresh map results and shares repeated retry taps', async () => {
+    mockCallable.mockResolvedValueOnce({ data: { items: [{ id: 'cached' }] } });
+    await getMapRecommendations(mapRequest);
+    let resolveRefresh;
+    mockCallable.mockImplementationOnce(() => new Promise((resolve) => { resolveRefresh = resolve; }));
+    const first = getMapRecommendations(mapRequest, { forceRefresh: true });
+    const duplicate = getMapRecommendations(mapRequest, { forceRefresh: true });
+    expect(mockCallable).toHaveBeenCalledTimes(2);
+    resolveRefresh({ data: { items: [{ id: 'new' }] } });
+    await expect(first).resolves.toEqual({ items: [{ id: 'new' }] });
+    await expect(duplicate).resolves.toEqual({ items: [{ id: 'new' }] });
+    await expect(getMapRecommendations(mapRequest)).resolves.toEqual({ items: [{ id: 'new' }] });
+  });
+
+  it('exposes a map refresh failure instead of disguising old pins as a successful response', async () => {
+    mockCallable.mockResolvedValueOnce({ data: { items: [{ id: 'cached' }] } });
+    await getMapRecommendations(mapRequest);
+    mockCallable.mockRejectedValueOnce(new Error('offline'));
+    await expect(getMapRecommendations(mapRequest, { forceRefresh: true })).rejects.toThrow('offline');
+    mockCallable.mockResolvedValueOnce({ data: { items: [{ id: 'recovered' }] } });
+    await expect(getMapRecommendations(mapRequest, { forceRefresh: true }))
+      .resolves.toEqual({ items: [{ id: 'recovered' }] });
+    expect(mockCallable).toHaveBeenCalledTimes(3);
   });
 
   it('reuses map results for equivalent viewports with GPS jitter', async () => {

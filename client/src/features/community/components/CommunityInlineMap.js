@@ -132,6 +132,7 @@ export default function CommunityInlineMap({
   const centeredOnLocationRef = useRef(false);
   const handledFocusRequestRef = useRef(null);
   const pendingFocusIdRef = useRef(null);
+  const locationActionSerialRef = useRef(0);
   const [mapInstance, setMapInstance] = useState(0);
   const [mapLoadStatus, setMapLoadStatus] = useState('loading');
   const [selectedRecommendationId, setSelectedRecommendationId] = useState(null);
@@ -167,11 +168,10 @@ export default function CommunityInlineMap({
     initialRegionRef.current = regionForLocation(location, USER_MAP_ZOOM);
     currentRegionRef.current = initialRegionRef.current;
     centeredOnLocationRef.current = true;
-  } else if (!initialRegionRef.current && TERMINAL_LOCATION_STATUSES.has(status)) {
+  } else if (!initialRegionRef.current) {
     initialRegionRef.current = regionForLocation(null, DEFAULT_MAP_ZOOM);
     currentRegionRef.current = initialRegionRef.current;
   }
-  const nativeMapMounted = Boolean(initialRegionRef.current) || !awaitingFirstFix;
 
   const mapItems = useMemo(
     () => normalizeRecommendationMapItems(recommendations).slice(0, MAX_NATIVE_MARKERS),
@@ -196,19 +196,21 @@ export default function CommunityInlineMap({
 
   useEffect(() => {
     startTracking();
-    return stopTracking;
+    return () => {
+      locationActionSerialRef.current += 1;
+      stopTracking();
+    };
   }, [startTracking, stopTracking]);
 
   useEffect(() => {
-    if (!nativeMapMounted) return;
     setMapLoadStatus('loading');
-  }, [mapInstance, nativeMapMounted]);
+  }, [mapInstance]);
 
   useEffect(() => {
-    if (!nativeMapMounted || mapLoadStatus !== 'loading') return undefined;
+    if (mapLoadStatus !== 'loading') return undefined;
     const timer = setTimeout(() => setMapLoadStatus('error'), MAP_LOAD_TIMEOUT_MS);
     return () => clearTimeout(timer);
-  }, [mapInstance, mapLoadStatus, nativeMapMounted]);
+  }, [mapInstance, mapLoadStatus]);
 
   useEffect(() => {
     if (selectedRecommendationId && !selectedMapItem) setSelectedRecommendationId(null);
@@ -218,6 +220,7 @@ export default function CommunityInlineMap({
     zoom = USER_MAP_ZOOM,
     pendingRecommendationId = null,
   } = {}) => {
+    locationActionSerialRef.current += 1;
     const nextRegion = regionForLocation(nextLocation, zoom);
     initialRegionRef.current = nextRegion;
     currentRegionRef.current = nextRegion;
@@ -282,16 +285,26 @@ export default function CommunityInlineMap({
     }
   }, [focusRecommendationId, searchRegion, selectedRecommendationId]);
 
+  const markUserGesture = useCallback(() => {
+    userGestureRef.current = true;
+    userMovedMapRef.current = true;
+    locationActionSerialRef.current += 1;
+    pendingFocusIdRef.current = null;
+    setSelectedRecommendationId(null);
+  }, []);
+
   const handleRegionChangeComplete = useCallback((region, details) => {
     currentRegionRef.current = region;
+    if (details?.isGesture) markUserGesture();
     const wasGesture = userGestureRef.current || details?.isGesture === true;
     userGestureRef.current = false;
     if (wasGesture && searchedRef.current) setSearchAreaVisible(true);
-  }, []);
+  }, [markUserGesture]);
 
   const centerOnUser = useCallback(async () => {
+    const actionSerial = ++locationActionSerialRef.current;
     const nextLocation = location || await startTracking();
-    if (!nextLocation) return;
+    if (!nextLocation || locationActionSerialRef.current !== actionSerial) return;
     moveToLocation(nextLocation);
   }, [location, moveToLocation, startTracking]);
 
@@ -299,21 +312,6 @@ export default function CommunityInlineMap({
     setMapLoadStatus('loading');
     setMapInstance((value) => value + 1);
   }, []);
-
-  if (!initialRegionRef.current && awaitingFirstFix) {
-    return (
-      <View style={community.inlineMapEmpty} testID="map-awaiting-location">
-        <ActivityIndicator size="large" color="#1E3A5F" />
-        <AppText style={community.inlineMapEmptyTitle}>מאתר את המיקום שלך</AppText>
-        <AppText style={community.inlineMapEmptyText}>המפה תיפתח ישירות באזור הקרוב אליך.</AppText>
-      </View>
-    );
-  }
-
-  if (!initialRegionRef.current) {
-    initialRegionRef.current = regionForLocation(null, DEFAULT_MAP_ZOOM);
-    currentRegionRef.current = initialRegionRef.current;
-  }
 
   return (
     <View style={community.inlineMapWrap}>
@@ -328,11 +326,9 @@ export default function CommunityInlineMap({
         showsMyLocationButton={false}
         onMapReady={handleMapReady}
         onMapLoaded={() => setMapLoadStatus('ready')}
-        onPanDrag={() => {
-          userGestureRef.current = true;
-          userMovedMapRef.current = true;
-          pendingFocusIdRef.current = null;
-          setSelectedRecommendationId(null);
+        onPanDrag={markUserGesture}
+        onRegionChange={(_, details) => {
+          if (details?.isGesture) markUserGesture();
         }}
         onRegionChangeComplete={handleRegionChangeComplete}
         onPress={() => {
@@ -426,10 +422,22 @@ export default function CommunityInlineMap({
         </TouchableOpacity>
       )}
 
-      {TERMINAL_LOCATION_STATUSES.has(status) && (
-        <TouchableOpacity style={community.mapLocationNotice} onPress={startTracking}>
+      {awaitingFirstFix && !selectedMapItem && (
+        <View style={[community.mapLocationNotice, { bottom: overlayBottomInset + 12, right: 74 }]}
+          pointerEvents="none" testID="map-locating">
+          <ActivityIndicator size="small" color="#1E3A5F" />
+          <AppText style={community.mapLocationNoticeText}>מאתר את המיקום שלך…</AppText>
+        </View>
+      )}
+
+      {TERMINAL_LOCATION_STATUSES.has(status) && !selectedMapItem && (
+        <TouchableOpacity style={[community.mapLocationNotice, { bottom: overlayBottomInset + 12, right: 74, minHeight: 44 }]}
+          onPress={startTracking}
+          accessibilityRole="button" testID="map-location-retry">
           <Ionicons name="location-outline" size={17} color="#1E3A5F" />
-          <AppText style={community.mapLocationNoticeText}>אפשר להפעיל מיקום כדי למצוא המלצות קרובות</AppText>
+          <AppText style={community.mapLocationNoticeText}>{status === 'denied'
+            ? 'אפשר להפעיל מיקום כדי למצוא המלצות קרובות'
+            : 'לא התקבל מיקום. לחצו לניסיון נוסף'}</AppText>
         </TouchableOpacity>
       )}
 
@@ -448,7 +456,9 @@ export default function CommunityInlineMap({
 
       {mapLoadStatus === 'ready' && !!error && !loading && (
         <TouchableOpacity
-          style={community.mapErrorPill}
+          style={[community.mapErrorPill, { minHeight: 44 }]}
+          accessibilityRole="button"
+          testID="map-recommendations-retry"
           onPress={() => searchRegion(currentRegionRef.current, { forceRefresh: true })}
         >
           <Ionicons name="refresh" size={17} color="#991B1B" />

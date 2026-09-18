@@ -97,6 +97,21 @@ describe('request coordinator', () => {
     expect(loader).toHaveBeenCalledTimes(1);
   });
 
+  it('shares an automatic request with a forced retry and surfaces its failure', async () => {
+    await coordinator.request('map:area', async () => 'cached').promise;
+    clock += 30_001;
+    const pending = deferred();
+    const automatic = coordinator.request('map:area', () => pending.promise);
+    const duplicateLoader = jest.fn();
+    const forced = coordinator.request('map:area', duplicateLoader, { forceRefresh: true });
+    expect(forced.promise).toBe(automatic.promise);
+    expect(duplicateLoader).not.toHaveBeenCalled();
+    const failure = new Error('offline');
+    pending.reject(failure);
+    await expect(forced.promise).rejects.toBe(failure);
+    expect(coordinator.peek('map:area')).toBe('cached');
+  });
+
   it('does not use stale fallback after five minutes', async () => {
     const loader = jest.fn().mockResolvedValueOnce('cached');
     await coordinator.request('community:old', loader).promise;

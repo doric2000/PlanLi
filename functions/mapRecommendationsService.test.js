@@ -1,5 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { indexes } = require('../firestore.indexes.json');
 
 const { parseSearchQuery } = require('./discoverySearch');
 const { cleanDestinations, cleanFilters } = require('./personalizationService');
@@ -101,7 +102,7 @@ test('map preview exposes only compact public fields', () => {
   assert.equal('search' in preview, false);
 });
 
-test('map discovery refuses global zoom and caps visible previews at 500', async () => {
+test('map discovery refuses global zoom and caps visible previews at 200', async () => {
   const tooWide = await getMapRecommendations({
     admin: fakeAdmin([]),
     data: { viewport: { ...telAvivViewport, zoom: 3 } },
@@ -119,3 +120,44 @@ test('map discovery refuses global zoom and caps visible previews at 500', async
   assert.equal(capped.zoomInRequired, true);
   assert.equal(new Set(capped.items.map((item) => item.id)).size, MAX_MAP_RESULTS);
 });
+
+for (const regionId of [null, 'europe']) {
+  test(`the actual ${regionId ? 'regional' : 'global'} map query has a matching declared index`, async () => {
+    const queries = [];
+    const admin = { firestore: () => ({ collection: (collectionGroup) => {
+      const captured = { collectionGroup, equalities: [], ordering: [] };
+      queries.push(captured);
+      const query = {
+        where: (field, operator, value) => {
+          assert.equal(operator, '==');
+          captured.equalities.push({ field, value });
+          return query;
+        },
+        orderBy: (field, direction = 'asc') => {
+          captured.ordering.push({ fieldPath: field, order: direction === 'asc' ? 'ASCENDING' : 'DESCENDING' });
+          return query;
+        },
+        startAt: () => query, endAt: () => query, limit: () => query,
+        get: async () => ({ docs: [] }),
+      };
+      return query;
+    } }) };
+
+    await getMapRecommendations({ admin, data: { viewport: telAvivViewport, ...(regionId ? { regionId } : {}) } });
+    assert.ok(queries.length > 0, 'Must exercise the real geohash query builder');
+    for (const query of queries) {
+      assert.ok(query.equalities.some(({ field, value }) => field === 'status' && value === 'active'));
+      assert.ok(query.equalities.some(({ field, value }) => field === 'publicationGate.destinationApprovalVerified' && value === true));
+      assert.equal(query.equalities.some(({ field, value }) => field === 'discoveryRegionId' && value === regionId), Boolean(regionId));
+      const equalityFields = query.equalities.map(({ field }) => field).sort();
+      assert.ok(indexes.some((index) => {
+        if (index.collectionGroup !== query.collectionGroup || index.queryScope !== 'COLLECTION') return false;
+        const fields = index.fields.filter(({ fieldPath }) => fieldPath !== '__name__');
+        const prefix = fields.slice(0, equalityFields.length);
+        return prefix.every(({ order }) => order === 'ASCENDING')
+          && JSON.stringify(prefix.map(({ fieldPath }) => fieldPath).sort()) === JSON.stringify(equalityFields)
+          && JSON.stringify(fields.slice(equalityFields.length)) === JSON.stringify(query.ordering);
+      }), `Missing index for ${JSON.stringify(query)}`);
+    }
+  });
+}

@@ -186,12 +186,80 @@ describe('CommunityInlineMap', () => {
     expect(screen.queryByTestId('mock-map-preview')).toBeNull();
   });
 
-  it('waits for the first location before mounting the native map', async () => {
+  it('mounts and searches immediately while location is pending, with a non-blocking indicator', async () => {
+    mockLocationState = { location: null, status: 'locating', awaitingFirstFix: true };
+    const onSearchViewport = jest.fn();
+    const screen = render(<MapUnderTest recommendations={[]} onSearchViewport={onSearchViewport} />);
+    await act(async () => {});
+    expect(screen.queryByTestId('map-awaiting-location')).toBeNull();
+    expect(screen.getByTestId('community-inline-map').props.initialRegion.latitude).toBe(31.04);
+    expect(screen.getByTestId('map-locating').props.pointerEvents).toBe('none');
+    expect(onSearchViewport).toHaveBeenCalledTimes(1);
+    fireEvent(screen.getByTestId('community-inline-map'), 'regionChangeComplete', {
+      latitude: 41.7, longitude: 44.8, latitudeDelta: 0.2, longitudeDelta: 0.2,
+    }, { isGesture: true });
+    fireEvent.press(screen.getByTestId('map-search-this-area'));
+    expect(onSearchViewport).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(['panDrag', 'regionChange', 'regionChangeComplete'])(
+    'does not recenter on a late location after a %s gesture', async (gesture) => {
+      mockLocationState = { location: null, status: 'locating', awaitingFirstFix: true };
+      const screen = render(<MapUnderTest recommendations={[]} />);
+      await act(async () => {});
+      const original = screen.getByTestId('community-inline-map').props.initialRegion;
+      fireEvent(screen.getByTestId('community-inline-map'), gesture, original, { isGesture: true });
+      mockLocationState = {
+        location: { lat: 41.7, lng: 44.8, accuracy: 10 }, status: 'granted', awaitingFirstFix: false,
+      };
+      screen.rerender(<MapUnderTest recommendations={[]} />);
+      expect(screen.getByTestId('community-inline-map').props.initialRegion).toBe(original);
+      expect(screen.queryByTestId('map-locating')).toBeNull();
+    }
+  );
+
+  it('centers only once automatically and preserves a focused recommendation on later location updates', async () => {
     mockLocationState = { location: null, status: 'locating', awaitingFirstFix: true };
     const screen = render(<MapUnderTest recommendations={[]} />);
     await act(async () => {});
-    expect(screen.getByTestId('map-awaiting-location')).toBeTruthy();
-    expect(screen.queryByTestId('community-inline-map')).toBeNull();
+    mockLocationState = {
+      location: { lat: 41.7, lng: 44.8, accuracy: 100 }, status: 'granted', awaitingFirstFix: false,
+    };
+    screen.rerender(<MapUnderTest recommendations={[]} />);
+    await waitFor(() => expect(screen.getByTestId('community-inline-map').props.initialRegion.latitude).toBe(41.7));
+    mockLocationState = { ...mockLocationState, location: { lat: 42, lng: 45, accuracy: 5 } };
+    screen.rerender(<MapUnderTest recommendations={[]} />);
+    expect(screen.getByTestId('community-inline-map').props.initialRegion.latitude).toBe(41.7);
+    const focusRequest = { requestId: 'focus-1', recommendationId: 'rec-1', coordinates: { lat: 32.1, lng: 34.8 } };
+    screen.rerender(<MapUnderTest recommendations={recommendations} focusRequest={focusRequest} />);
+    await waitFor(() => expect(screen.getByTestId('community-inline-map').props.initialRegion.latitude).toBe(32.1));
+    mockLocationState = { ...mockLocationState, location: { lat: 43, lng: 46, accuracy: 5 } };
+    screen.rerender(<MapUnderTest recommendations={recommendations} focusRequest={focusRequest} />);
+    expect(screen.getByTestId('community-inline-map').props.initialRegion.latitude).toBe(32.1);
+    expect(screen.getByTestId('mock-map-preview')).toBeTruthy();
+  });
+
+  it('keeps pins and retries the current viewport after a recommendation error', async () => {
+    const onSearchViewport = jest.fn();
+    const screen = render(<MapUnderTest recommendations={recommendations} error={new Error('offline')} onSearchViewport={onSearchViewport} />);
+    await act(async () => {});
+    act(() => screen.getByTestId('community-inline-map').props.onMapLoaded());
+    expect(screen.getByTestId('recommendation-map-marker-rec-1')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('map-recommendations-retry'));
+    expect(onSearchViewport).toHaveBeenLastCalledWith(expect.objectContaining({ zoom: 15 }), { forceRefresh: true });
+    expect(screen.queryByText('אין המלצות באזור המוצג')).toBeNull();
+  });
+
+  it('does not move back when a pending my-location request completes after another gesture', async () => {
+    let resolveLocation;
+    mockLocationState = { location: null, status: 'locating', awaitingFirstFix: true };
+    mockStartTracking.mockImplementation(() => new Promise((resolve) => { resolveLocation = resolve; }));
+    const screen = render(<MapUnderTest recommendations={[]} />);
+    await act(async () => {});
+    fireEvent.press(screen.getByTestId('map-my-location'));
+    fireEvent(screen.getByTestId('community-inline-map'), 'panDrag');
+    await act(async () => resolveLocation({ lat: 41.7, lng: 44.8, accuracy: 5 }));
+    expect(screen.getByTestId('community-inline-map').props.initialRegion.latitude).toBe(31.04);
   });
 
   it('selects pins repeatedly, keeps the preview stable, and opens by postId', async () => {

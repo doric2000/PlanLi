@@ -77,7 +77,7 @@ function createPrincipalChangedError() {
   return error;
 }
 
-function requestDiscovery(name, payload = {}, retryIdentityChange = true) {
+function requestDiscovery(name, payload = {}, { forceRefresh = false, retryIdentityChange = true } = {}) {
   const principalUid = auth.currentUser?.uid || null;
   const key = discoveryCacheKey(name, payload, principalUid);
   const assertPrincipalUnchanged = () => {
@@ -109,12 +109,12 @@ function requestDiscovery(name, payload = {}, retryIdentityChange = true) {
     });
     assertPrincipalUnchanged();
     return result;
-  });
+  }, { forceRefresh });
   const promise = coordinated.promise.catch((error) => {
     if (error?.code !== 'auth/identity-changed') throw error;
     discoveryCoordinator.invalidate(key);
     if (!retryIdentityChange) throw error;
-    return requestDiscovery(name, payload, false).promise;
+    return requestDiscovery(name, payload, { forceRefresh, retryIdentityChange: false }).promise;
   });
   return { ...coordinated, promise };
 }
@@ -140,11 +140,11 @@ export const requestPersonalizedRoutes = (payload = {}) =>
 export const getPersonalizedRoutes = (payload = {}) =>
   requestPersonalizedRoutes(payload).promise;
 
-export const requestPersonalizedMapRecommendations = (payload = {}) =>
-  requestDiscovery(DISCOVERY_CALLABLES.map, payload);
+export const requestPersonalizedMapRecommendations = (payload = {}, { forceRefresh = false } = {}) =>
+  requestDiscovery(DISCOVERY_CALLABLES.map, payload, { forceRefresh });
 
-export const getPersonalizedMapRecommendations = (payload = {}) =>
-  requestPersonalizedMapRecommendations(payload).promise;
+export const getPersonalizedMapRecommendations = (payload = {}, options = {}) =>
+  requestPersonalizedMapRecommendations(payload, options).promise;
 
 export function clearPersonalizationDiscoveryCache(kind) {
   const callableName = kind ? DISCOVERY_CALLABLES[kind] : null;
