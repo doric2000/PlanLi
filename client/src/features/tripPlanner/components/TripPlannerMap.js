@@ -1,24 +1,30 @@
 import React, { useEffect, useMemo, useRef } from 'react';
-import MapView, { Marker, Polyline } from 'react-native-maps';
+import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 
 import { colors, tripPlannerStyles as styles } from '../../../styles';
 import { coordinatesForStop, regionForStops, routeCoordinates } from '../utils/tripPlannerModel';
 
 export default function TripPlannerMap({
-  stops = [], route, selectedStopId, onSelectStop, onRegionChange, onMapPress, style,
+  stops = [], route, selectedStopId, onSelectStop, onRegionChange, onMapPress, onReady, style,
 }) {
   const mapRef = useRef(null);
   const points = useMemo(() => stops.map(coordinatesForStop).filter(Boolean), [stops]);
   const initialRegion = useMemo(() => regionForStops(stops), []);
   const line = useMemo(() => routeCoordinates(route, stops), [route, stops]);
+  const pointKey = points.map((point) => `${point.latitude}:${point.longitude}`).join('|');
   useEffect(() => {
-    if (points.length) mapRef.current?.fitToCoordinates(points, { edgePadding: { top: 130, right: 50, bottom: 330, left: 50 }, animated: true });
-  }, [points.length]);
+    if (points.length && mapRef.current) mapRef.current.fitToCoordinates(points, { edgePadding: { top: 40, right: 40, bottom: 45, left: 40 }, animated: true });
+  }, [pointKey]);
   return (
     <MapView
       ref={mapRef}
+      provider={PROVIDER_GOOGLE}
       style={[styles.map, style]}
       initialRegion={initialRegion}
+      onMapReady={() => {
+        if (points.length) mapRef.current?.fitToCoordinates(points, { edgePadding: { top: 40, right: 40, bottom: 45, left: 40 }, animated: false });
+        onReady?.();
+      }}
       onRegionChangeComplete={onRegionChange}
       onPress={(event) => onMapPress?.(event?.nativeEvent?.coordinate)}
       accessibilityLabel="מפת תכנון הטיול"

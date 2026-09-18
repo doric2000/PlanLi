@@ -7,7 +7,7 @@ jest.mock('../src/hooks/useAuthUser', () => ({ useAuthUser: () => ({ ensureCapab
 jest.mock('@expo/vector-icons', () => ({ Ionicons: 'Icon' }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ bottom: 34 }) }));
 beforeEach(() => jest.clearAllMocks());
-it.each([['trip', 'TripPlanner'], ['recommendation', 'AddRecommendation'], ['route', 'AddRoutesScreen']])('gates %s creation', async (id, destination) => {
+it.each([['trip', 'MyTrips'], ['recommendation', 'AddRecommendation'], ['route', 'AddRoutesScreen']])('gates %s creation', async (id, destination) => {
   mockEnsure.mockResolvedValue(true);
   const navigation = { goBack: jest.fn(), navigate: jest.fn() };
   const s = render(<CreateMenuScreen navigation={navigation} />);
@@ -30,6 +30,6 @@ it('opens trip planning from the flagship action', async () => {
   const s = render(<CreateMenuScreen navigation={navigation} />);
   const plan = s.getByTestId('create-trip');
   fireEvent.press(plan);
-  await waitFor(() => expect(navigation.navigate).toHaveBeenCalledWith('TripPlanner'));
+  await waitFor(() => expect(navigation.navigate).toHaveBeenCalledWith('MyTrips'));
   expect(s.getByText('חדש')).toBeTruthy();
 });

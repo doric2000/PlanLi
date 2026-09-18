@@ -820,7 +820,7 @@ export default function HomePlanningHubScreen({ navigation }) {
       isGuest={isGuest}
       favoriteCities={favoriteCities}
       onCreateRoute={openRouteBuilder}
-      onCreateTrip={() => navigation.navigate('TripPlanner')}
+      onCreateTrip={() => navigation.navigate('MyTrips')}
       onOpenProfile={() => navigation.navigate(isGuest ? 'Auth' : 'Profile')}
       onOpenFavorites={openFavorites}
       onOpenCommunity={() => navigation.navigate('Community')}

@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { TouchableOpacity, View } from 'react-native';
 import AppText from '../../../components/AppText';
 import { tripPlannerStyles as styles } from '../../../styles';
 import { coordinatesForStop } from '../utils/tripPlannerModel';
 
-export default function TripPlannerMap({ stops = [], selectedStopId, onSelectStop, style }) {
+export default function TripPlannerMap({ stops = [], selectedStopId, onSelectStop, onReady, style }) {
+  useEffect(() => { onReady?.(); }, []);
   const points = stops.map((stop) => ({ stop, point: coordinatesForStop(stop) })).filter((item) => item.point);
   const lats = points.map(({ point }) => point.latitude);
   const lngs = points.map(({ point }) => point.longitude);

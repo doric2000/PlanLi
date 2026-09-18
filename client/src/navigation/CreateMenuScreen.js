@@ -8,7 +8,7 @@ import { CAPABILITIES } from '../constants/authPolicy';
 import { mainNavigationStyles as styles, navigationPalette as c } from '../styles/mainNavigationStyles';
 
 const ACTIONS = [
-  { id: 'trip', title: 'תכנון טיול', description: 'שלבו המלצות ועצירות משלכם · נשמר פרטי', icon: 'location-outline', screen: 'TripPlanner' },
+  { id: 'trip', title: 'תכנון טיול', description: 'המשיכו טיול קיים או התחילו חדש', icon: 'location-outline', screen: 'MyTrips' },
   { id: 'recommendation', title: 'פרסום המלצה', description: 'מקום שאהבת ושווה להכיר', icon: 'people-outline', screen: 'AddRecommendation' },
   { id: 'route', title: 'פרסום מסלול', description: 'מסלול שהקהילה תוכל לגלות', icon: 'map-outline', screen: 'AddRoutesScreen' },
 ];

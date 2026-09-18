@@ -36,6 +36,8 @@ export const tripErrorMessage = (error, fallback = 'לא הצלחנו לעדכן
   if (reason === 'DAY_LIMIT_REACHED') return 'אפשר לתכנן עד 14 ימים בכל טיול.';
   if (reason === 'TRIP_LIMIT_REACHED') return 'אפשר לשמור עד 50 טיולים פעילים. מחקו טיול ישן ונסו שוב.';
   if (reason === 'RECOMMENDATION_UNAVAILABLE') return 'אחת ההמלצות שבחרתם כבר אינה זמינה.';
+  if (reason === 'RECOMMENDATION_LOCATION_UNAVAILABLE') return 'לאחת ההמלצות אין מיקום מתאים למסלול. הסירו אותה מהבחירה ונסו שוב.';
+  if (reason === 'INVALID_STOP_ORDER') return 'סדר העצירות השתנה. טענו את הטיול מחדש ונסו שוב.';
   if (reason === 'ROUTES_API_NOT_AVAILABLE' || reason === 'ROUTES_UNAVAILABLE') {
     return 'המסלול החי אינו זמין כרגע. העצירות נשמרו ויוצגו בקו מקווקו.';
   }
@@ -117,11 +119,14 @@ export async function queueTripOperations({ tripId, expectedRevision, operations
   let queue = [];
   try {
     queue = stored ? JSON.parse(stored) : [];
+    if (!Array.isArray(queue)) throw new Error('Invalid trip operation queue');
   } catch {
-    queue = [];
+    throw new Error('Stored trip operations could not be read safely.');
   }
+  const existing = queue.find((entry) => entry.id === id);
+  if (existing) return existing;
   const entry = { id, tripId, expectedRevision, operations, queuedAt: Date.now() };
-  await AsyncStorage.setItem(key, JSON.stringify([...queue, entry].slice(-50)));
+  await AsyncStorage.setItem(key, JSON.stringify([...queue, entry]));
   return entry;
 }
 
@@ -132,30 +137,59 @@ export async function flushTripOperationQueue(tripId) {
   let queue;
   try {
     queue = JSON.parse(stored);
+    if (!Array.isArray(queue)) throw new Error('Invalid trip operation queue');
   } catch {
-    await AsyncStorage.removeItem(key);
-    return { applied: 0, remaining: 0 };
+    return { applied: 0, remaining: 1, conflict: true };
   }
   let applied = 0;
+  let revision = null;
+  let conflict = false;
   const remaining = [];
   for (let index = 0; index < queue.length; index += 1) {
     const entry = queue[index];
     try {
-      await applyPrivateTripOperations({
+      const result = await applyPrivateTripOperations({
         tripId: entry.tripId,
-        expectedRevision: entry.expectedRevision,
+        expectedRevision: revision ?? entry.expectedRevision,
         operations: entry.operations,
         id: entry.id,
       });
+      revision = result.revision;
       applied += 1;
     } catch (error) {
+      if (tripErrorReason(error) === 'REVISION_CONFLICT') {
+        try {
+          const latest = await getPrivateTrip(tripId, { cache: false });
+          const result = await applyPrivateTripOperations({
+            tripId: entry.tripId,
+            expectedRevision: latest.revision,
+            operations: entry.operations,
+            id: entry.id,
+          });
+          revision = result.revision;
+          applied += 1;
+          continue;
+        } catch (retryError) {
+          conflict = !isOfflineTripError(retryError);
+        }
+      }
+      if (!isOfflineTripError(error)) conflict = true;
       remaining.push(...queue.slice(index));
       break;
     }
   }
   if (remaining.length) await AsyncStorage.setItem(key, JSON.stringify(remaining));
   else await AsyncStorage.removeItem(key);
-  return { applied, remaining: remaining.length };
+  return { applied, remaining: remaining.length, ...(conflict ? { conflict: true } : {}) };
+}
+
+export async function hasQueuedTripOperations(tripId) {
+  const stored = await AsyncStorage.getItem(`${QUEUE_PREFIX}${tripId}`);
+  if (!stored) return false;
+  try {
+    const entries = JSON.parse(stored);
+    return !Array.isArray(entries) || entries.length > 0;
+  } catch { return true; }
 }
 
 export { operationId };

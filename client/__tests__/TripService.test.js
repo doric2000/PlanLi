@@ -52,12 +52,37 @@ test('planner mutations include a stable operation id and expected revision', as
   });
 });
 
-test('offline operations persist locally and flush without shifting their recorded revisions', async () => {
+test('offline operations persist locally and flush with the confirmed revision of the prior write', async () => {
   await service.queueTripOperations({ tripId: 'trip-1', expectedRevision: 4, operations: [{ type: 'set_title', title: 'אופליין' }], id: 'offline-one' });
+  expect(await service.hasQueuedTripOperations('trip-1')).toBe(true);
   await service.queueTripOperations({ tripId: 'trip-1', expectedRevision: 5, operations: [{ type: 'set_title', title: 'מחובר' }], id: 'offline-two' });
-  mockCallable.mockResolvedValue({ data: { revision: 6 } });
+  mockCallable.mockImplementation((_name, data) => Promise.resolve({ data: { revision: data.expectedRevision + 1 } }));
   await expect(service.flushTripOperationQueue('trip-1')).resolves.toEqual({ applied: 2, remaining: 0 });
+  expect(await service.hasQueuedTripOperations('trip-1')).toBe(false);
   expect(mockCallable.mock.calls.map(([, data]) => data.expectedRevision)).toEqual([4, 5]);
+});
+
+test('offline replay rebases a pending idempotent operation after a remote revision change', async () => {
+  await service.queueTripOperations({ tripId: 'trip-1', expectedRevision: 4, operations: [{ type: 'set_title', title: 'אופליין' }], id: 'offline-one' });
+  mockCallable.mockImplementation((name, data) => {
+    if (name === 'getPrivateTrip') return Promise.resolve({ data: { id: 'trip-1', revision: 8 } });
+    if (data.expectedRevision === 4) return Promise.reject({ details: { reason: 'REVISION_CONFLICT' } });
+    return Promise.resolve({ data: { revision: 9 } });
+  });
+  await expect(service.flushTripOperationQueue('trip-1')).resolves.toEqual({ applied: 1, remaining: 0 });
+  expect(mockCallable.mock.calls.filter(([name]) => name === 'applyPrivateTripOperations').map(([, data]) => [data.expectedRevision, data.operationId])).toEqual([[4, 'offline-one'], [8, 'offline-one']]);
+});
+
+test('queued operations are idempotent locally and malformed storage is never silently cleared', async () => {
+  const input = { tripId: 'trip-1', expectedRevision: 4, operations: [{ type: 'set_title', title: 'אופליין' }], id: 'same-id' };
+  await service.queueTripOperations(input);
+  await service.queueTripOperations(input);
+  expect(JSON.parse(mockStorage.get('planli:trip-planner:queue:trip-1'))).toHaveLength(1);
+  mockStorage.set('planli:trip-planner:queue:trip-1', 'not-json');
+  expect(await service.hasQueuedTripOperations('trip-1')).toBe(true);
+  await expect(service.flushTripOperationQueue('trip-1')).resolves.toEqual({ applied: 0, remaining: 1, conflict: true });
+  expect(mockStorage.get('planli:trip-planner:queue:trip-1')).toBe('not-json');
+  await expect(service.queueTripOperations(input)).rejects.toThrow('Stored trip operations');
 });
 
 test('route availability errors explain that the plan itself is preserved', () => {
