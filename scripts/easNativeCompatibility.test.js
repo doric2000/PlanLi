@@ -11,6 +11,21 @@ const build = { id: 'installed-build', app: { id: 'project' }, platform: 'IOS', 
   runtime: { version: '1.3.0' }, updateChannel: { name: 'production' }, fingerprint: { hash: baseline.fingerprint } };
 const check = (hash, content = 'optional import\n') => validateFingerprint({ hash, baseline, sourceRoot: '/source', readFile: () => Buffer.from(content) });
 
+test('Android baseline binds version, build, profile, source and native fingerprint', () => {
+  const android = { ...baseline, platform: 'android', appVersion: '1.1.0', sourceCommit: 'c'.repeat(40) };
+  const androidBuild = { ...build, platform: 'ANDROID', appVersion: '1.1.0', buildProfile: 'production', distribution: 'STORE', message: 'Verified source ' + android.sourceCommit };
+  assert.doesNotThrow(() => validateBuild(androidBuild, android));
+  for (const override of [{ platform: 'IOS' }, { appVersion: '1.0.0' }, { message: 'unknown source' }, { distribution: 'INTERNAL' }]) {
+    assert.throws(() => validateBuild({ ...androidBuild, ...override }, android), /baseline does not match/);
+  }
+  const commands = [];
+  verifyLocalNative({ baseline: android, sourceRoot: '/source', runEas(args) {
+    commands.push(args);
+    return JSON.stringify(args[0] === 'build:view' ? androidBuild : { hash: android.fingerprint });
+  } });
+  assert.equal(commands[1][commands[1].indexOf('--platform') + 1], 'android');
+});
+
 test('CLI environment preamble is separated from complete JSON without exposing it on errors', () => {
   assert.deepEqual(parseEasJson('Environment variables loaded\n{\n  "hash": "abc"\n}\n'), { hash: 'abc' });
   assert.deepEqual(parseEasJson('[{"id":"build"}]'), [{ id: 'build' }]);
