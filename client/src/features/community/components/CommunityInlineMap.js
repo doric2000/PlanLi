@@ -9,7 +9,7 @@ import {
   DEFAULT_MAP_ZOOM,
   USER_MAP_ZOOM,
 } from '../../../config/mapConfig';
-import { community } from '../../../styles';
+import { colors, community } from '../../../styles';
 import RecommendationMapPreviewCard from './RecommendationMapPreviewCard';
 import { normalizeRecommendationMapItems } from '../utils/recommendationMap';
 
@@ -17,6 +17,11 @@ const TERMINAL_LOCATION_STATUSES = new Set(['denied', 'timeout', 'error']);
 const MAX_NATIVE_MARKERS = 500;
 const FOCUSED_RECOMMENDATION_ZOOM = 16;
 const MAP_LOAD_TIMEOUT_MS = 10000;
+// Hide provider place labels, retaining roads, locality names and park geometry.
+const RECOMMENDATION_MAP_STYLE = [
+  { featureType: 'poi', elementType: 'labels', stylers: [{ visibility: 'off' }] },
+  { featureType: 'transit', elementType: 'labels', stylers: [{ visibility: 'off' }] },
+];
 const noLocationAction = async () => null;
 const noLocationCleanup = () => {};
 
@@ -67,7 +72,7 @@ const RecommendationMarker = memo(function RecommendationMarker({
     setTracksViewChanges(true);
     const timer = setTimeout(() => setTracksViewChanges(false), 180);
     return () => clearTimeout(timer);
-  }, [iconFontReady, mapItem.visual.color, mapItem.visual.icon, selected]);
+  }, [iconFontReady, mapItem.visual.icon, selected]);
 
   return (
     <Marker
@@ -77,33 +82,37 @@ const RecommendationMarker = memo(function RecommendationMarker({
       }}
       onPress={onPress}
       stopPropagation
+      anchor={{ x: 0.5, y: 1 }}
       tracksViewChanges={tracksViewChanges}
       zIndex={selected ? 1000 : 1}
       title={mapItem.title}
       description={mapItem.visual.label}
-      accessibilityLabel={`${mapItem.title}, ${mapItem.visual.label}`}
+      accessibilityRole="button"
+      accessibilityLabel={`המלצת PlanLi, ${mapItem.title}, ${mapItem.visual.label}`}
       testID={`recommendation-map-marker-${mapItem.id}`}
     >
-      <View style={community.mapMarkerTouchTarget}>
+      <View style={community.mapMarkerTouchTarget} collapsable={false}>
         <View
+          testID={`recommendation-map-badge-${mapItem.id}`}
           style={[
             community.mapMarkerBubble,
-            { backgroundColor: mapItem.visual.color },
             selected && community.mapMarkerBubbleSelected,
           ]}
         >
+          <AppText weight="semiBold" style={community.mapMarkerBrand} allowFontScaling={false}>
+            PlanLi
+          </AppText>
           {iconFontReady && (
             <MaterialIcons
               name={mapItem.visual.icon}
-              size={selected ? 23 : 19}
-              color="#FFFFFF"
+              size={16}
+              color={colors.white}
             />
           )}
         </View>
         <View
           style={[
             community.mapMarkerTail,
-            { borderTopColor: mapItem.visual.color },
             selected && community.mapMarkerTailSelected,
           ]}
         />
@@ -322,6 +331,8 @@ export default function CommunityInlineMap({
         initialRegion={initialRegionRef.current}
         provider={PROVIDER_GOOGLE}
         mapType="standard"
+        customMapStyle={RECOMMENDATION_MAP_STYLE}
+        poiClickEnabled={false}
         showsUserLocation
         showsMyLocationButton={false}
         onMapReady={handleMapReady}
