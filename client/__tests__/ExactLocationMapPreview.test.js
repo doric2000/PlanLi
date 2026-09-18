@@ -1,11 +1,13 @@
 import React from 'react';
-import { Platform } from 'react-native';
+import { Modal, Platform } from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { act, fireEvent, render } from '@testing-library/react-native';
 
 import ExactLocationMapPreview from '../src/components/ExactLocationMapPreview';
 
 const mockAnimateToRegion = jest.fn();
 jest.mock('react-native-safe-area-context', () => ({
+  SafeAreaProvider: ({ children }) => children,
   SafeAreaView: require('react-native').View,
 }));
 
@@ -136,6 +138,20 @@ describe('ExactLocationMapPreview platform modes', () => {
     fireEvent.press(screen.getByTestId('exact-location-map-preview-expanded-retry'));
     expect(screen.queryByTestId('exact-location-map-preview-expanded-error')).toBeNull();
     fireEvent.press(screen.getByTestId('exact-location-map-preview-close'));
+    expect(screen.getByTestId('exact-location-map-preview').props.region.latitude).toBe(place.coordinates.lat);
+  });
+
+  it('keeps the safe area inside the native modal and closes while loading or through Android back', () => {
+    const screen = render(<ExactLocationMapPreview place={place} />);
+    fireEvent.press(screen.getByTestId('exact-location-map-preview-expand'));
+    const modal = screen.UNSAFE_getByType(Modal);
+    expect(modal.findByType(SafeAreaProvider).findByType(SafeAreaView)).toBeTruthy();
+    expect(screen.getByTestId('exact-location-map-preview-expanded-skeleton')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('exact-location-map-preview-close'));
+    expect(screen.queryByTestId('exact-location-map-preview-expanded')).toBeNull();
+    fireEvent.press(screen.getByTestId('exact-location-map-preview-expand'));
+    fireEvent(screen.UNSAFE_getByType(Modal), 'requestClose');
+    expect(screen.queryByTestId('exact-location-map-preview-expanded')).toBeNull();
     expect(screen.getByTestId('exact-location-map-preview').props.region.latitude).toBe(place.coordinates.lat);
   });
 

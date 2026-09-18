@@ -4187,6 +4187,7 @@ export const routeDetailScreenStyles = StyleSheet.create({
 // components/MediaGalleryModal.js
 export const mediaGalleryModalStyles = StyleSheet.create({
 	screen: { flex: 1, backgroundColor: '#070B12' },
+	viewport: { flex: 1, overflow: 'hidden' },
 	header: {
 		height: 62, paddingHorizontal: 16, flexDirection: 'row-reverse', alignItems: 'center',
 		justifyContent: 'space-between', zIndex: 5,

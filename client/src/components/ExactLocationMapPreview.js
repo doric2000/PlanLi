@@ -8,7 +8,7 @@ import {
   View,
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import AppText from './AppText';
 import { colors, exactLocationPickerStyles as styles } from '../styles';
@@ -145,17 +145,19 @@ export default function ExactLocationMapPreview({ place, style, testID = 'exact-
       </TouchableOpacity>
       {expanded ? (
         <Modal visible animationType="slide" presentationStyle="fullScreen" onRequestClose={() => setExpanded(false)}>
-          <SafeAreaView style={styles.mapExpandedScreen}>
-            <View style={styles.mapExpandedHeader}>
-              <TouchableOpacity style={styles.mapControlButton} onPress={() => setExpanded(false)}
-                accessibilityRole="button" testID={`${testID}-close`}>
-                <AppText style={styles.mapFailureRetryText}>{copy.mapClose}</AppText>
-              </TouchableOpacity>
-              <AppText style={styles.mapExpandedTitle} numberOfLines={2}>{place?.name || copy.mapPreview}</AppText>
-            </View>
-            <AppText style={styles.mapHelp}>{copy.mapInteract}</AppText>
-            <LocationMap place={place} testID={`${testID}-expanded`} locale={locale} interactive />
-          </SafeAreaView>
+          <SafeAreaProvider>
+            <SafeAreaView style={styles.mapExpandedScreen}>
+              <View style={styles.mapExpandedHeader}>
+                <TouchableOpacity style={styles.mapControlButton} onPress={() => setExpanded(false)}
+                  accessibilityRole="button" testID={`${testID}-close`}>
+                  <AppText style={styles.mapFailureRetryText}>{copy.mapClose}</AppText>
+                </TouchableOpacity>
+                <AppText style={styles.mapExpandedTitle} numberOfLines={2}>{place?.name || copy.mapPreview}</AppText>
+              </View>
+              <AppText style={styles.mapHelp}>{copy.mapInteract}</AppText>
+              <LocationMap place={place} testID={`${testID}-expanded`} locale={locale} interactive />
+            </SafeAreaView>
+          </SafeAreaProvider>
         </Modal>
       ) : null}
     </View>
