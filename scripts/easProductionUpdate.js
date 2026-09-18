@@ -6,7 +6,7 @@ const {
 } = require('./easProductionPreflight');
 const { verifyProductionUpdateArtifact } = require('./easUpdateArtifact');
 const { prepareSource, createEasRunner } = require('./easReleaseSource');
-const { readBaseline, verifyPreviewNative } = require('./easNativeCompatibility');
+const { releasePlatform, readBaseline, verifyPreviewNative } = require('./easNativeCompatibility');
 
 const EXPECTED_ACCOUNT = 'doric2000';
 const EXPECTED_OWNER = 'doric2000';
@@ -36,6 +36,8 @@ function parseArgs(argv) {
     const value = argv[index];
     if (value === '--apply') {
       args.apply = true;
+    } else if (value === '--platform') {
+      args.platform = releasePlatform(argv[++index] || '');
     } else if (value === '--confirm') {
       args.confirmation = String(argv[index + 1] || '').trim();
       index += 1;
@@ -107,7 +109,8 @@ function readReleaseConfiguration(repoRoot) {
   };
 }
 
-function validateReleaseConfiguration({ app, eas }) {
+function validateReleaseConfiguration({ app, eas }, platform = 'ios') {
+  releasePlatform(platform);
   if (app.owner !== EXPECTED_OWNER) fail(`Expo owner must remain ${EXPECTED_OWNER}.`);
   if (app.extra?.eas?.projectId !== EXPECTED_PROJECT_ID) {
     fail(`EAS project must remain ${EXPECTED_PROJECT_ID}.`);
@@ -115,8 +118,9 @@ function validateReleaseConfiguration({ app, eas }) {
   if (app.updates?.url !== `https://u.expo.dev/${EXPECTED_PROJECT_ID}`) {
     fail('The EAS Update URL does not match the reviewed project.');
   }
-  if ((app.ios?.version || app.version) !== EXPECTED_MARKETING_VERSION || app.runtimeVersion !== EXPECTED_RUNTIME) {
-    fail(`The iOS release must use marketing version ${EXPECTED_MARKETING_VERSION} and runtime ${EXPECTED_RUNTIME}.`);
+  const expectedVersion = platform === 'ios' ? EXPECTED_MARKETING_VERSION : '1.1.0';
+  if ((app[platform]?.version || app.version) !== expectedVersion || (app[platform]?.runtimeVersion || app.runtimeVersion) !== EXPECTED_RUNTIME) {
+    fail(`The ${platform} release must use marketing version ${expectedVersion} and runtime ${EXPECTED_RUNTIME}.`);
   }
   const production = eas.build?.production || {};
   if (production.channel !== EXPECTED_CHANNEL || production.environment !== EXPECTED_ENVIRONMENT) {
@@ -144,9 +148,10 @@ function updateRuntime(update) {
   return String(update?.runtime?.version || update?.runtimeVersion || '').trim();
 }
 
-function validatePreviewUpdates({ value, groupId, head }) {
+function validatePreviewUpdates({ value, groupId, head, platform = 'ios' }) {
+  releasePlatform(platform);
   const updates = normalizeUpdates(value);
-  if (!updates.length) fail(`Preview group ${groupId} contains no updates.`);
+  if (updates.length !== 1 || updates[0].platform !== platform) fail(`Preview group ${groupId} must contain exactly one ${platform} update.`);
   const commits = new Set(updates.map((update) => String(update?.gitCommitHash || '').trim()));
   const branches = new Set(updates.map(updateBranch));
   const runtimes = new Set(updates.map(updateRuntime));
@@ -195,15 +200,17 @@ function extractReleaseMetadata(value, fallback = {}) {
 function formatReleaseRecord(metadata, message, artifact) {
   return [
     '',
-    '## iOS production OTA release',
+    `## ${metadata.platform === 'android' ? 'Android' : 'iOS'} production OTA release`,
     '',
     `- Source commit: \`${metadata.commit}\`.`,
     `- EAS Update group: \`${metadata.groupId}\`; channel \`${metadata.channel}\`; runtime \`${metadata.runtime}\`.`,
     `- EAS environment: \`${metadata.environment}\`; published at \`${metadata.createdAt}\`.`,
-    `- Immutable iOS launch bundle: update \`${artifact.updateId}\`; ${artifact.bytes} bytes; SHA-256 \`${artifact.sha256}\`.`,
+    `- Immutable ${metadata.platform === 'android' ? 'Android' : 'iOS'} launch bundle: update \`${artifact.updateId}\`; ${artifact.bytes} bytes; SHA-256 \`${artifact.sha256}\`.`,
     `- Message: ${message}`,
     '- Device application and post-update security smoke tests: pending.',
-    '- Rollback: republish the immediately preceding verified production group; never change the runtime URL or channel in-app.',
+    metadata.previousGroupId?.startsWith('embedded-build:')
+      ? `- Rollback: no previous ${metadata.platform} OTA; an authorized rollback must target the embedded build for runtime ${metadata.runtime}.`
+      : '- Rollback: republish the immediately preceding verified production group; never change the runtime URL or channel in-app.',
     '',
   ].join('\n');
 }
@@ -214,12 +221,13 @@ function appendReleaseRecord(readmePath, metadata, message, artifact) {
   fs.appendFileSync(readmePath, formatReleaseRecord(metadata, message, artifact), 'utf8');
 }
 
-function buildRepublishCommand({ previewGroup, message }) {
+function buildRepublishCommand({ previewGroup, message, platform = 'ios' }) {
+  releasePlatform(platform);
   return [
     'update:republish',
     '--group', previewGroup,
     '--destination-channel', EXPECTED_CHANNEL,
-    '--platform', 'ios',
+    '--platform', platform,
     '--message', message,
     '--non-interactive',
   ];
@@ -236,35 +244,37 @@ function parseRepublishedGroupId(output) {
 async function runRelease({ repoRoot, args }, dependencies = {}) {
   validateMessage(args.message);
   validatePreviewGroupId(args.previewGroup);
-  validateReleaseConfiguration(readReleaseConfiguration(repoRoot));
-  const preflight = (dependencies.runPreflight || runPreflight)({ repoRoot, deployedCommit: args.deployedCommit, archive: true });
+  const platform = releasePlatform(args.platform);
+  const baseline = readBaseline(repoRoot, platform);
+  validateReleaseConfiguration(readReleaseConfiguration(repoRoot), platform);
+  const preflight = (dependencies.runPreflight || runPreflight)({ repoRoot, deployedCommit: args.deployedCommit, archive: true, platform, baseline });
   validateConfirmation({ ...args, head: preflight.head });
 
-  const baseline = readBaseline(repoRoot);
   const source = (dependencies.prepareSource || prepareSource)({ repoRoot, baseline });
   const runEas = (dependencies.createEasRunner || createEasRunner)(source);
   validateEasVersion(runEas(['--version']));
   validateEasIdentity(runEas(['whoami']));
   const preview = JSON.parse(runEas(['update:view', args.previewGroup, '--json']));
-  validatePreviewUpdates({ value: preview, groupId: args.previewGroup, head: preflight.head });
+  validatePreviewUpdates({ value: preview, groupId: args.previewGroup, head: preflight.head, platform });
   const native = (dependencies.verifyPreviewNative || verifyPreviewNative)({ runEas, baseline, sourceRoot: source.sourceRoot, update: normalizeUpdates(preview)[0] });
   const verifyArtifact = dependencies.verifyArtifact || verifyProductionUpdateArtifact;
-  const previewArtifact = await verifyArtifact(preview, args.previewGroup);
+  const previewArtifact = await verifyArtifact(preview, args.previewGroup, undefined, platform);
 
   const command = buildRepublishCommand({
     previewGroup: args.previewGroup,
+    platform,
     message: args.message,
   });
   if (!args.apply) {
     return { apply: false, command, preflight, native, previewArtifact, previewGroup: args.previewGroup };
   }
 
-  const latest = (dependencies.runPreflight || runPreflight)({ repoRoot, archive: true });
+  const latest = (dependencies.runPreflight || runPreflight)({ repoRoot, archive: true, platform, baseline });
   if (latest.head !== preflight.head || latest.deployedCommit !== preflight.deployedCommit) fail('Production or source changed during verification.');
   const productionGroup = parseRepublishedGroupId(runEas(command));
   const published = JSON.parse(runEas(['update:view', productionGroup, '--json']));
-  const metadata = extractReleaseMetadata(published, { head: preflight.head });
-  const productionArtifact = await verifyArtifact(published, metadata.groupId);
+  const metadata = { ...extractReleaseMetadata(published, { head: preflight.head }), platform, previousGroupId: preflight.groupId };
+  const productionArtifact = await verifyArtifact(published, metadata.groupId, undefined, platform);
   if (productionArtifact.sha256 !== previewArtifact.sha256) {
     fail('Production republish changed the verified preview launch bundle.');
   }

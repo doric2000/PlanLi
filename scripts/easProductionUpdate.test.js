@@ -25,6 +25,33 @@ const head = 'a'.repeat(40);
 const previewGroup = '11111111-2222-4333-8444-555555555555';
 const productionGroup = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
 
+test('Android promotion rejects iOS candidates and preserves its platform through republish', async t => {
+  const f = fixture(t);
+  const args = { platform: 'android', apply: true, confirmation: `PUBLISH PRODUCTION ${f.head.slice(0, 12)}`, previewGroup: f.group, message: 'Android update' };
+  await assert.rejects(runRelease({ repoRoot: f.root, args }, f.dependencies), /exactly one android/);
+  f.updates[0].platform = 'android';
+  f.dependencies.runPreflight = () => ({ head: f.head, deployedCommit: 'c'.repeat(40), groupId: 'embedded-build:build-10' });
+  const original = f.dependencies.createEasRunner();
+  let republished = false;
+  f.dependencies.createEasRunner = () => command => {
+    if (command[0] === 'update:republish') {
+      assert.equal(command[command.indexOf('--platform') + 1], 'android');
+      republished = true;
+      return `Update group ID ${productionGroup}`;
+    }
+    if (command[0] === 'update:view' && republished) return JSON.stringify([{ ...f.updates[0], group: productionGroup, branch: 'production' }]);
+    return original(command);
+  };
+  f.dependencies.verifyArtifact = async (_updates, _group, _fetch, platform) => {
+    assert.equal(platform, 'android');
+    return { sha256: 'same-bundle', updateId: 'android-update', bytes: 1 };
+  };
+  const result = await runRelease({ repoRoot: f.root, args }, f.dependencies);
+  assert.equal(result.metadata.platform, 'android');
+  assert.match(fs.readFileSync(path.join(f.root, 'README.md'), 'utf8'), /Android production OTA release/);
+  assert.match(fs.readFileSync(path.join(f.root, 'README.md'), 'utf8'), /no previous android OTA/);
+});
+
 test('production promotion is blocked before republish on a native mismatch', async t => {
   const f = fixture(t);
   f.dependencies.verifyPreviewNative = () => { throw new Error('Unreviewed native fingerprint'); };
@@ -67,6 +94,7 @@ function configuration() {
 function update(group = previewGroup, overrides = {}) {
   return {
     branch: 'staging',
+    platform: 'ios',
     createdAt: '2026-08-28T10:00:00.000Z',
     gitCommitHash: head,
     group,

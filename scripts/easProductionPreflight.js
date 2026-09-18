@@ -1,6 +1,7 @@
 const { execFileSync, spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
+const { releasePlatform } = require('./easNativeCompatibility');
 
 function fail(message) {
   const error = new Error(message);
@@ -83,17 +84,27 @@ function resolveProductionLineage(entries, readGroup) {
   fail('No production update group with one Git commit was found behind the current rollback.');
 }
 
-function currentProductionCommit(clientRoot) {
+function currentProductionCommit(clientRoot, platform = 'ios', baseline) {
+  releasePlatform(platform);
   const branch = JSON.parse(runEas(clientRoot, [
     'update:list', '--branch', 'production', '--runtime-version', '1.3.0',
-    '--platform', 'ios', '--limit', '10', '--json', '--non-interactive',
+    '--platform', platform, '--limit', '10', '--json', '--non-interactive',
   ]));
-  return resolveProductionLineage(branch?.currentPage || [], (groupId) => (
-    JSON.parse(runEas(clientRoot, ['update:view', groupId, '--json']))
-  ));
+  return resolvePlatformLineage(branch?.currentPage, (groupId) =>
+    JSON.parse(runEas(clientRoot, ['update:view', groupId, '--json'])), platform, baseline);
 }
 
-function runPreflight({ repoRoot, deployedCommit = '', archive = false }) {
+function resolvePlatformLineage(entries, readGroup, platform = 'ios', baseline) {
+  releasePlatform(platform);
+  if (!Array.isArray(entries)) fail('EAS production list is missing its update inventory.');
+  if (platform === 'android' && entries.length === 0) {
+    if (baseline?.platform !== 'android' || !/^[a-f0-9]{40}$/.test(baseline.sourceCommit || '')) fail('First Android OTA requires the reviewed embedded build source.');
+    return { deployedCommit: baseline.sourceCommit, groupId: 'embedded-build:' + baseline.buildId };
+  }
+  return resolveProductionLineage(entries, (groupId) => readGroup(groupId).filter(update => update.platform === platform));
+}
+
+function runPreflight({ repoRoot, deployedCommit = '', archive = false, platform = 'ios', baseline }) {
   if (!archive) validateRootConfigFiles(repoRoot);
   else {
     // Archive mode excludes unrelated/untracked files instead of moving them.
@@ -113,7 +124,7 @@ function runPreflight({ repoRoot, deployedCommit = '', archive = false }) {
 
   const production = deployedCommit
     ? { deployedCommit, groupId: 'provided-by-release-workflow' }
-    : currentProductionCommit(path.join(repoRoot, 'client'));
+    : currentProductionCommit(path.join(repoRoot, 'client'), platform, baseline);
   const commitExists = spawnSync('git', ['cat-file', '-e', `${production.deployedCommit}^{commit}`], {
     cwd: repoRoot,
     stdio: 'ignore',
@@ -141,6 +152,8 @@ if (require.main === module) {
 }
 
 module.exports = {
+  resolvePlatformLineage,
+  currentProductionCommit,
   easExecutable,
   easExecOptions,
   parseArgs,

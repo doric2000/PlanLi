@@ -4,13 +4,22 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 
-function readBaseline(repoRoot) {
-  const baseline = JSON.parse(fs.readFileSync(path.join(repoRoot, 'config/eas-ios-native-baseline.json'), 'utf8'));
+function releasePlatform(platform = 'ios') {
+  if (!['ios', 'android'].includes(platform)) throw new Error('Release platform must be ios or android.');
+  return platform;
+}
+
+function readBaseline(repoRoot, platform = 'ios') {
+  releasePlatform(platform);
+  const baseline = JSON.parse(fs.readFileSync(path.join(repoRoot, `config/eas-${platform}-native-baseline.json`), 'utf8'));
   const app = JSON.parse(fs.readFileSync(path.join(repoRoot, 'client/app.json'), 'utf8')).expo;
   if (baseline.version !== 1 || baseline.projectId !== app.extra?.eas?.projectId
-    || baseline.runtime !== (app.ios?.runtimeVersion || app.runtimeVersion)
-    || baseline.iosVersion !== (app.ios?.version || app.version) || baseline.channel !== 'production') {
-    throw new Error('Native baseline does not match the configured iOS project/runtime/version.');
+    || baseline.runtime !== (app[platform]?.runtimeVersion || app.runtimeVersion)
+    || (platform === 'ios' ? baseline.iosVersion : baseline.appVersion) !== (app[platform]?.version || app.version) || baseline.channel !== 'production') {
+    throw new Error('Native baseline does not match the configured native project/runtime/version.');
+  }
+  if (platform === 'android' && (baseline.platform !== 'android' || !/^[a-f0-9]{40}$/.test(baseline.sourceCommit || ''))) {
+    throw new Error('Android baseline requires a reviewed build source commit.');
   }
   return baseline;
 }
@@ -34,12 +43,15 @@ function parseEasJson(output) {
 
 function validateBuild(build, baseline) {
   if (build.id !== baseline.buildId || build.app?.id !== baseline.projectId
-    || build.platform !== 'IOS' || build.status !== 'FINISHED'
+    || build.platform !== releasePlatform(baseline.platform).toUpperCase() || build.status !== 'FINISHED'
     || build.appBuildVersion !== baseline.buildNumber
     || build.runtime?.version !== baseline.runtime
     || build.updateChannel?.name !== baseline.channel
-    || build.fingerprint?.hash !== baseline.fingerprint) {
-    throw new Error('Installed iOS baseline does not match EAS build metadata. Review the baseline before releasing.');
+    || build.fingerprint?.hash !== baseline.fingerprint
+    || (baseline.platform === 'android' && (build.appVersion !== baseline.appVersion
+      || build.buildProfile !== 'production' || build.distribution !== 'STORE'
+      || !(build.gitCommitHash === baseline.sourceCommit || build.message?.includes(baseline.sourceCommit))))) {
+    throw new Error('Installed native baseline does not match EAS build metadata. Review the baseline before releasing.');
   }
 }
 
@@ -84,7 +96,7 @@ function verifyLocalNative({ runEas, baseline, sourceRoot }) {
   verifyBuild({ runEas, baseline });
   // CLI 22.6.0 incorrectly treats mixed --build-id/--update-id comparisons as
   // update-vs-local. Generate explicitly; never use that ambiguous command.
-  const generated = parseEasJson(runEas(['fingerprint:generate', '--platform', 'ios', '--environment', 'production', '--json', '--non-interactive']));
+  const generated = parseEasJson(runEas(['fingerprint:generate', '--platform', releasePlatform(baseline.platform), '--environment', 'production', '--json', '--non-interactive']));
   return validateFingerprint({ hash: generated.hash, baseline, sourceRoot });
 }
 
@@ -96,5 +108,5 @@ function verifyPreviewNative({ runEas, baseline, sourceRoot, update }) {
   return validateFingerprint({ hash: metadata.fingerprint.hash, baseline, sourceRoot });
 }
 
-module.exports = { readBaseline, normalizedHash, parseEasJson, validateBuild, validateFingerprint,
+module.exports = { releasePlatform, readBaseline, normalizedHash, parseEasJson, validateBuild, validateFingerprint,
   previewNativeMetadata, verifyBuild, verifyLocalNative, verifyPreviewNative };

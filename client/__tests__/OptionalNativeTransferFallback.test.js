@@ -13,11 +13,13 @@ jest.mock('../src/features/community/publishing/recommendationPublishStorage', (
 jest.mock('../src/features/operations/operationService', () => ({ operationStore: {} }));
 jest.mock('../src/features/operations/operationModel', () => ({ safeOperationError: (error) => error }));
 
+import { Platform } from 'react-native';
 import nativeTransfers from '../modules/planli-transfers';
 import { requireOptionalNativeModule } from 'expo-modules-core';
 import { backgroundTransfersAvailable } from '../src/features/operations/BackgroundMediaService';
 
-test('an installed binary without PlanLiTransfers stays on the foreground fallback', () => {
+test.each(['ios', 'android'])('an installed %s binary without PlanLiTransfers stays on the foreground fallback', (platform) => {
+  Platform.OS = platform;
   expect(requireOptionalNativeModule).toHaveBeenCalledWith('PlanLiTransfers');
   expect(nativeTransfers).toBeNull();
   expect(backgroundTransfersAvailable()).toBe(false);

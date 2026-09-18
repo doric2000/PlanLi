@@ -1,4 +1,41 @@
-# iOS OTA native compatibility
+# OTA native compatibility
+
+## Android OTA compatibility
+
+Android releases use the same guarded commands with explicit `--platform android`;
+the default remains iOS. The Android baseline is Google Play internal-test build
+`b0648036-61d6-4af6-b659-442a22b603dc`, version `1.1.0 (10)`, runtime `1.3.0`,
+channel `production`, native fingerprint `ffa38603c423e70296ac74e695750ff8d59701db`.
+EAS build metadata and its message bind the archived source to
+`890d70110de37ad1814b79c7c1b2106e42b74a54`. Before the first Android OTA, the live
+production inventory for Android runtime 1.3.0 was empty. Only an empty inventory
+allows the guard to use this reviewed embedded source for ancestry; later releases
+must contain the latest Android OTA source. iOS releases cannot take this fallback.
+
+For source `dfb83069703ea3459b57c1dd4a1fc015df3097f3`, production-environment
+fingerprinting produced `acae1d5dac2ec822e7b09bcb8ebdac44dfe66220`. Comparing both
+explicit hashes through EAS found exactly three changed top-level inputs:
+`modules/planli-transfers/android`, its addition to `expoAutolinkingConfig:android`,
+and `expoConfig`, whose only change was the iOS-only marketing version `1.1.1`.
+No other dependency, Android permission, native configuration or source changed.
+
+The Android optional-module review binds the same foreground-fallback source
+hashes as iOS. The real optional bridge and availability service are tested for
+both platforms with the native module absent. Build 10 cannot enable native
+background transfers; the foreground queues remain in use. This is a reviewed
+optional delta, not an exact native match or proof of physical-device behavior.
+Unknown fingerprints or changed fallback source still stop publication.
+
+```powershell
+npm run release:eas-candidate -- --platform android --apply --message '<summary>'
+npm run release:eas-production -- --platform android --preview-group '<candidate-group>' --message '<summary>'
+npm run release:eas-production -- --platform android --preview-group '<candidate-group>' --message '<summary>' --apply --confirm 'PUBLISH PRODUCTION <12-char-HEAD>'
+```
+
+Candidate export, immutable manifest download and production republish are scoped
+to Android. No iOS update is republished. The first Android OTA has no previous
+OTA group; an authorized rollback must target the embedded build for Android
+runtime 1.3.0. Subsequent rollbacks use the preceding verified Android group.
 
 ## Findings from the repeated warnings
 

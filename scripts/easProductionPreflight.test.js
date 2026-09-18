@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const {
+  resolvePlatformLineage,
   easExecutable,
   easExecOptions,
   parseArgs,
@@ -10,6 +11,21 @@ const {
   validateRepositoryState,
   validateRootConfigFiles,
 } = require('./easProductionPreflight');
+
+test('first Android OTA uses a reviewed embedded source only for an empty inventory', () => {
+  const baseline = { platform: 'android', sourceCommit: 'a'.repeat(40), buildId: 'build-10' };
+  assert.deepEqual(resolvePlatformLineage([], () => [], 'android', baseline), {
+    deployedCommit: baseline.sourceCommit, groupId: 'embedded-build:build-10',
+  });
+  assert.throws(() => resolvePlatformLineage(undefined, () => [], 'android', baseline), /inventory/);
+  assert.throws(() => resolvePlatformLineage([], () => [], 'android'), /reviewed embedded/);
+  assert.throws(() => resolvePlatformLineage([], () => [], 'ios', baseline), /No production update/);
+  assert.deepEqual(resolvePlatformLineage([{ group: 'ota' }], () => [
+    { platform: 'ios', gitCommitHash: 'b'.repeat(40) },
+    { platform: 'android', gitCommitHash: 'c'.repeat(40) },
+  ], 'android', baseline), { deployedCommit: 'c'.repeat(40), groupId: 'ota' });
+  assert.throws(() => resolvePlatformLineage([{ group: 'bad' }], () => [], 'android', baseline), /No production update/);
+});
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');

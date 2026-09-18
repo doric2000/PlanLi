@@ -9,7 +9,7 @@ function fixture(t) {
     if (!resolved.startsWith(fs.realpathSync(os.tmpdir()) + path.sep) || !path.basename(resolved).startsWith('planli-eas-test-')) throw new Error('Unsafe test cleanup path');
     fs.rmSync(resolved, { recursive: true, force: true });
   });
-  for (const file of ['client/app.json', 'client/eas.json', 'config/eas-ios-native-baseline.json']) {
+  for (const file of ['client/app.json', 'client/eas.json', 'config/eas-ios-native-baseline.json', 'config/eas-android-native-baseline.json']) {
     fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
     fs.copyFileSync(path.join(__dirname, '../..', file), path.join(root, file));
   }
@@ -35,6 +35,6 @@ function fixture(t) {
       throw new Error(`Unexpected command: ${args[0]}`);
     },
   };
-  return { root, head, group, calls, dependencies };
+  return { root, head, group, calls, dependencies, updates };
 }
 module.exports = { fixture };

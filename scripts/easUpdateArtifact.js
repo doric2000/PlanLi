@@ -1,4 +1,5 @@
 const crypto = require('node:crypto');
+const { releasePlatform } = require('./easNativeCompatibility');
 
 const EXPECTED_RUNTIME = '1.3.0';
 const REQUIRED_PRODUCTION_MARKERS = [
@@ -61,14 +62,15 @@ function validateProductionBundle(bundle) {
   };
 }
 
-function validateCandidateUpdates(value, groupId) {
+function validateCandidateUpdates(value, groupId, platform = 'ios') {
+  releasePlatform(platform);
   const updates = Array.isArray(value) ? value : value?.updates;
   if (!Array.isArray(updates) || updates.length !== 1) {
-    fail(`Candidate group ${groupId} must contain exactly one iOS update.`);
+    fail(`Candidate group ${groupId} must contain exactly one ${platform} update.`);
   }
   const [update] = updates;
-  if (update.platform !== 'ios' || update.group !== groupId) {
-    fail(`Candidate group ${groupId} does not identify one matching iOS artifact.`);
+  if (update.platform !== platform || update.group !== groupId) {
+    fail(`Candidate group ${groupId} does not identify one matching ${platform} artifact.`);
   }
   if (update.runtimeVersion !== EXPECTED_RUNTIME || update.isRollBackToEmbedded === true) {
     fail(`Candidate group ${groupId} must be a normal runtime ${EXPECTED_RUNTIME} update.`);
@@ -79,12 +81,12 @@ function validateCandidateUpdates(value, groupId) {
   return update;
 }
 
-async function verifyProductionUpdateArtifact(value, groupId, fetchImpl = globalThis.fetch) {
-  const update = validateCandidateUpdates(value, groupId);
+async function verifyProductionUpdateArtifact(value, groupId, fetchImpl = globalThis.fetch, platform = 'ios') {
+  const update = validateCandidateUpdates(value, groupId, platform);
   const manifestResponse = await fetchImpl(update.manifestPermalink, {
     headers: {
       accept: 'multipart/mixed',
-      'expo-platform': 'ios',
+      'expo-platform': platform,
       'expo-protocol-version': '1',
       'expo-runtime-version': EXPECTED_RUNTIME,
     },
