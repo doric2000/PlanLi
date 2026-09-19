@@ -5172,3 +5172,13 @@ part of this follow-up.
 - Message: Fix trip planner map and place search stability
 - Device application and post-update security smoke tests: pending.
 - Rollback: republish the immediately preceding verified production group; never change the runtime URL or channel in-app.
+
+## Android production OTA release
+
+- Source commit: `015c085115ef10fda71727c02e3b7b3cdbda30c4`.
+- EAS Update group: `55ec4021-f017-4d00-9470-f65c301f7d16`; channel `production`; runtime `1.3.0`.
+- EAS environment: `production`; published at `2026-09-19T11:44:09.875Z`.
+- Immutable Android launch bundle: update `01a0b97b-2293-758b-8043-2f8f4612cc24`; 10888088 bytes; SHA-256 `59D5A2AD33A00DB22CF8A15291E2587EFA9880B7A42A87065BB198D7D5F6EFCC`.
+- Message: Fix trip planner map and place search stability
+- Device application and post-update security smoke tests: pending.
+- Rollback: republish the immediately preceding verified production group; never change the runtime URL or channel in-app.
