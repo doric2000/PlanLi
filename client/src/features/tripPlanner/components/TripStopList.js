@@ -65,5 +65,5 @@ export default function TripStopList({ stops, selectedStopId, readOnly = false, 
   );
   const common = { data: stops, renderItem: render, keyExtractor: (item) => item.id, contentContainerStyle: styles.listContent, style: styles.list, testID: 'trip-stops-list' };
   if (readOnly) return <FlatList {...common} />;
-  return <DraggableFlatList {...common} onDragEnd={({ data }) => onReorder?.(data)} activationDistance={8} />;
+  return <DraggableFlatList {...common} containerStyle={styles.list} onDragEnd={({ data }) => onReorder?.(data)} activationDistance={8} />;
 }

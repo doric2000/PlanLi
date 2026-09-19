@@ -101,6 +101,7 @@ test('the real stop list and add actions stay visible for a trip with one stop',
   const screen = render(<TripPlannerScreen navigation={navigation} route={{ params: { tripId: 'trip-1' } }} />);
   await waitFor(() => expect(screen.getByTestId('trip-stop-stop-1')).toBeTruthy());
   expect(screen.getByText('תצפית הכרמל')).toBeTruthy();
+  expect(screen.getByTestId('trip-stops-list').props.containerStyle).toEqual(expect.objectContaining({ flex: 1 }));
   expect(screen.getByTestId('trip-add-recommendations')).toBeTruthy();
   expect(screen.getByTestId('trip-add-custom-stop')).toBeTruthy();
   fireEvent.press(screen.getByTestId('trip-add-recommendations'));
