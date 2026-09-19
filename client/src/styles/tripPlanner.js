@@ -14,6 +14,7 @@ export const tripPlannerStyles = StyleSheet.create({
   editorMapCard: { height: 142, marginHorizontal: 16, marginTop: 12, borderRadius: 20, overflow: 'hidden', backgroundColor: '#EDF2F6' },
   editorMapOverlay: { position: 'absolute', bottom: 10, left: 10, borderRadius: 14, backgroundColor: '#FFFFFF', paddingHorizontal: 12, minHeight: 44, flexDirection: 'row-reverse', alignItems: 'center', gap: 6 },
   editorMapHint: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 5, paddingHorizontal: 20 },
+  editorMapStatusOverlay: { ...StyleSheet.absoluteFillObject, zIndex: 2, backgroundColor: '#EDF2F6' },
   editorMapHintText: { color: navy, fontSize: 13, textAlign: 'center', writingDirection: 'rtl' },
   editorFooter: { backgroundColor: '#FFFFFF', paddingHorizontal: 16, paddingTop: 10, flexDirection: 'row-reverse', gap: 8, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#E4E4DF' },
   editorAction: { flex: 1, minHeight: 52, borderRadius: 17, flexDirection: 'row-reverse', gap: 6, alignItems: 'center', justifyContent: 'center', backgroundColor: navy },
