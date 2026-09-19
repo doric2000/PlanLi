@@ -5285,3 +5285,13 @@ part of this follow-up.
 - Message: Restore trip stops and stabilize planner map readiness
 - Device application and post-update security smoke tests: pending.
 - Rollback: republish the immediately preceding verified production group; never change the runtime URL or channel in-app.
+
+## iOS production OTA release
+
+- Source commit: `9459ecaf5262d031ccd603eaed7decfa1c22dd53`.
+- EAS Update group: `2936ac5c-4570-46cb-87ae-3934385cc215`; channel `production`; runtime `1.3.0`.
+- EAS environment: `production`; published at `2026-09-19T14:49:15.981Z`.
+- Immutable iOS launch bundle: update `01a0ba24-99cd-78b1-aa7c-88f78af7f78c`; 10947820 bytes; SHA-256 `41797F009110FF8E2D2B8185B341CF94299B4EF037CAAFF468AD9E60435F470D`.
+- Message: Fix trip map loading, stop numbering, and editor spacing
+- Device application and post-update security smoke tests: pending.
+- Rollback: republish the immediately preceding verified production group; never change the runtime URL or channel in-app.
