@@ -25,6 +25,47 @@ The existing Text Search quota remains zero. See
 
 ## Current environment status
 
+### Trip planner map, numbering and spacing OTA (2026-09-19)
+
+PR [#414](https://github.com/doric2000/PlanLi/pull/414) fixes the
+device-reported `NaN` stop number by using the draggable-list index contract
+with an identity fallback. The inline trip map is now a stable, non-interactive
+viewport on iPhone, while pan and zoom remain available in the full-screen map.
+Map timeouts no longer cover the stop list, and the list has explicit spacing
+below the map. PR [#415](https://github.com/doric2000/PlanLi/pull/415)
+records the independently verified iOS release.
+
+The iOS production channel now serves group
+`2936ac5c-4570-46cb-87ae-3934385cc215`, update
+`01a0ba24-99cd-78b1-aa7c-88f78af7f78c`, from source
+`9459ecaf5262d031ccd603eaed7decfa1c22dd53`. It was published at
+`2026-09-19T14:49:15.981Z` for runtime `1.3.0` and targets TestFlight
+**1.1.1 (30)**. Verified staging group
+`4ceeebdf-98b9-43b8-99cd-0508af76fc93` and production contain the same
+10,947,820-byte bundle with SHA-256
+`41797F009110FF8E2D2B8185B341CF94299B4EF037CAAFF468AD9E60435F470D`.
+
+The Android production channel now serves group
+`482b54f6-c7a7-4144-83fa-b8d7f9ee6d48`, update
+`01a0ba2c-9287-7f95-941a-90e07715966c`, from source
+`6d99be09f6cee218ac67385115a14896cefdd48b` (the same client code plus the
+iOS release record). It was published at `2026-09-19T14:57:58.407Z` for
+runtime `1.3.0` and targets Google Play internal-test **1.1.0 (10)**.
+Verified staging group `2a05be38-1de2-41b4-b701-7937b5b87a9e` and
+production contain the same 10,949,308-byte bundle with SHA-256
+`B87D6B726B5590AF26C66843A2C2EEA30121BF182A7892959BAF2E1B085BA5E7`.
+
+Focused map/editor regression coverage passed 22 tests, and release readiness
+passed all 89 affected client suites for both platforms. GitHub affected-client,
+CodeQL, Semgrep, secret and project-security checks passed before merge. Both
+platforms passed production-candidate, native-compatibility, immutable-artifact
+and production read-back verification. No native build, dependency/runtime/version
+change, store submission, Firebase or Hosting deployment occurred. Installed-device
+download and physical iPhone/Android rendering remain unverified. Immediate rollback
+targets are the preceding verified groups
+`e81e1c26-e9b5-4b3d-b331-b77c3e74e349` for iOS and
+`fb38f97f-d7ba-460b-92d3-d0e90450951a` for Android.
+
 ### Trip planner stop-list and map-readiness OTA (2026-09-19)
 
 PR [#410](https://github.com/doric2000/PlanLi/pull/410) fixes the two
@@ -5292,6 +5333,16 @@ part of this follow-up.
 - EAS Update group: `2936ac5c-4570-46cb-87ae-3934385cc215`; channel `production`; runtime `1.3.0`.
 - EAS environment: `production`; published at `2026-09-19T14:49:15.981Z`.
 - Immutable iOS launch bundle: update `01a0ba24-99cd-78b1-aa7c-88f78af7f78c`; 10947820 bytes; SHA-256 `41797F009110FF8E2D2B8185B341CF94299B4EF037CAAFF468AD9E60435F470D`.
+- Message: Fix trip map loading, stop numbering, and editor spacing
+- Device application and post-update security smoke tests: pending.
+- Rollback: republish the immediately preceding verified production group; never change the runtime URL or channel in-app.
+
+## Android production OTA release
+
+- Source commit: `6d99be09f6cee218ac67385115a14896cefdd48b`.
+- EAS Update group: `482b54f6-c7a7-4144-83fa-b8d7f9ee6d48`; channel `production`; runtime `1.3.0`.
+- EAS environment: `production`; published at `2026-09-19T14:57:58.407Z`.
+- Immutable Android launch bundle: update `01a0ba2c-9287-7f95-941a-90e07715966c`; 10949308 bytes; SHA-256 `B87D6B726B5590AF26C66843A2C2EEA30121BF182A7892959BAF2E1B085BA5E7`.
 - Message: Fix trip map loading, stop numbering, and editor spacing
 - Device application and post-update security smoke tests: pending.
 - Rollback: republish the immediately preceding verified production group; never change the runtime URL or channel in-app.
