@@ -1,6 +1,7 @@
 const crypto = require('node:crypto');
 const { HttpsError } = require('firebase-functions/v2/https');
 const { authorizeRequest } = require('./authPolicy');
+const { hasActiveAdminAccess } = require('./adminAuthorization');
 const { prepareMedia, MAX_SOURCE_BYTES } = require('./mediaProcessor');
 const { validateMediaAssets, saveRecommendation } = require('./recommendationService');
 const { updateProfile } = require('./profileService');
@@ -91,6 +92,24 @@ function publicJob(id, job) {
     result: job.result || null, error: job.error || null };
 }
 
+async function assertEditableSource({ admin, auth, kind, source }) {
+  assert(source.exists, 'OPERATION_OWNER', 'permission-denied');
+  if (source.data()?.ownerId === auth.uid) return false;
+  assert(kind === 'recommendation' && await hasActiveAdminAccess({ admin, auth, requireRecentTotp: true }),
+    'OPERATION_OWNER', 'permission-denied');
+  return true;
+}
+
+// Only verified callable auth supplies this context. No credentials or client
+// authorization assertions are persisted; the worker reloads current privileges.
+function authenticationContext(auth) {
+  return {
+    authTime: Number(auth.token?.auth_time || 0),
+    provider: String(auth.token?.firebase?.sign_in_provider || 'password'),
+    secondFactor: auth.token?.firebase?.sign_in_second_factor === 'totp' ? 'totp' : null,
+  };
+}
+
 async function startBackgroundOperation({ admin, auth, data, mediaBucket }) {
   await authorizeRequest({ admin, auth, access: 'active' });
   const id = operationId(data?.operationId);
@@ -111,6 +130,7 @@ async function startBackgroundOperation({ admin, auth, data, mediaBucket }) {
   let legacyPayload = null;
   let expectedPhotoAssetId = null;
   let expectedUpdatedAt = null;
+  let adminEdit = false;
   if (data.kind === 'avatar') {
     const profile = await admin.firestore().doc(`users/${auth.uid}`).get();
     expectedPhotoAssetId = profile.data()?.photoMedia?.assetId || null;
@@ -129,7 +149,7 @@ async function startBackgroundOperation({ admin, auth, data, mediaBucket }) {
     const sourceId = pointer.sourceRouteId || pointer.sourceRecommendationId;
     if (sourceId) {
       const source = await admin.firestore().doc(`${data.kind === 'route' ? 'routes' : 'recommendations'}/${sourceId}`).get();
-      assert(source.exists && source.data()?.ownerId === auth.uid, 'OPERATION_OWNER', 'permission-denied');
+      adminEdit = await assertEditableSource({ admin, auth, kind: data.kind, source });
       expectedUpdatedAt = timestamp(source.data().updatedAt);
       existingMedia = source.data().media || [];
     }
@@ -142,7 +162,7 @@ async function startBackgroundOperation({ admin, auth, data, mediaBucket }) {
     if (legacyPayload.recommendationId) {
       assert(typeof legacyPayload.recommendationId === 'string' && !legacyPayload.recommendationId.includes('/'), 'OPERATION_INVALID', 'invalid-argument');
       const content = await admin.firestore().doc(`recommendations/${legacyPayload.recommendationId}`).get();
-      assert(content.exists && content.data()?.ownerId === auth.uid, 'OPERATION_OWNER', 'permission-denied');
+      adminEdit = await assertEditableSource({ admin, auth, kind: data.kind, source: content });
       expectedUpdatedAt = timestamp(content.data().updatedAt);
       existingMedia = content.data().media || [];
     }
@@ -157,8 +177,7 @@ async function startBackgroundOperation({ admin, auth, data, mediaBucket }) {
   const now = Date.now();
   const job = { ownerUid: auth.uid, requestHash, kind: data.kind, status: manifest.every((item) => item.asset) ? 'ready' : 'uploading',
     stage: 'uploading', createdAt: now, updatedAt: now, attempt: 1, leaseUntil: 0,
-    authTime: Number(auth.token?.auth_time || now / 1000),
-    provider: String(auth.token?.firebase?.sign_in_provider || 'password'),
+    ...authenticationContext(auth), adminEdit,
     draft, legacyPayload, expectedPhotoAssetId, expectedUpdatedAt, expectedCount: manifest.length,
     mediaSaveRequestId: crypto.randomUUID(), result: null, error: null, committedResult: null };
   const quota = admin.firestore().doc(`system/operations/owners/${auth.uid}`);
@@ -205,6 +224,15 @@ async function getBackgroundOperations({ admin, auth, data = {} }) {
 async function retryBackgroundOperation({ admin, auth, data, mediaBucket }) {
   await authorizeRequest({ admin, auth, access: 'active' });
   const ref = jobRef(admin, data?.operationId);
+  const before = (await ref.get()).data();
+  assert(before?.ownerUid === auth.uid, 'OPERATION_NOT_FOUND', 'not-found');
+  const context = authenticationContext(auth);
+  // Reauthentication must still belong to an eligible editor of this target.
+  // Reuse the worker gate so a revoked role cannot refresh a queued admin edit.
+  if (before.adminEdit) {
+    assert(auth.token?.admin === true, 'OPERATION_OWNER', 'permission-denied');
+  }
+  await actorForJob(admin, { ...before, ...context });
   const items = await ref.collection('items').get();
   await admin.firestore().runTransaction(async (transaction) => {
     const snapshot = await transaction.get(ref);
@@ -213,7 +241,7 @@ async function retryBackgroundOperation({ admin, auth, data, mediaBucket }) {
     assert(job.status === 'failed' && job.error?.retryable === true, 'OPERATION_REVIEW_REQUIRED');
     assert(job.attempt < 5, 'OPERATION_RETRY_LIMIT', 'resource-exhausted');
     transaction.update(ref, { status: 'ready', stage: 'queued', error: null, attempt: job.attempt + 1,
-      authTime: Number(auth.token?.auth_time || Date.now() / 1000), updatedAt: Date.now(), lastTransferAt: Date.now(), leaseUntil: 0 });
+      ...context, updatedAt: Date.now(), lastTransferAt: Date.now(), leaseUntil: 0 });
     items.docs.forEach((item) => transaction.update(item.ref, { transferFailed: false }));
   });
   // Reconcile a finalization event whose delivery was interrupted before repeating bytes.
@@ -288,10 +316,19 @@ async function recordBackgroundUpload({ admin, object, mediaBucket }) {
 
 async function actorForJob(admin, job) {
   const record = await admin.auth().getUser(job.ownerUid);
-  assert(!record.disabled && (!record.tokensValidAfterTime || job.authTime * 1000 >= Date.parse(record.tokensValidAfterTime)), 'OPERATION_AUTH_EXPIRED', 'unauthenticated');
+  assert(!record.disabled, 'OPERATION_OWNER', 'permission-denied');
+  assert(Number.isFinite(job.authTime) && job.authTime > 0 &&
+    (!record.tokensValidAfterTime || job.authTime * 1000 >= Date.parse(record.tokensValidAfterTime)), 'OPERATION_AUTH_EXPIRED', 'unauthenticated');
   const auth = { uid: job.ownerUid, token: { email_verified: record.emailVerified === true,
-    email: record.email || '', firebase: { sign_in_provider: job.provider } } };
+    email: record.email || '', auth_time: job.authTime,
+    admin: job.kind === 'recommendation' && job.adminEdit === true && record.customClaims?.admin === true,
+    firebase: { sign_in_provider: job.provider, sign_in_second_factor: job.secondFactor || null } } };
   await authorizeRequest({ admin, auth, access: 'active' });
+  const sourceId = job.draft?.pointer?.sourceRecommendationId || job.draft?.pointer?.sourceRouteId || job.legacyPayload?.recommendationId;
+  if (sourceId) {
+    const source = await admin.firestore().doc(`${job.kind === 'route' ? 'routes' : 'recommendations'}/${sourceId}`).get();
+    await assertEditableSource({ admin, auth, kind: job.kind, source });
+  }
   return auth;
 }
 
@@ -350,14 +387,14 @@ async function processBackgroundOperation(options) {
   try {
     let result = job.committedResult || job.result;
     if (!result) {
-      const auth = await actorForJob(admin, job);
+      let auth = await actorForJob(admin, job);
       const snapshot = await ref.collection('items').get();
       const items = snapshot.docs.map((item) => ({ ...item.data(), ref: item.ref }));
       assert(items.length === job.expectedCount, 'OPERATION_MEDIA_INCOMPLETE');
       if (items.some((item) => item.state === 'waiting' && item.transferFailed)) fail('OPERATION_UPLOAD_INTERRUPTED', 'unavailable');
       for (const item of items) {
         if (item.asset || item.state === 'waiting') continue;
-        await actorForJob(admin, job);
+        auth = await actorForJob(admin, job);
         item.asset = await prepareMediaImpl({ admin, auth, mediaBucket, data: { stagingPath: item.stagingPath, kind: job.kind },
           commitPreparedAsset: async (asset) => admin.firestore().runTransaction(async (transaction) => {
             const current = (await transaction.get(ref)).data();
@@ -371,7 +408,7 @@ async function processBackgroundOperation(options) {
         await update({ status: ready ? 'ready' : 'uploading', stage: 'uploading', leaseUntil: 0 });
         return;
       }
-      await actorForJob(admin, job);
+      auth = await actorForJob(admin, job);
       await update({ stage: 'saving' });
       if (job.kind === 'avatar') {
         result = await updateProfileImpl({ admin, auth, mediaBucket, data: { photoMedia: items[0].asset },
@@ -394,6 +431,7 @@ async function processBackgroundOperation(options) {
           draftId = saved.draftId; version = saved.version;
           await update({ draft: { ...job.draft, id: draftId, version }, mediaSaved: true });
         }
+        auth = await actorForJob(admin, job);
         result = await publish({ ...options, auth, operation: { ref, leaseId, expectedUpdatedAt: job.expectedUpdatedAt }, data: { draftId, expectedVersion: version } });
       } else {
         result = await saveRecommendationImpl({ ...options, auth, data: {
@@ -418,7 +456,8 @@ async function processBackgroundOperation(options) {
     }
     const code = String(error?.code || 'internal');
     const reason = String(error?.details?.reason || 'OPERATION_FAILED').slice(0, 80);
-    const retryable = ['unavailable', 'internal', 'deadline-exceeded'].includes(code);
+    const retryable = ['unavailable', 'internal', 'deadline-exceeded'].includes(code) ||
+      ['recent_sign_in_required', 'totp_required', 'OPERATION_AUTH_EXPIRED'].includes(reason);
     await update({ status: 'failed', stage: 'failed', leaseUntil: 0, error: { code, reason, retryable } });
     await notify({ admin, id, job: { ...job, status: 'failed' } });
   }

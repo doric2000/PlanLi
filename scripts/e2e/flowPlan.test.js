@@ -35,5 +35,5 @@ test('a generic smoke flow cannot satisfy missing coverage for an unvisited scre
   assert.deepEqual(runtimeFlowsForSource('client/src/config/appCheck.web.js'), []);
   assert.deepEqual(runtimeFlowsForSource('client/src/components/RecommendationHero.js'), ['gallery']);
   assert.deepEqual(runtimeFlowsForSource('client/src/components/ExactLocationPicker.js'), []);
-  assert.deepEqual(runtimeFlowsForSource('client/src/features/community/screens/CreateRecommendationScreen.js'), ['publish', 'network']);
+  assert.deepEqual(runtimeFlowsForSource('client/src/features/community/screens/CreateRecommendationScreen.js'), ['publish', 'network', 'recommendation-edit']);
 });

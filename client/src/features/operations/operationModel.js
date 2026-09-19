@@ -1,3 +1,5 @@
+import { mediaAuthenticationErrorMessage } from '../../utils/travelMediaErrors';
+
 export const OPERATION_HISTORY_KEY = '@planli/operation-history';
 export const SUCCESS_VISIBLE_MS = 8000;
 export const HISTORY_LIMIT = 200;
@@ -42,13 +44,13 @@ export function safeOperationError(error) {
   const uncertain = /deadline-exceeded|timeout|persistence-mismatch/.test(code);
   return {
     code,
-    message: uncertain
+    message: mediaAuthenticationErrorMessage(error) || (uncertain
       ? 'ייתכן שהשמירה הושלמה. כדאי לבדוק את הפריט לפני ניסיון נוסף.'
       : /unauthenticated|permission-denied/.test(code)
         ? 'צריך לבדוק את ההתחברות וההרשאות לפני ניסיון נוסף.'
         : /upload-stalled|network|unavailable|retry-limit/.test(code)
           ? 'החיבור נקטע או שההעלאה נעצרה. בדקו את החיבור ונסו שוב.'
-          : 'הפעולה לא הושלמה. אפשר לחזור לפריט ולנסות שוב.',
+          : 'הפעולה לא הושלמה. אפשר לחזור לפריט ולנסות שוב.'),
     uncertain,
   };
 }

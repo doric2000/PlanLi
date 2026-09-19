@@ -425,10 +425,13 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     RECOMMENDATION_SUBCATEGORIES.filter((item) => item.categoryId === categoryId)
   ), [categoryId]);
   const visibleSubcategories = useMemo(() => {
-    if (!showAllSubcategories) return popularSubcategories;
+    if (!showAllSubcategories) {
+      const selected = allCategorySubcategories.filter((item) => subcategoryIds.includes(item.id));
+      return [...selected, ...popularSubcategories.filter((item) => !subcategoryIds.includes(item.id))];
+    }
     if (!subcategorySearch.trim()) return allCategorySubcategories;
     return searchRecommendationCatalog(subcategorySearch, { categoryId, limit: 50 });
-  }, [allCategorySubcategories, categoryId, popularSubcategories, showAllSubcategories, subcategorySearch]);
+  }, [allCategorySubcategories, categoryId, popularSubcategories, showAllSubcategories, subcategorySearch, subcategoryIds]);
 
   const editableImageUris = useMemo(() => editableMedia.map(travelMediaUri).filter(Boolean), [editableMedia]);
 

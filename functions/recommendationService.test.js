@@ -895,7 +895,7 @@ test('new recommendations cannot smuggle external media', async () => {
 
 test('legacy trusted media without URLs is rebuilt with verified download URLs', async () => {
   const assetId = '323e4567-e89b-42d3-a456-426614174001';
-  const makeMetadata = (variant, ownerUid = 'u1', state = 'prepared') => ({
+  const makeMetadata = (variant, ownerUid = 'u1', state = 'claimed') => ({
     size: '1024',
     contentType: 'image/webp',
     metadata: {
@@ -956,6 +956,23 @@ test('legacy trusted media without URLs is rebuilt with verified download URLs',
   });
   assert.deepEqual(mixedRetained.large, mixedLegacy.large);
   assert.match(mixedRetained.feed.url, /feed-token/);
+  // A claimed image is reusable only when the authorized source actually owns it.
+  await assert.rejects(validateMediaAssets({
+    admin, uid: 'u1', mediaBucket: 'test.appspot.com',
+    media: [existingAsset], existingMedia: [],
+  }), /already been used/);
+  for (const invalid of [
+    makeMetadata('thumb', 'another-owner'),
+    makeMetadata('feed'),
+    { ...makeMetadata('thumb'), metadata: { ...makeMetadata('thumb').metadata, assetId: 'another-asset' } },
+    makeMetadata('thumb', 'u1', 'deleting'),
+  ]) {
+    const invalidAdmin = fakeAdminForMetadata({ [`media/u1/${assetId}/thumb.webp`]: invalid });
+    const partial = { ...existingAsset, large: { ...existingAsset.large, url: 'https://trusted/large' },
+      feed: { ...existingAsset.feed, url: 'https://trusted/feed' } };
+    await assert.rejects(validateMediaAssets({ admin: invalidAdmin, uid: 'admin-editor',
+      mediaBucket: 'test.appspot.com', media: [partial], existingMedia: [partial] }));
+  }
 });
 
 test('authorized edits can retain media already attached to the document', async () => {
@@ -3295,6 +3312,27 @@ test('admin edits retain the original owner media without trusting client media 
   const saved = admin.documents.get('recommendations/admin-edit');
   assert.equal(saved.ownerId, 'original-owner');
   assert.deepEqual(saved.media, [existingAsset]);
+});
+
+test('a queued admin edit cannot overwrite a newer recommendation revision', async () => {
+  const source = { ownerId: 'original-owner', title: 'Newer author edit',
+    destination: { countryId: 'IL', cityId: 'TLV' }, updatedAt: { toMillis: () => 200 }, media: [] };
+  const admin = createFakeAdmin({
+    'countries/IL': { name: 'Israel', code: 'IL', status: 'active' },
+    'countries/IL/destinations/TLV': { name: 'Tel Aviv', status: 'active', stats: { recommendationCount: 1 } },
+    'recommendations/admin-edit': source,
+    'system/moderation/admins/admin-editor': { active: true },
+    'users/admin-editor': { status: 'active' },
+    'system/operations/jobs/edit': { ownerUid: 'admin-editor', leaseId: 'lease', status: 'processing' },
+  });
+  await assert.rejects(saveRecommendation({
+    admin, auth: { uid: 'admin-editor', token: { admin: true, auth_time: Math.floor(Date.now() / 1000),
+      firebase: { sign_in_second_factor: 'totp' } } },
+    operation: { ref: admin.firestore().doc('system/operations/jobs/edit'), leaseId: 'lease', expectedUpdatedAt: 100 },
+    data: { recommendationId: 'admin-edit', destinationRef: { countryId: 'IL', cityId: 'TLV' }, recommendation: validContent },
+  }), /recommendation changed/);
+  assert.deepEqual(admin.documents.get('recommendations/admin-edit'), source);
+  assert.equal(admin.documents.get('system/operations/jobs/edit').committedResult, undefined);
 });
 
 test('recommendation edits preserve hidden state instead of reactivating content', async () => {
