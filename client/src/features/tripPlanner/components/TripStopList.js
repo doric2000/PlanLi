@@ -58,12 +58,20 @@ export default function TripStopList({ stops, selectedStopId, readOnly = false, 
     next.splice(to, 0, item);
     onReorder?.(next);
   };
-  const render = ({ item, index, drag, isActive }) => (
+  const renderRow = ({ item, index, drag, isActive }) => (
     <StopRow item={item} index={index} count={stops.length} selected={item.id === selectedStopId} readOnly={readOnly}
       drag={drag} isActive={isActive} onSelect={onSelect} onDelete={onDelete} onMove={move}
       onMoveToDay={onMoveToDay} onOpenRecommendation={onOpenRecommendation} onEditCustom={onEditCustom} />
   );
-  const common = { data: stops, renderItem: render, keyExtractor: (item) => item.id, contentContainerStyle: styles.listContent, style: styles.list, testID: 'trip-stops-list' };
-  if (readOnly) return <FlatList {...common} />;
-  return <DraggableFlatList {...common} containerStyle={styles.list} onDragEnd={({ data }) => onReorder?.(data)} activationDistance={8} />;
+  const common = { data: stops, keyExtractor: (item) => item.id, contentContainerStyle: styles.listContent, style: styles.list, testID: 'trip-stops-list' };
+  if (readOnly) return <FlatList {...common} renderItem={({ item, index }) => renderRow({ item, index })} />;
+  return <DraggableFlatList {...common} containerStyle={styles.list}
+    renderItem={({ item, getIndex, drag, isActive }) => {
+      const currentIndex = getIndex?.();
+      const fallbackIndex = stops.findIndex((stop) => stop.id === item.id);
+      const index = Number.isInteger(currentIndex) && currentIndex >= 0
+        ? currentIndex : Math.max(0, fallbackIndex);
+      return renderRow({ item, index, drag, isActive });
+    }}
+    onDragEnd={({ data }) => onReorder?.(data)} activationDistance={8} />;
 }
