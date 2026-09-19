@@ -57,7 +57,7 @@ async function recommendationEditSmoke({ call, fixture, recommendationId, media,
     const partial = assets.map((asset) => ({ ...asset, thumb: { ...asset.thumb } }));
     delete partial[0].thumb.url;
     await source.update({ media: partial });
-    const file = getStorage(app).bucket().file(partial[0].thumb.path);
+    const file = getStorage(app).bucket(BUCKET).file(partial[0].thumb.path);
     const [metadata] = await file.getMetadata();
     await file.setMetadata({ metadata: { ...metadata.metadata, state: 'claimed' } });
     assets = await edit([...partial].reverse());
