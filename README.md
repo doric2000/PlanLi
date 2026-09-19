@@ -5225,3 +5225,13 @@ part of this follow-up.
 - Message: Fix trip planner map and place search stability
 - Device application and post-update security smoke tests: pending.
 - Rollback: republish the immediately preceding verified production group; never change the runtime URL or channel in-app.
+
+## iOS production OTA release
+
+- Source commit: `101327917ebc680e942271814fb0bfa32bd1c5fe`.
+- EAS Update group: `e81e1c26-e9b5-4b3d-b331-b77c3e74e349`; channel `production`; runtime `1.3.0`.
+- EAS environment: `production`; published at `2026-09-19T13:51:07.259Z`.
+- Immutable iOS launch bundle: update `01a0b9ef-5dfb-7e50-82f3-967832ff0df6`; 10947020 bytes; SHA-256 `817F10DB73D4F4E3048AAA9FFC2C887812AA99E264E483A2872E0C39BDEE3B8B`.
+- Message: Restore trip stops and defer iPhone map fitting
+- Device application and post-update security smoke tests: pending.
+- Rollback: republish the immediately preceding verified production group; never change the runtime URL or channel in-app.
