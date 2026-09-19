@@ -5094,3 +5094,17 @@ part of this follow-up.
 - Public Android-channel delivery and immutable bundle independently verified at `2026-09-18T19:18:09.435Z`; iOS group `55bfcf70-1b1a-4320-aabd-a1939c83bbcb` unchanged.
 - Device application and post-update security smoke tests: pending.
 - Rollback: no previous android OTA; an authorized rollback must target the embedded build for runtime 1.3.0.
+
+## iOS production OTA release
+
+- Source commit: `48b683489f6aa7ab05afa6bba91885f5b98a587d`.
+- EAS Update group: `68ed932b-5146-43c8-a97f-2b3511d5eb9d`; channel `production`; runtime `1.3.0`.
+- EAS environment: `production`; published at `2026-09-19T10:01:10.726Z`.
+- Immutable iOS launch bundle: update `01a0b91c-d946-73d7-a4c5-5d678df89f71`; 10946036 bytes; SHA-256 `53800755F19EF526C6985A0BC35283B4DF0B9B3402627361D2BB889AAB7A3906`.
+- Message: Reliable list-first personal trip planning
+- Target: TestFlight `1.1.1 (30)`, build `b16eca67-6291-4520-82b6-10cb1af190f5`; no new native build or Apple submission/review.
+- Verified staging candidate: `802bd485-3ec4-4794-8dfb-213661f775a2`; identical production bundle.
+- EAS update readback and guarded immutable-bundle verification passed at `2026-09-19T10:01:55Z`.
+- Previous verified production group: `55bfcf70-1b1a-4320-aabd-a1939c83bbcb`.
+- Device application and post-update security smoke tests: pending.
+- Rollback: republish the immediately preceding verified production group; never change the runtime URL or channel in-app.
