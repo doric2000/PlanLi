@@ -23,8 +23,8 @@ export default function TripDayTabs({ trip, selectedDayId, onSelect, onAddDay, r
             accessibilityState={{ selected }}
             accessibilityLabel={day.kind === 'ideas' ? 'רעיונות' : day.title}
           >
-            <AppText style={[styles.dayChipText, selected && styles.dayChipTextSelected]} numberOfLines={1}>
-              {day.kind === 'ideas' ? 'רעיונות' : day.title}
+          <AppText style={[styles.dayChipText, selected && styles.dayChipTextSelected]} numberOfLines={1}>
+              {day.kind === 'ideas' ? 'רעיונות' : day.title} · {day.stops?.length ?? day.stopCount ?? 0}
             </AppText>
           </TouchableOpacity>
         );

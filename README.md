@@ -25,6 +25,26 @@ The existing Text Search quota remains zero. See
 
 ## Current environment status
 
+### Personal trip operation compatibility deployment (2026-09-19)
+
+Under explicit release authorization, Firebase CLI **15.30.2** deployed only the
+Node.js 22 v2 callable `applyPrivateTripOperations` to `planli-f0b12` in
+`europe-west1`. The deployment source was commit
+`d3f7f515a2213ef1530ab2a2a28ef855fcd6720d`; it completed at
+`2026-09-19T07:28:31.738552803Z` as active Cloud Run revision
+`applyprivatetripoperations-00002-yuh`. This server change preserves validated
+client stop IDs for batched recommendation additions so queued follow-up edits can
+address the same stops deterministically.
+
+Independent inventory verification confirmed the callable is active with 512 MB
+memory on Node.js 22, and the production log window from deployment start at
+`2026-09-19T07:26:52Z` contained no `ERROR` entries for the function. No other
+Function, Rules, index, Hosting target, native build or OTA was deployed in this
+step. The affected validation passed 92 client suites and three Functions test
+files before deployment. Authenticated device execution and the client OTA remain
+unverified at this point. The unrelated untracked root `app.json` was preserved
+and excluded.
+
 ### Android cumulative app and modal safe-area OTA (2026-09-18)
 
 The Android production channel now delivers the current application, including

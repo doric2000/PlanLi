@@ -152,7 +152,16 @@ function cleanOperation(raw) {
     const recommendationIds = raw.recommendationIds.map((id) => cleanId(id, 'recommendationId'));
     assertPlanner(new Set(recommendationIds).size === recommendationIds.length,
       'invalid-argument', 'recommendationIds contains duplicates.', 'DUPLICATE_RECOMMENDATION');
-    return { type, dayId, recommendationIds };
+    let clientStopIds;
+    if (raw.clientStopIds !== undefined) {
+      assertPlanner(Array.isArray(raw.clientStopIds)
+        && raw.clientStopIds.length === recommendationIds.length,
+      'invalid-argument', 'clientStopIds is invalid.', 'INVALID_STOP_IDS');
+      clientStopIds = raw.clientStopIds.map((id) => cleanId(id, 'clientStopId'));
+      assertPlanner(new Set(clientStopIds).size === clientStopIds.length,
+        'invalid-argument', 'clientStopIds contains duplicates.', 'INVALID_STOP_IDS');
+    }
+    return { type, dayId, recommendationIds, ...(clientStopIds ? { clientStopIds } : {}) };
   }
   if (type === 'add_custom_stop') return {
     type,
@@ -180,7 +189,19 @@ function cleanOperation(raw) {
 function cleanOperations(value) {
   assertPlanner(Array.isArray(value) && value.length >= 1 && value.length <= MAX_OPERATIONS,
     'invalid-argument', 'operations is invalid.', 'INVALID_OPERATIONS');
-  return value.map(cleanOperation);
+  const operations = value.map(cleanOperation);
+  const createdStopPaths = operations.flatMap((operation) => {
+    if (operation.type === 'add_recommendation_stops' && operation.clientStopIds) {
+      return operation.clientStopIds.map((id) => `${operation.dayId}/${id}`);
+    }
+    if (operation.type === 'add_custom_stop' && operation.clientId) {
+      return [`${operation.dayId}/${operation.clientId}`];
+    }
+    return [];
+  });
+  assertPlanner(new Set(createdStopPaths).size === createdStopPaths.length,
+    'invalid-argument', 'Client stop ids must be unique within the request.', 'INVALID_STOP_IDS');
+  return operations;
 }
 
 function normalizeLimit(value, fallback = 30, maximum = 50) {

@@ -205,6 +205,7 @@ function RecommendationDetailLoaded({ item, postId, navigation, initialCommentsO
       <AddToTripModal
         visible={addToTripVisible}
         recommendationId={postId}
+        recommendationPreview={item}
         onClose={() => setAddToTripVisible(false)}
       />
     </SafeAreaView>

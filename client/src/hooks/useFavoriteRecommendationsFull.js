@@ -26,8 +26,8 @@ const asRecommendationPreview = (favorite) => {
   };
 };
 
-export function useFavoriteRecommendationsFull({ enabled = true } = {}) {
-  const result = useFavorites('recommendation', { enabled });
+export function useFavoriteRecommendationsFull({ enabled = true, pageSize = 50 } = {}) {
+  const result = useFavorites('recommendation', { enabled, pageSize });
   const favorites = useMemo(
     () => result.favorites.map(asRecommendationPreview),
     [result.favorites]

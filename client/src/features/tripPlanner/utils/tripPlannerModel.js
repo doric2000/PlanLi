@@ -88,7 +88,7 @@ export function routeSummary(route) {
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
 
-export function applyOperationsLocally(tripValue, operations) {
+export function applyOperationsLocally(tripValue, operations, recommendationPreviews = {}) {
   const trip = clone(tripValue);
   (operations || []).forEach((operation) => {
     if (operation.type === 'set_title') trip.title = operation.title;
@@ -104,6 +104,23 @@ export function applyOperationsLocally(tripValue, operations) {
       day.stops.push({ id: operation.clientId, ...operation.stop, order: day.stops.length });
       day.stopCount += 1;
       trip.stopCount += 1;
+    }
+    if (operation.type === 'add_recommendation_stops') {
+      operation.recommendationIds.forEach((id, index) => {
+        const preview = recommendationPreviews[id] || {};
+        const raw = preview.place?.coordinates;
+        const lat = Number(raw?.lat ?? raw?.latitude);
+        const lng = Number(raw?.lng ?? raw?.longitude);
+        day.stops.push({ id: operation.clientStopIds?.[index] || `pending-${id}-${day.stops.length}`, sourceType: 'recommendation', recommendationId: id,
+          title: preview.title || 'המלצה שנבחרה', subtitle: preview.place?.address || preview.destination?.cityName || preview.description || '',
+          media: preview.media || [], coordinates: Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null,
+          order: day.stops.length });
+      });
+      day.stopCount = day.stops.length;
+      trip.stopCount = trip.days.reduce((sum, item) => sum + item.stops.length, 0);
+    }
+    if (operation.type === 'update_custom_stop') {
+      day.stops = day.stops.map((stop) => stop.id === operation.stopId ? { ...stop, ...operation.stop } : stop);
     }
     if (operation.type === 'delete_stop') {
       day.stops = day.stops.filter((stop) => stop.id !== operation.stopId).map((stop, index) => ({ ...stop, order: index }));
