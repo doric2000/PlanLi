@@ -89,6 +89,12 @@ async function backendSmoke() {
   } while (Date.now() < publicationDeadline);
   assert.equal(publication.status, 'success', `Background publication failed: ${JSON.stringify(publication.error || { status: publication.status })}`);
   assert.ok(publication.result.recommendationId);
+  await require('./recommendationEditSmoke').recommendationEditSmoke({ call, fixture,
+    recommendationId: saved.recommendationId, media, uploadPrepared: async () => {
+      const stagingPath = `media-staging/${fixture.uid}/${crypto.randomUUID()}.jpg`;
+      await uploadBytes(ref(storage, stagingPath), bytes, metadata);
+      return call('prepareMedia', { stagingPath, kind: 'recommendation' });
+    } });
   // Exercise the same persisted-draft state left by a previous device flow.
   const draft = await call('saveRecommendationDraft', { draft: {
     step: 2, locationMode: 'destination', selectedCountry: { id: 'GB', name: 'Britain' },

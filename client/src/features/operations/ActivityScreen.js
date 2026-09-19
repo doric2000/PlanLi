@@ -6,7 +6,7 @@ import { useContentPublish } from '../publishing/ContentPublishContext';
 import { useOperations } from './OperationState';
 import { operationStore } from './operationService';
 import { openOperation } from './operationNavigation';
-import { TERMINAL_STATES } from './operationModel';
+import { TERMINAL_STATES, safeOperationError } from './operationModel';
 import OperationCard, { OperationButton } from './OperationCard';
 import OperationDismissButton from './OperationDismissButton';
 import OperationRegionAction from './OperationRegionAction';
@@ -33,7 +33,7 @@ export default function ActivityScreen({ navigation, route }) {
     if (running.current.has(id)) return;
     running.current.add(id);
     setBusy((current) => ({ ...current, [id]: true }));
-    try { await work(); } catch { Alert.alert('הפעולה לא הושלמה', 'אפשר לנסות שוב בעוד רגע.'); }
+    try { await work(); } catch (error) { Alert.alert('הפעולה לא הושלמה', safeOperationError(error).message); }
     finally { running.current.delete(id); setBusy((current) => ({ ...current, [id]: false })); }
   };
   const open = (entry) => {
@@ -61,7 +61,8 @@ export default function ActivityScreen({ navigation, route }) {
           <View style={styles.actions} pointerEvents={busy[entry.id] ? 'none' : 'auto'}>
             <OperationRegionAction entry={entry} onChooseRegion={() => navigation.navigate('RegionSelector', { source: 'publish-change' })} />
             {TERMINAL_STATES.has(entry.status) && <OperationButton onPress={() => open(entry)}>צפייה בפריט</OperationButton>}
-            {entry.source === 'background' && entry.status === 'failed' && entry.retryable && <OperationButton
+            {entry.serverOperationId && !job && !photo && entry.status === 'failed' && entry.retryable && <OperationButton
+              testID={`activity-retry-server-${entry.serverOperationId}`}
               onPress={() => run(entry.id, async () => { await retryBackgroundOperation(entry.serverOperationId);
                 await syncBackgroundHistory(entry.ownerUid, entry.serverOperationId); })}>נסו שוב</OperationButton>}
             {photo?.status === 'failed' && <OperationButton testID={`activity-retry-${photo.id}`}

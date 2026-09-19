@@ -1,0 +1,65 @@
+appId: com.planli.planlitravels.e2e
+name: Edit a published recommendation with a selected nonpopular subcategory
+---
+- runFlow: helpers/boot.yml
+- runFlow: helpers/login.yml
+- tapOn:
+    id: main-tab-community
+- scrollUntilVisible:
+    element:
+      text: Local edited aquarium
+    direction: DOWN
+    timeout: 90000
+    centerElement: true
+- tapOn: Local edited aquarium
+- assertVisible:
+    id: recommendation-detail-content
+- scrollUntilVisible:
+    element:
+      id: content-action-menu
+    direction: DOWN
+    timeout: 60000
+- tapOn:
+    id: content-action-menu
+- tapOn: "עריכה"
+- extendedWaitUntil:
+    visible:
+      id: "recommendation-title-input|recommendation-draft-discard"
+    timeout: 60000
+# The backend smoke deliberately leaves an unfinished draft. Resolve the draft
+# choice through the editor before waiting for this recommendation's fields.
+- runFlow:
+    when:
+      visible:
+        id: recommendation-draft-discard
+    commands:
+      - tapOn:
+          id: recommendation-draft-discard
+- extendedWaitUntil:
+    visible:
+      id: recommendation-title-input
+    timeout: 60000
+- tapOn:
+    id: recommendation-title-input
+- eraseText
+- inputText: Edited Aquarium Native
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: recommendation-subcategory-aquarium
+    direction: DOWN
+    timeout: 60000
+- assertVisible:
+    id: recommendation-subcategory-aquarium
+    checked: true
+- takeScreenshot: recommendation-edit-selected-aquarium
+- tapOn:
+    id: recommendation-next
+- extendedWaitUntil:
+    notVisible:
+      id: recommendation-composer-header
+    timeout: 90000
+- extendedWaitUntil:
+    visible: Edited Aquarium Native
+    timeout: 90000
+- takeScreenshot: recommendation-edit-saved
