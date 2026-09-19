@@ -1,4 +1,5 @@
 import { randomUUID } from 'expo-crypto';
+import { mediaAuthenticationErrorMessage } from '../../../utils/travelMediaErrors';
 import React, {
   createContext,
   useCallback,
@@ -107,6 +108,7 @@ export function normalizedPublishError(error) {
 }
 
 export function isTransientPublishError(error) {
+  if (mediaAuthenticationErrorMessage(error)) return false;
   const code = String(error?.code || '');
   if (MANUAL_RETRY_CODES.has(code)) return false;
   if (error?.details?.retryable === false) return false;
@@ -118,7 +120,7 @@ export function isTransientPublishError(error) {
 
 export function publishRetryPolicy(error, attempts) {
   const code = String(error?.code || '');
-  const manualRetry = MANUAL_RETRY_CODES.has(code);
+  const manualRetry = MANUAL_RETRY_CODES.has(code) || Boolean(mediaAuthenticationErrorMessage(error));
   const automaticRetry = !manualRetry && isTransientPublishError(error);
   const retryable = error?.details?.retryable === false
     ? false
@@ -1195,7 +1197,7 @@ export function ContentPublishProvider({ children }) {
       const retryPolicy = publishRetryPolicy(error, attempts);
       if (current.background) retryPolicy.shouldRetry = false;
       // Legacy edits have no server publication receipt. Reopen the editor instead of replaying a write.
-      if (current.payload?.recommendationId && !current.payload?.draftId) {
+      if (current.payload?.recommendationId && !current.payload?.draftId && !current.background) {
         retryPolicy.shouldRetry = false;
         retryPolicy.retryable = false;
       }

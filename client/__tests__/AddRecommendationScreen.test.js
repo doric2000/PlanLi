@@ -1111,6 +1111,33 @@ describe('AddRecommendationScreen Integration Test', () => {
     expect(navigationMock.goBack).toHaveBeenCalled();
   });
 
+  it.each([false, true])('shows selected nonpopular subcategories when editing (resumed=%s)', async (resumed) => {
+    const navigation = { goBack: jest.fn(), setOptions: jest.fn(), navigate: jest.fn(), dispatch: jest.fn(),
+      addListener: jest.fn(() => jest.fn()) };
+    const item = makeEditItem({ recommendationCatalogVersion: 1, categoryId: 'activities',
+      subcategoryIds: ['aquarium', 'theme_park'], media: [canonicalMedia()] });
+    if (resumed) mockGetCurrentRecommendationDraft.mockResolvedValueOnce({
+      id: 'recommendation-draft-1', version: 3, sourceRecommendationId: item.id,
+      step: 4, locationMode: 'destination', selectedCountry: { id: 'IL', name: 'ישראל' },
+      selectedCity: { id: 'TLV', name: 'תל אביב' }, categoryId: item.categoryId,
+      subcategoryIds: item.subcategoryIds, title: item.title, description: item.description,
+      budget: item.budget, details: {}, media: item.media, localMediaCount: 0,
+    });
+    const screen = render(<AddRecommendationScreen navigation={navigation}
+      route={{ params: { mode: 'edit', item, postId: item.id } }} />);
+    await waitFor(() => expect(screen.getByTestId('recommendation-subcategory-aquarium').props.accessibilityState)
+      .toMatchObject({ checked: true }));
+    expect(screen.getAllByTestId('recommendation-subcategory-theme_park')).toHaveLength(1);
+    expect(screen.getByTestId('recommendation-subcategory-theme_park').props.accessibilityState).toMatchObject({ checked: true });
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 950)); });
+    expect(mockSaveRecommendationDraft).not.toHaveBeenCalled();
+    fireEvent.changeText(screen.getByTestId('recommendation-title-input'), 'Updated aquarium');
+    fireEvent.press(screen.getByTestId('recommendation-next'));
+    await waitFor(() => expect(mockEnqueueCreate).toHaveBeenCalledWith(expect.objectContaining({
+      draft: expect.objectContaining({ categoryId: 'activities', subcategoryIds: ['aquarium', 'theme_park'] }),
+    })));
+  });
+
   it('keeps the custom label while Other remains selected with another subcategory', async () => {
     const navigationMock = {
       goBack: jest.fn(), setOptions: jest.fn(), navigate: jest.fn(), dispatch: jest.fn(),

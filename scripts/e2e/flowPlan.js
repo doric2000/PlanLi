@@ -1,9 +1,10 @@
 'use strict';
-const FLOWS = ['guest', 'auth', 'publish', 'gallery', 'network', 'location', 'atlas', 'route', 'navigation'];
+const FLOWS = ['guest', 'auth', 'publish', 'gallery', 'network', 'location', 'atlas', 'route', 'navigation', 'recommendation-edit'];
 function selectFlows(files) {
   const selected = new Set();
   for (const file of files) {
     if (/\.md$|\.test\.[jt]sx?$/.test(file)) continue;
+    if (/\/(?:CreateRecommendationScreen|backgroundOperationService|recommendationService|RecommendationPublishContext|travelMediaErrors)\.js$/.test(file)) selected.add('recommendation-edit');
     if (/^client\/src\/features\/roadtrip\/|\/(?:useRouteDraftMedia|routeBuilder|RouteService)\.js$|^functions\/route(?:Draft)?Service\.js$/.test(file)) { selected.add('route'); continue; }
     if (/^client\/src\/(?:features\/region\/|styles\/atlas\.js$)|^client\/assets\/atlas\//.test(file)) { selected.add('atlas'); continue; }
     if (file === 'client/src/components/ExactLocationMapPreview.js') { selected.add('location'); continue; }
@@ -39,7 +40,8 @@ function runtimeFlowsForSource(file) {
   if (/^client\/src\/config\/(?:firebase|firebaseEnvironment|localEmulators|appCheck(?:\.native)?|secureAuthStorage)\.js$/.test(file)) return [...FLOWS];
   if (/\/(?:HomeScreen|RegionSelectorScreen|AuthEntryScreen)\.js$/.test(file)) return ['guest'];
   if (/\/LoginScreen\.js$/.test(file)) return ['auth'];
-  if (/\/(?:CreateRecommendationScreen|SingleDestinationPicker|TravelMediaComposer|useTravelMediaSource|MediaService|RecommendationService)\.js$/.test(file)) return ['publish', 'network'];
+  if (/\/(?:CreateRecommendationScreen|RecommendationPublishContext)\.js$/.test(file)) return ['publish', 'network', 'recommendation-edit'];
+  if (/\/(?:SingleDestinationPicker|TravelMediaComposer|useTravelMediaSource|MediaService|RecommendationService)\.js$/.test(file)) return ['publish', 'network'];
   if (/\/(?:RecommendationDetailScreen|RecommendationDetailContent|RecommendationHero|MediaGalleryModal|ContentActionMenu|ActionMenu|mediaAssets)\.js$/.test(file)) return ['gallery'];
   return [];
 }

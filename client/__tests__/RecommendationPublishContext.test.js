@@ -2,6 +2,8 @@ jest.mock('../src/features/operations/BackgroundMediaService', () => ({
   backgroundTransfersAvailable: () => false, removeBackgroundSources: async () => {}, discardBackgroundJob: async () => {},
 }));
 import React from 'react';
+import { mediaAuthenticationErrorMessage } from '../src/utils/travelMediaErrors';
+import { safeOperationError } from '../src/features/operations/operationModel';
 import { act, render, waitFor } from '@testing-library/react-native';
 
 import {
@@ -17,6 +19,18 @@ import {
 } from '../src/features/community/publishing/RecommendationPublishContext';
 
 let mockUuidSerial = 0;
+
+test.each(['recent_sign_in_required', 'totp_required', 'OPERATION_AUTH_EXPIRED'])(
+  'authentication recovery is manual and uses safe actionable copy: %s', (reason) => {
+    const error = { code: 'functions/failed-precondition', message: 'private provider detail', details: { reason, retryable: true } };
+    expect(publishRetryPolicy(error, 1)).toEqual({ automaticRetry: false, retryable: true, shouldRetry: false, delayMs: 0 });
+    expect(isTransientPublishError(error)).toBe(false);
+    expect(safeOperationError(error).message).toBe(mediaAuthenticationErrorMessage(error));
+    expect(safeOperationError({ code: error.code, reason }).message).toBe(safeOperationError(error).message);
+    expect(safeOperationError(error).message).toContain('מחדש');
+    expect(safeOperationError(error).message).not.toContain(error.message);
+  }
+);
 jest.mock('expo-crypto', () => ({
   randomUUID: () => `123e4567-e89b-42d3-a456-${String(++mockUuidSerial).padStart(12, '0')}`,
 }));

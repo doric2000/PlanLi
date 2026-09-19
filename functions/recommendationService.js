@@ -766,6 +766,7 @@ async function validateVariant({
   variant,
   expectedVariant,
   mediaBucket,
+  retained = false,
 }) {
   assert(variant && typeof variant === 'object', 'invalid-argument', `Missing ${expectedVariant} image.`);
   const path = cleanString(variant.path, {
@@ -811,7 +812,7 @@ async function validateVariant({
     'Image asset metadata is invalid.'
   );
   assert(
-    metadata.metadata?.state === 'prepared',
+    metadata.metadata?.state === 'prepared' || (retained && metadata.metadata?.state === 'claimed'),
     'failed-precondition',
     'This prepared image has already been used.'
   );
@@ -880,6 +881,7 @@ async function validateMediaAssets({
           return [variantName, await validateVariant({
             admin, uid: ownerMatch[1], assetId: trustedExistingAsset.assetId,
             variant, expectedVariant: variantName, mediaBucket,
+            retained: true,
           })];
         }));
         return { ...trustedExistingAsset, ...Object.fromEntries(variants) };

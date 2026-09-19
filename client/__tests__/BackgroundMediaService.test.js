@@ -79,3 +79,28 @@ test('server completion updates the same journal entry and preserves an acknowle
   await syncBackgroundHistory('owner');
   expect(mockJournal.update).toHaveBeenCalledWith(expect.objectContaining({ id: 'publish:local-job', targetId: 'post', acknowledged: true }));
 });
+
+test('admin reauthentication failure survives a cold history refresh with explicit retry', async () => {
+  mockCall.mockResolvedValue({ operations: [{ operationId: 'edit-job', kind: 'recommendation', status: 'failed',
+    error: { code: 'failed-precondition', reason: 'recent_sign_in_required', retryable: true } }] });
+  await syncBackgroundHistory('owner');
+  expect(mockJournal.update).toHaveBeenCalledWith(expect.objectContaining({
+    serverOperationId: 'edit-job', status: 'failed', retryable: true, message: expect.stringContaining('אימות מנהל מחדש'),
+  }));
+  expect(mockCall.mock.calls.map(([name]) => name)).toEqual(['getBackgroundOperations']);
+});
+
+test('reordered remote recommendation images register once and need no native transfer', async () => {
+  const assets = [{ assetId: 'second' }, { assetId: 'first' }];
+  const options = { ...request(), kind: 'recommendation', media: assets.map((asset) => ({ asset })),
+    job: { id: 'edit-job', ownerUid: 'owner', payload: { draftId: 'draft', expectedVersion: 2, sourceRecommendationId: 'target' } } };
+  mockCall.mockImplementation(async (name) => name === 'startBackgroundOperation' ? {} : {
+    status: 'success', result: { recommendationId: 'target', publicationStatus: 'active' },
+  });
+  await expect(runBackgroundMedia(options)).resolves.toMatchObject({ recommendationId: 'target' });
+  const [name, body] = mockCall.mock.calls[0];
+  expect(name).toBe('startBackgroundOperation');
+  expect(body.items.map((item) => item.asset)).toEqual(assets);
+  expect(body).toMatchObject({ draftId: 'draft', expectedVersion: 2 });
+  expect(mockStage).not.toHaveBeenCalled(); expect(mockSchedule).not.toHaveBeenCalled();
+});

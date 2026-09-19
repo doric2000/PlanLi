@@ -130,7 +130,7 @@ test('revoked and suspended accounts cannot complete accepted work', async () =>
     f.worker.updateProfileImpl = async () => assert.fail('No business write may run');
     await service.processBackgroundOperation(f.worker);
     assert.equal(f.records.get(f.jobPath).status, 'failed');
-    assert.equal(f.records.get(f.jobPath).error.retryable, false);
+    assert.equal(f.records.get(f.jobPath).error.retryable, mode === 'revoked');
   }
 });
 
@@ -242,4 +242,129 @@ test('an edit retains only canonical images from its owned content', async () =>
   await assert.rejects(service.startBackgroundOperation({ ...f.options, data: {
     ...data, operationId: randomUUID(), payload: { recommendation: { title: 'Another post' } },
   } }));
+});
+
+function editFixture({ adminEdit = true, draft = false } = {}) {
+  const f = fixture();
+  const sourceOwner = adminEdit ? 'author' : auth.uid;
+  const media = ['first', 'second'].map(() => {
+    const assetId = randomUUID();
+    return { assetId, ...Object.fromEntries(['large', 'feed', 'thumb'].map((variant) => [variant,
+      { path: `media/${sourceOwner}/${assetId}/${variant}.webp`, url: `https://example.test/${assetId}/${variant}` }])) };
+  });
+  f.records.set('recommendations/edit-target', { ownerId: sourceOwner, media, updatedAt: 12, status: 'active' });
+  const editorAuth = { ...auth, token: { ...auth.token, admin: adminEdit,
+    firebase: { ...auth.token.firebase, sign_in_second_factor: 'totp' } } };
+  f.user.customClaims = { admin: adminEdit };
+  f.records.set('system/moderation/admins/owner', { active: adminEdit });
+  const data = { operationId: f.id, kind: 'recommendation', items: [...media].reverse().map((asset) => ({ id: randomUUID(), asset })),
+    payload: { recommendationId: 'edit-target', recommendation: { title: 'Reordered' } } };
+  if (draft) {
+    delete data.payload;
+    data.draftId = 'edit-draft'; data.expectedVersion = 1;
+    const versionPath = 'system/recommendationDrafts/owners/owner/draftVersions/version';
+    f.records.set('system/recommendationDrafts/owners/owner', { ownerId: 'owner', draftId: data.draftId,
+      sourceRecommendationId: 'edit-target', version: 1, state: 'draft', versionPath });
+    f.records.set(versionPath, { ownerId: 'owner', state: 'draft', draft: { media: [...media].reverse() } });
+  }
+  f.options = { ...f.options, auth: editorAuth, data };
+  f.worker.saveRecommendationImpl = async ({ auth: actor, data: payload, operation }) => {
+    const { assertEditableSource } = require('./recommendationDraftService');
+    await assertEditableSource({ admin: f.admin, auth: actor, sourceRecommendationId: payload.recommendationId });
+    assert.equal(operation.expectedUpdatedAt, 12);
+    assert.deepEqual(payload.recommendation.media.map((asset) => asset.assetId), [...media].reverse().map((asset) => asset.assetId));
+    assert.equal(f.records.get('recommendations/edit-target').ownerId, sourceOwner);
+    const result = { recommendationId: 'edit-target', publicationStatus: 'active' };
+    await operation.ref.update({ committedResult: result });
+    return result;
+  };
+  return { ...f, media };
+}
+
+test('owner and admin reorder retained photos without uploads; the worker survives client departure', async () => {
+  for (const adminEdit of [false, true]) {
+    const f = editFixture({ adminEdit });
+    await service.startBackgroundOperation(f.options);
+    const stored = f.records.get(f.jobPath);
+    assert.equal(stored.adminEdit, adminEdit);
+    assert.equal(stored.secondFactor, 'totp');
+    assert.equal(stored.authTime, auth.token.auth_time);
+    let prepares = 0;
+    await service.processBackgroundOperation({ ...f.worker, prepareMediaImpl: async () => { prepares++; } });
+    assert.equal(f.records.get(f.jobPath).status, 'success');
+    assert.equal(prepares, 0);
+    const again = await service.startBackgroundOperation(f.options);
+    assert.equal(again.status, 'success');
+    assert.equal(again.secondFactor, undefined);
+    assert.equal(again.adminEdit, undefined);
+  }
+});
+
+test('catalog draft admission allows the registered admin and keeps the editor as job owner', async () => {
+  const f = editFixture({ draft: true });
+  await service.startBackgroundOperation(f.options);
+  const job = f.records.get(f.jobPath);
+  assert.equal(job.ownerUid, auth.uid);
+  assert.equal(job.adminEdit, true);
+  assert.equal(job.draft.pointer.sourceRecommendationId, 'edit-target');
+  assert.equal((await service.actorForJob(f.admin, job)).token.admin, true);
+});
+
+test('admission rejects foreign edits without an active admin, fresh sign-in and TOTP', async () => {
+  for (const draft of [false, true]) for (const denial of ['ordinary', 'inactive', 'stale', 'no-totp']) {
+    const f = editFixture({ draft });
+    if (denial === 'ordinary') f.options.auth.token.admin = false;
+    if (denial === 'inactive') f.records.set('system/moderation/admins/owner', { active: false });
+    if (denial === 'stale') f.options.auth.token.auth_time -= 601;
+    if (denial === 'no-totp') delete f.options.auth.token.firebase.sign_in_second_factor;
+    await assert.rejects(service.startBackgroundOperation(f.options));
+    assert.equal(f.records.has(f.jobPath), false);
+  }
+});
+
+test('worker revalidates role, registry, revocation, account and TOTP before writing', async () => {
+  for (const denial of ['claim', 'registry', 'revoked', 'disabled', 'suspended', 'stale', 'no-totp']) {
+    const f = editFixture();
+    await service.startBackgroundOperation(f.options);
+    if (denial === 'claim') f.user.customClaims.admin = false;
+    if (denial === 'registry') f.records.set('system/moderation/admins/owner', { active: false });
+    if (denial === 'revoked') f.user.tokensValidAfterTime = new Date(Date.now() + 1000).toISOString();
+    if (denial === 'disabled') f.user.disabled = true;
+    if (denial === 'suspended') f.records.get('users/owner').moderation = { status: 'suspended' };
+    if (denial === 'stale') f.records.get(f.jobPath).authTime -= 601;
+    if (denial === 'no-totp') delete f.records.get(f.jobPath).secondFactor;
+    await service.processBackgroundOperation({ ...f.worker, saveRecommendationImpl: async () => assert.fail('Unauthorized write') });
+    assert.equal(f.records.get(f.jobPath).status, 'failed', denial);
+    assert.equal(f.records.get(f.jobPath).committedResult, null);
+    assert.equal(f.records.get('recommendations/edit-target').ownerId, 'author');
+  }
+});
+
+test('expired admin authentication permits only explicit reauthenticated retry without reupload', async () => {
+  const f = editFixture();
+  await service.startBackgroundOperation(f.options);
+  f.records.get(f.jobPath).authTime -= 601;
+  await service.processBackgroundOperation(f.worker);
+  assert.deepEqual(f.records.get(f.jobPath).error, { code: 'failed-precondition', reason: 'recent_sign_in_required', retryable: true });
+  const retry = { admin: f.admin, auth: f.options.auth, mediaBucket: bucket, data: { operationId: f.id } };
+  const stale = { ...retry.auth, token: { ...retry.auth.token, auth_time: retry.auth.token.auth_time - 601 } };
+  await assert.rejects(service.retryBackgroundOperation({ ...retry, auth: stale }), (error) => error.details.reason === 'recent_sign_in_required');
+  assert.equal(f.records.get(f.jobPath).attempt, 1);
+  f.user.customClaims.admin = false;
+  await assert.rejects(service.retryBackgroundOperation(retry));
+  f.user.customClaims.admin = true;
+  await service.retryBackgroundOperation(retry);
+  assert.equal(f.records.get(f.jobPath).attempt, 2);
+  await service.processBackgroundOperation({ ...f.worker, prepareMediaImpl: async () => assert.fail('Retained images must not upload again') });
+  assert.equal(f.records.get(f.jobPath).status, 'success');
+});
+
+test('admin authorization does not admit media from another post or enable route admin edits', async () => {
+  const f = editFixture();
+  f.options.data.items[0].asset = { ...f.media[0], assetId: randomUUID() };
+  await assert.rejects(service.startBackgroundOperation(f.options));
+  const routeJob = { ownerUid: auth.uid, kind: 'route', adminEdit: true, authTime: auth.token.auth_time,
+    secondFactor: 'totp', provider: 'password', draft: { pointer: { sourceRouteId: 'route' } } };
+  f.records.set('routes/route', { ownerId: 'author' });
+  await assert.rejects(service.actorForJob(f.admin, routeJob));
 });
