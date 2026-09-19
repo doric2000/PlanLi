@@ -107,6 +107,7 @@ export default function TripPlannerScreen({ navigation, route }) {
   const stops = useMemo(() => orderedStops(selectedDay), [selectedDay]);
   const selectedStop = stops.find((stop) => stop.id === selectedStopId);
   const locatedStops = stops.filter((stop) => coordinatesForStop(stop));
+  const hasLocatedStops = locatedStops.length > 0;
   const actualStopCount = (trip?.days || []).reduce((sum, day) => sum + (day.stops?.length || 0), 0);
   const graphMismatch = Boolean(trip && actualStopCount !== Number(trip.stopCount));
 
@@ -133,6 +134,11 @@ export default function TripPlannerScreen({ navigation, route }) {
     const timer = setTimeout(() => setMapFailed(true), 10000);
     return () => clearTimeout(timer);
   }, [locatedStops.length, mapReady, mapKey]);
+
+  useEffect(() => {
+    setMapReady(false);
+    setMapFailed(false);
+  }, [selectedDayId, hasLocatedStops]);
 
   const mutate = useCallback((operations) => {
     const run = async () => {
@@ -223,6 +229,7 @@ export default function TripPlannerScreen({ navigation, route }) {
   const openDiscovery = () => navigation.navigate('TripDiscovery', { tripId, dayId: selectedDay.id });
   const openCustom = (stop) => navigation.navigate('TripCustomStop', { tripId, dayId: selectedDay.id, stopId: stop?.id, revision: tripRef.current?.revision });
   const retryMap = () => { setMapFailed(false); setMapReady(false); setMapKey((current) => current + 1); };
+  const closeExpandedMap = () => { setMapExpanded(false); setMapReady(true); setMapFailed(false); };
   const recoverCorruptQueue = async () => {
     setSaveStatus('saving');
     try {
@@ -253,9 +260,10 @@ export default function TripPlannerScreen({ navigation, route }) {
 
   const renderMap = (expanded = false) => (
     <View style={expanded ? styles.mapFullScreen : styles.editorMapCard}>
-      <TripPlannerMap key={`${mapKey}-${expanded}`} stops={stops} route={routeData} selectedStopId={selectedStopId} onSelectStop={setSelectedStopId} onReady={() => { setMapReady(true); setMapFailed(false); }} />
-      {mapFailed ? <View style={styles.editorMapHint}><Ionicons name="map-outline" size={28} color={colors.primary} /><AppText style={styles.editorMapHintText}>המפה לא נטענה. העצירות עדיין זמינות ברשימה.</AppText><TouchableOpacity style={styles.secondaryButton} onPress={retryMap} accessibilityRole="button"><AppText style={styles.secondaryButtonText}>טעינה מחדש של המפה</AppText></TouchableOpacity></View> : null}
-      {!expanded && !mapFailed ? <TouchableOpacity style={styles.editorMapOverlay} onPress={() => { setMapReady(false); setMapExpanded(true); }} accessibilityRole="button" accessibilityLabel="מפה במסך מלא"><Ionicons name="expand-outline" size={18} color={colors.primary} /><AppText style={styles.stopDetailText}>מפה מלאה</AppText></TouchableOpacity> : null}
+      <TripPlannerMap key={`${mapKey}-${selectedDayId}-${expanded}`} stops={stops} route={routeData} selectedStopId={selectedStopId} onSelectStop={setSelectedStopId} onReady={() => { setMapReady(true); setMapFailed(false); }} />
+      {!mapReady && !mapFailed ? <View style={[styles.editorMapHint, styles.editorMapStatusOverlay]} testID="trip-map-loading"><ActivityIndicator color={colors.primary} /><AppText style={styles.editorMapHintText}>טוענים את המפה…</AppText></View> : null}
+      {mapFailed ? <View style={[styles.editorMapHint, styles.editorMapStatusOverlay]} testID="trip-map-error"><Ionicons name="map-outline" size={28} color={colors.primary} /><AppText style={styles.editorMapHintText}>המפה לא נטענה. העצירות עדיין זמינות ברשימה.</AppText><TouchableOpacity style={styles.secondaryButton} onPress={retryMap} accessibilityRole="button" testID="trip-map-retry"><AppText style={styles.secondaryButtonText}>טעינה מחדש של המפה</AppText></TouchableOpacity></View> : null}
+      {!expanded && mapReady && !mapFailed ? <TouchableOpacity style={styles.editorMapOverlay} onPress={() => { setMapReady(false); setMapExpanded(true); }} accessibilityRole="button" accessibilityLabel="מפה במסך מלא"><Ionicons name="expand-outline" size={18} color={colors.primary} /><AppText style={styles.stopDetailText}>מפה מלאה</AppText></TouchableOpacity> : null}
     </View>
   );
 
@@ -285,8 +293,8 @@ export default function TripPlannerScreen({ navigation, route }) {
         <TouchableOpacity style={styles.editorAction} onPress={() => openCustom()} accessibilityRole="button" accessibilityLabel="עצירה משלי" testID="trip-add-custom-stop"><Ionicons name="add-circle-outline" size={20} color="#FFFFFF" /><AppText style={styles.editorActionText}>עצירה משלי</AppText></TouchableOpacity>
       </View>
       <TripShareModal visible={shareVisible} trip={trip} onClose={() => setShareVisible(false)} onChanged={(shareActive) => absorb({ ...tripRef.current, shareActive })} />
-      <Modal visible={mapExpanded} animationType="slide" onRequestClose={() => setMapExpanded(false)}>
-        <View style={styles.mapFullScreen}>{locatedStops.length ? renderMap(true) : null}<View style={[styles.mapFullHeader, { paddingTop: Math.max(insets.top, 8) }]}><View style={styles.headerRow}><TouchableOpacity style={styles.iconButton} onPress={() => setMapExpanded(false)} accessibilityRole="button" accessibilityLabel="חזרה לרשימת העצירות"><Ionicons name="close" size={22} color={colors.primary} /></TouchableOpacity><AppText style={styles.pageHeaderTitle}>{selectedDay?.title || 'מפת הטיול'}</AppText></View></View>{selectedStop ? <TouchableOpacity style={styles.mapFullDetails} onPress={() => setMapExpanded(false)} accessibilityRole="button"><AppText style={styles.stopTitle}>{selectedStop.title}</AppText><AppText style={styles.stopSubtitle}>חזרה לרשימה ולפרטי העצירה ←</AppText></TouchableOpacity> : null}</View>
+      <Modal visible={mapExpanded} animationType="slide" onRequestClose={closeExpandedMap}>
+        <View style={styles.mapFullScreen}>{locatedStops.length ? renderMap(true) : null}<View style={[styles.mapFullHeader, { paddingTop: Math.max(insets.top, 8) }]}><View style={styles.headerRow}><TouchableOpacity style={styles.iconButton} onPress={closeExpandedMap} accessibilityRole="button" accessibilityLabel="חזרה לרשימת העצירות"><Ionicons name="close" size={22} color={colors.primary} /></TouchableOpacity><AppText style={styles.pageHeaderTitle}>{selectedDay?.title || 'מפת הטיול'}</AppText></View></View>{selectedStop ? <TouchableOpacity style={styles.mapFullDetails} onPress={closeExpandedMap} accessibilityRole="button"><AppText style={styles.stopTitle}>{selectedStop.title}</AppText><AppText style={styles.stopSubtitle}>חזרה לרשימה ולפרטי העצירה ←</AppText></TouchableOpacity> : null}</View>
       </Modal>
       <Modal transparent visible={Boolean(movingStop)} animationType="fade" onRequestClose={() => setMovingStop(null)}><TouchableOpacity activeOpacity={1} style={styles.modalBackdrop} onPress={() => setMovingStop(null)}><View style={styles.modalSheet} accessibilityViewIsModal><AppText style={styles.modalTitle}>לאיזה יום להעביר?</AppText><AppText style={styles.modalText}>{movingStop?.title}</AppText>{(trip.days || []).filter((day) => day.id !== selectedDay?.id).sort((a, b) => a.order - b.order).map((day) => <TouchableOpacity key={day.id} onPress={() => moveStop(day.id)} style={styles.tripCard} accessibilityRole="button"><AppText style={styles.tripCardTitle}>{day.kind === 'ideas' ? 'רעיונות' : day.title}</AppText><AppText style={styles.tripCardMeta}>{day.stops?.length ?? day.stopCount ?? 0} עצירות</AppText></TouchableOpacity>)}</View></TouchableOpacity></Modal>
     </View>

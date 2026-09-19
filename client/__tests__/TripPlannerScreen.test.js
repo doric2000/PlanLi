@@ -11,6 +11,7 @@ const mockApply = jest.fn();
 const mockQueue = jest.fn();
 const mockIsOffline = jest.fn(() => false);
 let mockFocusCallback;
+let mockMapProps;
 
 jest.mock('@react-navigation/native', () => ({
   useFocusEffect: (callback) => {
@@ -29,7 +30,10 @@ jest.mock('react-native-draggable-flatlist', () => {
   });
 });
 jest.mock('../src/features/tripPlanner/components/TripDayTabs', () => () => null);
-jest.mock('../src/features/tripPlanner/components/TripPlannerMap', () => () => null);
+jest.mock('../src/features/tripPlanner/components/TripPlannerMap', () => (props) => {
+  mockMapProps = props;
+  return null;
+});
 jest.mock('../src/features/tripPlanner/components/TripShareModal', () => () => null);
 jest.mock('../src/services/TripService', () => ({
   applyPrivateTripOperations: (...args) => mockApply(...args),
@@ -66,6 +70,7 @@ const trip = {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockMapProps = null;
   mockGetPrivateTrip.mockResolvedValue(trip);
   mockApply.mockResolvedValue({ revision: 2 });
   mockQueue.mockResolvedValue({});
@@ -100,6 +105,19 @@ test('the real stop list and add actions stay visible for a trip with one stop',
   expect(screen.getByTestId('trip-add-custom-stop')).toBeTruthy();
   fireEvent.press(screen.getByTestId('trip-add-recommendations'));
   expect(navigation.navigate).toHaveBeenCalledWith('TripDiscovery', { tripId: 'trip-1', dayId: 'day-1' });
+});
+
+test('a located stop shows progress until its native map surface is ready', async () => {
+  mockGetPrivateTrip.mockResolvedValue({ ...trip, stopCount: 1, days: [trip.days[0], {
+    ...trip.days[1], stopCount: 1,
+    stops: [{ id: 'stop-1', title: 'תצפית הכרמל', order: 0, coordinates: { lat: 32.8, lng: 35 } }],
+  }] });
+  const screen = render(<TripPlannerScreen navigation={{ goBack: jest.fn(), navigate: jest.fn() }} route={{ params: { tripId: 'trip-1' } }} />);
+  await waitFor(() => expect(screen.getByTestId('trip-map-loading')).toBeTruthy());
+  expect(screen.queryByLabelText('מפה במסך מלא')).toBeNull();
+  act(() => mockMapProps.onReady());
+  expect(screen.queryByTestId('trip-map-loading')).toBeNull();
+  expect(screen.getByLabelText('מפה במסך מלא')).toBeTruthy();
 });
 
 test('opening the planner without an id returns to the library without creating a trip', async () => {

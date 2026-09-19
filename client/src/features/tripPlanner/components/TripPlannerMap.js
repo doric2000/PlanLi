@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef } from 'react';
+import { Platform } from 'react-native';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 
 import { colors, tripPlannerStyles as styles } from '../../../styles';
@@ -12,19 +13,21 @@ export default function TripPlannerMap({
   const initialRegion = useMemo(() => regionForStops(stops), []);
   const line = useMemo(() => routeCoordinates(route, stops), [route, stops]);
   const pointKey = points.map((point) => `${point.latitude}:${point.longitude}`).join('|');
+  const isAndroid = Platform.OS === 'android';
   useEffect(() => {
     if (points.length && mapRef.current) mapRef.current.fitToCoordinates(points, { edgePadding: { top: 40, right: 40, bottom: 45, left: 40 }, animated: true });
   }, [pointKey]);
   return (
     <MapView
       ref={mapRef}
-      provider={PROVIDER_GOOGLE}
+      provider={isAndroid ? PROVIDER_GOOGLE : undefined}
       style={[styles.map, style]}
       initialRegion={initialRegion}
       onMapReady={() => {
         if (points.length) mapRef.current?.fitToCoordinates(points, { edgePadding: { top: 40, right: 40, bottom: 45, left: 40 }, animated: false });
-        onReady?.();
+        if (!isAndroid) onReady?.();
       }}
+      onMapLoaded={isAndroid ? onReady : undefined}
       onRegionChangeComplete={onRegionChange}
       onPress={(event) => onMapPress?.(event?.nativeEvent?.coordinate)}
       accessibilityLabel="מפת תכנון הטיול"
