@@ -5346,3 +5346,13 @@ part of this follow-up.
 - Message: Fix trip map loading, stop numbering, and editor spacing
 - Device application and post-update security smoke tests: pending.
 - Rollback: republish the immediately preceding verified production group; never change the runtime URL or channel in-app.
+
+## iOS production OTA release
+
+- Source commit: `dd72177d4739b2b84987c3f2ef68cfe80fa8b292`.
+- EAS Update group: `586f1ad9-7715-450a-8e12-9720d9b789e3`; channel `production`; runtime `1.3.0`.
+- EAS environment: `production`; published at `2026-09-19T16:09:37.656Z`.
+- Immutable iOS launch bundle: update `01a0ba6e-2c78-7889-91f7-4acdbb94eb6f`; 10947820 bytes; SHA-256 `C6DE6B7751AC519CAB3F99ADE7EC75ECEADE5A06D89075D6345E4DD06823EA59`.
+- Message: Fix trip planner map loading on iPhone
+- Device application and post-update security smoke tests: pending.
+- Rollback: republish the immediately preceding verified production group; never change the runtime URL or channel in-app.
