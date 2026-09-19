@@ -5108,3 +5108,17 @@ part of this follow-up.
 - Previous verified production group: `55bfcf70-1b1a-4320-aabd-a1939c83bbcb`.
 - Device application and post-update security smoke tests: pending.
 - Rollback: republish the immediately preceding verified production group; never change the runtime URL or channel in-app.
+
+## Android production OTA release
+
+- Source commit: `280039f5618dd9647a26e49755aec027b78c7578`.
+- EAS Update group: `37a0acef-ad5b-4b0a-b744-9df4c02c951d`; channel `production`; runtime `1.3.0`.
+- EAS environment: `production`; published at `2026-09-19T10:13:12.032Z`.
+- Immutable Android launch bundle: update `01a0b927-dae0-7c85-ba08-6b0bd8c16f2b`; 10946988 bytes; SHA-256 `6CC3A52EF4B842446FBE6CE2DCDEF1AAB382D005C5CD5E82BB0F0F11FFC07AED`.
+- Message: Android: reliable list-first personal trip planning
+- Target: Google Play internal-test Android `1.1.0 (10)`, build `b0648036-61d6-4af6-b659-442a22b603dc`; no new native build or store submission/review.
+- Verified staging candidate: `d398bda3-7ac5-477e-96f3-33fe0e9ebdac`; identical production bundle.
+- EAS update readback and guarded immutable-bundle verification passed at `2026-09-19T10:13:39Z`.
+- Previous verified production group: `e7a9dcf4-074b-4ed5-9d6d-3ba983ec2f20`.
+- Device application and post-update security smoke tests: pending.
+- Rollback: republish the immediately preceding verified production group; never change the runtime URL or channel in-app.
