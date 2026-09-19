@@ -41,9 +41,49 @@ memory on Node.js 22, and the production log window from deployment start at
 `2026-09-19T07:26:52Z` contained no `ERROR` entries for the function. No other
 Function, Rules, index, Hosting target, native build or OTA was deployed in this
 step. The affected validation passed 92 client suites and three Functions test
-files before deployment. Authenticated device execution and the client OTA remain
-unverified at this point. The unrelated untracked root `app.json` was preserved
-and excluded.
+files before deployment. Authenticated device execution remains unverified. The
+client OTA completed afterward and is summarized below. The unrelated untracked
+root `app.json` was preserved and excluded.
+
+### Reliable personal trip planning OTA (2026-09-19)
+
+PR [#400](https://github.com/doric2000/PlanLi/pull/400) delivered the list-first
+trip workspace, identifiable saved/search selection, day and ideas targeting,
+custom stops, stable queued stop IDs, and explicit loading, empty, offline,
+conflict and map-failure recovery. PR
+[#401](https://github.com/doric2000/PlanLi/pull/401) renewed the fail-closed
+optional-native compatibility evidence after verifying that the changed operation
+recovery paths do not enable `PlanLiTransfers` in the installed binaries.
+
+The iOS production channel now serves group
+`68ed932b-5146-43c8-a97f-2b3511d5eb9d`, update
+`01a0b91c-d946-73d7-a4c5-5d678df89f71`, from source
+`48b683489f6aa7ab05afa6bba91885f5b98a587d`. It was published at
+`2026-09-19T10:01:10.726Z` for runtime `1.3.0` and targets TestFlight
+**1.1.1 (30)**. Verified staging candidate
+`802bd485-3ec4-4794-8dfb-213661f775a2` and production contain the same
+10,946,036-byte bundle with SHA-256
+`53800755F19EF526C6985A0BC35283B4DF0B9B3402627361D2BB889AAB7A3906`.
+
+The Android production channel now serves group
+`37a0acef-ad5b-4b0a-b744-9df4c02c951d`, update
+`01a0b927-dae0-7c85-ba08-6b0bd8c16f2b`, from source
+`280039f5618dd9647a26e49755aec027b78c7578`. It was published at
+`2026-09-19T10:13:12.032Z` for runtime `1.3.0` and targets Google Play
+internal-test **1.1.0 (10)**. Verified staging candidate
+`d398bda3-7ac5-477e-96f3-33fe0e9ebdac` and production contain the same
+10,946,988-byte bundle with SHA-256
+`6CC3A52EF4B842446FBE6CE2DCDEF1AAB382D005C5CD5E82BB0F0F11FFC07AED`.
+
+Release readiness passed 123 affected client suites and 12 Functions test files;
+the optional-native review additionally passed five focused suites / 55 tests.
+GitHub validation and security checks passed for the implementation and release
+evidence PRs. EAS readback and immutable-bundle verification passed for both
+platforms. No native build, dependency/runtime/version change, App Store or Play
+submission/review occurred. Installed-device application and post-update security
+smoke tests remain pending. The preceding verified rollback groups are
+`55bfcf70-1b1a-4320-aabd-a1939c83bbcb` for iOS and
+`e7a9dcf4-074b-4ed5-9d6d-3ba983ec2f20` for Android.
 
 ### Android cumulative app and modal safe-area OTA (2026-09-18)
 
