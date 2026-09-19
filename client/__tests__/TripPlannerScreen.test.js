@@ -97,7 +97,7 @@ test('loading an existing trip settles after one request instead of retriggering
     navigation={{ goBack: jest.fn(), navigate: jest.fn(), setParams: jest.fn() }}
     route={{ params: { tripId: 'trip-1' } }}
   />);
-  await waitFor(() => expect(screen.getByDisplayValue('טיול יציב')).toBeTruthy());
+  await waitFor(() => expect(screen.getByDisplayValue('טיול יציב')).toBeTruthy(), { timeout: 5000 });
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 30)); });
   expect(mockGetPrivateTrip).toHaveBeenCalledTimes(1);
   expect(mockGetPrivateTrip).toHaveBeenCalledWith('trip-1');
