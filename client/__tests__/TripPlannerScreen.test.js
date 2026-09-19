@@ -1,5 +1,6 @@
 import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
 
 const mockGetPrivateTrip = jest.fn();
 const mockLoadCachedTrip = jest.fn(async () => null);
@@ -12,6 +13,7 @@ const mockQueue = jest.fn();
 const mockIsOffline = jest.fn(() => false);
 let mockFocusCallback;
 let mockMapProps;
+let mockMissingDragIndex = false;
 
 jest.mock('@react-navigation/native', () => ({
   useFocusEffect: (callback) => {
@@ -26,7 +28,12 @@ jest.mock('react-native-draggable-flatlist', () => {
   const { FlatList } = require('react-native');
   return ({ renderItem, onDragEnd, activationDistance, ...props }) => ReactModule.createElement(FlatList, {
     ...props,
-    renderItem: ({ item, index }) => renderItem({ item, index, drag: jest.fn(), isActive: false }),
+    renderItem: ({ item, index }) => renderItem({
+      item,
+      getIndex: () => mockMissingDragIndex ? undefined : index,
+      drag: jest.fn(),
+      isActive: false,
+    }),
   });
 });
 jest.mock('../src/features/tripPlanner/components/TripDayTabs', () => () => null);
@@ -70,6 +77,7 @@ const trip = {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockMissingDragIndex = false;
   mockMapProps = null;
   mockGetPrivateTrip.mockResolvedValue(trip);
   mockApply.mockResolvedValue({ revision: 2 });
@@ -101,11 +109,26 @@ test('the real stop list and add actions stay visible for a trip with one stop',
   const screen = render(<TripPlannerScreen navigation={navigation} route={{ params: { tripId: 'trip-1' } }} />);
   await waitFor(() => expect(screen.getByTestId('trip-stop-stop-1')).toBeTruthy());
   expect(screen.getByText('תצפית הכרמל')).toBeTruthy();
+  expect(screen.getByLabelText('1, תצפית הכרמל')).toBeTruthy();
+  expect(screen.queryByText('NaN')).toBeNull();
   expect(screen.getByTestId('trip-stops-list').props.containerStyle).toEqual(expect.objectContaining({ flex: 1 }));
+  expect(StyleSheet.flatten(screen.getByTestId('trip-map-card').props.style).marginBottom).toBe(12);
+  expect(mockMapProps.interactive).toBe(false);
   expect(screen.getByTestId('trip-add-recommendations')).toBeTruthy();
   expect(screen.getByTestId('trip-add-custom-stop')).toBeTruthy();
   fireEvent.press(screen.getByTestId('trip-add-recommendations'));
   expect(navigation.navigate).toHaveBeenCalledWith('TripDiscovery', { tripId: 'trip-1', dayId: 'day-1' });
+});
+
+test('a temporarily unavailable draggable index falls back to the stop identity', async () => {
+  mockMissingDragIndex = true;
+  mockGetPrivateTrip.mockResolvedValue({ ...trip, stopCount: 1, days: [trip.days[0], {
+    ...trip.days[1], stopCount: 1,
+    stops: [{ id: 'stop-1', sourceType: 'recommendation', title: 'מלון לירו', order: 0 }],
+  }] });
+  const screen = render(<TripPlannerScreen navigation={{ goBack: jest.fn(), navigate: jest.fn() }} route={{ params: { tripId: 'trip-1' } }} />);
+  await waitFor(() => expect(screen.getByLabelText('1, מלון לירו')).toBeTruthy());
+  expect(screen.queryByText('NaN')).toBeNull();
 });
 
 test('a located stop shows progress until its native map surface is ready', async () => {
@@ -116,9 +139,45 @@ test('a located stop shows progress until its native map surface is ready', asyn
   const screen = render(<TripPlannerScreen navigation={{ goBack: jest.fn(), navigate: jest.fn() }} route={{ params: { tripId: 'trip-1' } }} />);
   await waitFor(() => expect(screen.getByTestId('trip-map-loading')).toBeTruthy());
   expect(screen.queryByLabelText('מפה במסך מלא')).toBeNull();
+  expect(mockMapProps.interactive).toBe(false);
   act(() => mockMapProps.onReady());
   expect(screen.queryByTestId('trip-map-loading')).toBeNull();
   expect(screen.getByLabelText('מפה במסך מלא')).toBeTruthy();
+});
+
+test('a map timeout keeps the map mounted and exposes a compact retry', async () => {
+  let triggerMapTimeout;
+  const realSetTimeout = global.setTimeout;
+  const timeoutSpy = jest.spyOn(global, 'setTimeout').mockImplementation((callback, delay, ...args) => {
+    if (delay === 10000) {
+      triggerMapTimeout = callback;
+      return 101;
+    }
+    return realSetTimeout(callback, delay, ...args);
+  });
+  try {
+    mockGetPrivateTrip.mockResolvedValue({ ...trip, stopCount: 1, days: [trip.days[0], {
+      ...trip.days[1], stopCount: 1,
+      stops: [{ id: 'stop-1', title: 'מלון לירו', order: 0, coordinates: { lat: 40.466, lng: 19.491 } }],
+    }] });
+    const screen = render(<TripPlannerScreen navigation={{ goBack: jest.fn(), navigate: jest.fn() }} route={{ params: { tripId: 'trip-1' } }} />);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(screen.getByTestId('trip-map-loading')).toBeTruthy();
+    expect(triggerMapTimeout).toEqual(expect.any(Function));
+    act(() => triggerMapTimeout());
+    expect(screen.getByTestId('trip-map-error')).toBeTruthy();
+    expect(screen.getByText('מלון לירו')).toBeTruthy();
+    expect(screen.getByTestId('trip-map-card')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('trip-map-retry'));
+    expect(screen.queryByTestId('trip-map-error')).toBeNull();
+    expect(screen.getByTestId('trip-map-loading')).toBeTruthy();
+  } finally {
+    timeoutSpy.mockRestore();
+  }
 });
 
 test('opening the planner without an id returns to the library without creating a trip', async () => {
