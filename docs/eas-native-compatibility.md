@@ -142,6 +142,21 @@ remains the already-reviewed optional delta
 `f5fac23f11fb1f2c0b1adbaf545b164644c461d3`; no new native input is accepted by
 this receipt.
 
+The fallback-source receipt was renewed again for operation-recovery commit
+`2781d29609b31878b6aab7974e87c1cae3326528`. Its `ActivityScreen` change only
+uses the existing callable retry for a server operation whose local publishing
+job is absent and maps retry failures to the existing safe error copy. Its
+recommendation-publishing changes classify authentication recovery as manual and
+keep accepted background edits retryable after the local job is gone. Neither
+change imports, calls or enables `PlanLiTransfers`; entries backed by a local
+publishing or profile-photo job keep their existing foreground paths. The real module bridge
+was loaded with `requireOptionalNativeModule` returning `null` on both iOS and
+Android, and `backgroundTransfersAvailable()` remained false. Activity history,
+background service, recommendation publishing and profile-photo fallback suites
+also passed. The focused receipt is five suites / 55 tests. Both production
+fingerprints remain their already-reviewed optional deltas; no new native input
+is accepted by this renewal.
+
 When an authorized native build replaces build 30, inspect its source,
 fingerprint, environment and installed/tested status, then update the baseline
 and retire the old optional-module assessment in a reviewed change. Enabling
