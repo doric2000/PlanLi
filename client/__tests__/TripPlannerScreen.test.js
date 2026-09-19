@@ -11,6 +11,7 @@ const mockCacheTrip = jest.fn(async () => {});
 const mockApply = jest.fn();
 const mockQueue = jest.fn();
 const mockIsOffline = jest.fn(() => false);
+const mockCaptureDiagnosticException = jest.fn();
 let mockFocusCallback;
 let mockMapProps;
 let mockMissingDragIndex = false;
@@ -58,6 +59,9 @@ jest.mock('../src/services/TripService', () => ({
   queueTripOperations: (...args) => mockQueue(...args),
   tripErrorMessage: jest.fn(() => 'שגיאה'),
   tripErrorReason: jest.fn(() => ''),
+}));
+jest.mock('../src/services/ErrorReporting', () => ({
+  captureDiagnosticException: (...args) => mockCaptureDiagnosticException(...args),
 }));
 
 const TripPlannerScreen = require('../src/features/tripPlanner/screens/TripPlannerScreen').default;
@@ -145,6 +149,31 @@ test('a located stop shows progress until its native map surface is ready', asyn
   expect(screen.getByLabelText('מפה במסך מלא')).toBeTruthy();
 });
 
+test('adding a located stop on the active day resets map loading for the new viewport', async () => {
+  const oneStopTrip = { ...trip, stopCount: 1, days: [trip.days[0], {
+    ...trip.days[1], stopCount: 1,
+    stops: [{ id: 'stop-1', title: 'תצפית הכרמל', order: 0, coordinates: { lat: 32.8, lng: 35 } }],
+  }] };
+  mockGetPrivateTrip.mockResolvedValue(oneStopTrip);
+  const screen = render(<TripPlannerScreen navigation={{ goBack: jest.fn(), navigate: jest.fn() }} route={{ params: { tripId: 'trip-1' } }} />);
+  await waitFor(() => expect(screen.getByTestId('trip-map-loading')).toBeTruthy());
+  act(() => mockMapProps.onReady());
+  expect(screen.queryByTestId('trip-map-loading')).toBeNull();
+
+  mockGetPrivateTrip.mockResolvedValue({ ...oneStopTrip, stopCount: 2, revision: 2, days: [trip.days[0], {
+    ...oneStopTrip.days[1], stopCount: 2,
+    stops: [
+      ...oneStopTrip.days[1].stops,
+      { id: 'stop-2', title: 'הנמל', order: 1, coordinates: { lat: 32.82, lng: 34.99 } },
+    ],
+  }] });
+  act(() => mockFocusCallback());
+
+  await waitFor(() => expect(screen.getByText('הנמל')).toBeTruthy());
+  expect(screen.getByTestId('trip-map-loading')).toBeTruthy();
+  expect(mockMapProps.stops).toHaveLength(2);
+});
+
 test('a map timeout keeps the map mounted and exposes a compact retry', async () => {
   let triggerMapTimeout;
   const realSetTimeout = global.setTimeout;
@@ -172,9 +201,19 @@ test('a map timeout keeps the map mounted and exposes a compact retry', async ()
     expect(screen.getByTestId('trip-map-error')).toBeTruthy();
     expect(screen.getByText('מלון לירו')).toBeTruthy();
     expect(screen.getByTestId('trip-map-card')).toBeTruthy();
+    expect(mockCaptureDiagnosticException).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'Trip planner map load timed out.' }),
+      expect.objectContaining({
+        operation: 'trip_planner_map_load',
+        code: 'map_load_timeout',
+        reason: expect.stringMatching(/^google_.+_1_points$/),
+      }),
+    );
     fireEvent.press(screen.getByTestId('trip-map-retry'));
     expect(screen.queryByTestId('trip-map-error')).toBeNull();
     expect(screen.getByTestId('trip-map-loading')).toBeTruthy();
+    act(() => triggerMapTimeout());
+    expect(mockCaptureDiagnosticException).toHaveBeenCalledTimes(1);
   } finally {
     timeoutSpy.mockRestore();
   }

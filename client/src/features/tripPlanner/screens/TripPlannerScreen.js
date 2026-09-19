@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Modal, StatusBar, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Modal, Platform, StatusBar, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -14,6 +14,7 @@ import {
   isCorruptTripQueueError, isOfflineTripError, loadCachedTrip,
   operationId, quarantineTripOperationQueue, queueTripOperations, tripErrorMessage, tripErrorReason,
 } from '../../../services/TripService';
+import { captureDiagnosticException } from '../../../services/ErrorReporting';
 import TripDayTabs from '../components/TripDayTabs';
 import TripPlannerMap from '../components/TripPlannerMap';
 import TripShareModal from '../components/TripShareModal';
@@ -26,6 +27,7 @@ export default function TripPlannerScreen({ navigation, route }) {
   const tripRef = useRef(null);
   const mutationChain = useRef(Promise.resolve());
   const offlineChanges = useRef(false);
+  const reportedMapFailures = useRef(new Set());
   const [trip, setTrip] = useState(null);
   const [title, setTitle] = useState('');
   const [selectedDayId, setSelectedDayId] = useState('');
@@ -107,6 +109,10 @@ export default function TripPlannerScreen({ navigation, route }) {
   const stops = useMemo(() => orderedStops(selectedDay), [selectedDay]);
   const selectedStop = stops.find((stop) => stop.id === selectedStopId);
   const locatedStops = stops.filter((stop) => coordinatesForStop(stop));
+  const mapViewportKey = locatedStops.map((stop) => {
+    const point = coordinatesForStop(stop);
+    return `${stop.id}:${point.latitude}:${point.longitude}`;
+  }).join('|');
   const hasLocatedStops = locatedStops.length > 0;
   const actualStopCount = (trip?.days || []).reduce((sum, day) => sum + (day.stops?.length || 0), 0);
   const graphMismatch = Boolean(trip && actualStopCount !== Number(trip.stopCount));
@@ -131,14 +137,25 @@ export default function TripPlannerScreen({ navigation, route }) {
 
   useEffect(() => {
     if (!locatedStops.length || mapReady) return undefined;
-    const timer = setTimeout(() => setMapFailed(true), 10000);
+    const timer = setTimeout(() => {
+      setMapFailed(true);
+      const diagnosticKey = `${selectedDayId}:${mapViewportKey}`;
+      if (!reportedMapFailures.current.has(diagnosticKey)) {
+        reportedMapFailures.current.add(diagnosticKey);
+        captureDiagnosticException(new Error('Trip planner map load timed out.'), {
+          operation: 'trip_planner_map_load',
+          code: 'map_load_timeout',
+          reason: `google_${Platform.OS}_${locatedStops.length}_points`,
+        });
+      }
+    }, 10000);
     return () => clearTimeout(timer);
-  }, [locatedStops.length, mapReady, mapKey]);
+  }, [locatedStops.length, mapReady, mapKey, mapViewportKey, selectedDayId]);
 
   useEffect(() => {
     setMapReady(false);
     setMapFailed(false);
-  }, [selectedDayId, hasLocatedStops]);
+  }, [selectedDayId, hasLocatedStops, mapViewportKey]);
 
   const mutate = useCallback((operations) => {
     const run = async () => {
@@ -260,7 +277,7 @@ export default function TripPlannerScreen({ navigation, route }) {
 
   const renderMap = (expanded = false) => (
     <View style={expanded ? styles.mapFullScreen : styles.editorMapCard} testID={expanded ? 'trip-map-full-card' : 'trip-map-card'}>
-      <TripPlannerMap key={`${mapKey}-${selectedDayId}-${expanded}`} stops={stops} route={routeData}
+      <TripPlannerMap key={`${mapKey}-${selectedDayId}-${expanded}-${mapViewportKey}`} stops={stops} route={routeData}
         selectedStopId={selectedStopId} onSelectStop={setSelectedStopId} interactive={expanded}
         onReady={() => { setMapReady(true); setMapFailed(false); }} />
       {!mapReady && !mapFailed ? <View pointerEvents="none" style={[styles.editorMapHint, styles.editorMapLoadingOverlay]} testID="trip-map-loading"><ActivityIndicator color={colors.primary} /><AppText style={styles.editorMapHintText}>טוענים את המפה…</AppText></View> : null}

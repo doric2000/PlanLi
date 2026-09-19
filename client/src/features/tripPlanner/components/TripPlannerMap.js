@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
-import { Platform } from 'react-native';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 
 import { colors, tripPlannerStyles as styles } from '../../../styles';
@@ -10,57 +9,46 @@ export default function TripPlannerMap({
   interactive = true,
 }) {
   const mapRef = useRef(null);
-  const nativeReadyRef = useRef(false);
+  const tilesLoadedRef = useRef(false);
   const readyReportedRef = useRef(false);
   const points = useMemo(() => stops.map(coordinatesForStop).filter(Boolean), [stops]);
   const viewportRegion = useMemo(() => regionForStops(stops), [stops]);
   const line = useMemo(() => routeCoordinates(route, stops), [route, stops]);
   const pointKey = points.map((point) => `${point.latitude}:${point.longitude}`).join('|');
-  const isAndroid = Platform.OS === 'android';
-  const reportReady = useCallback(() => {
-    if (readyReportedRef.current) return;
-    readyReportedRef.current = true;
-    onReady?.();
-  }, [onReady]);
   const updateInteractiveViewport = useCallback((animated) => {
-    if (!interactive || !nativeReadyRef.current || !mapRef.current) return;
+    if (!interactive || !tilesLoadedRef.current || !mapRef.current || points.length < 2) return;
     try {
-      if (points.length > 1) {
-        mapRef.current.fitToCoordinates(points, {
-          edgePadding: { top: 40, right: 40, bottom: 45, left: 40 }, animated,
-        });
-      } else if (points.length === 1 && animated) {
-        mapRef.current.animateToRegion({ ...points[0], latitudeDelta: 0.06, longitudeDelta: 0.06 }, 250);
-      }
+      mapRef.current.fitToCoordinates(points, {
+        edgePadding: { top: 40, right: 40, bottom: 45, left: 40 }, animated,
+      });
     } catch {
-      // Readiness must not be hidden when a native camera command is unavailable.
+      // Keep the loaded map usable if a native camera command is unavailable.
     }
   }, [interactive, pointKey]);
   useEffect(() => {
     updateInteractiveViewport(true);
   }, [pointKey, updateInteractiveViewport]);
-  const handleReady = () => {
-    nativeReadyRef.current = true;
-    reportReady();
+  const handleLoaded = useCallback(() => {
+    tilesLoadedRef.current = true;
     updateInteractiveViewport(false);
-  };
+    if (readyReportedRef.current) return;
+    readyReportedRef.current = true;
+    onReady?.();
+  }, [onReady, updateInteractiveViewport]);
   return (
     <MapView
       ref={mapRef}
-      provider={isAndroid ? PROVIDER_GOOGLE : undefined}
+      provider={PROVIDER_GOOGLE}
       style={[styles.map, style]}
-      {...(interactive ? { initialRegion: viewportRegion } : { region: viewportRegion })}
+      initialRegion={viewportRegion}
       mapType="standard"
-      loadingEnabled
-      cacheEnabled={!interactive && !isAndroid}
       scrollEnabled={interactive}
       zoomEnabled={interactive}
       zoomTapEnabled={interactive}
       rotateEnabled={interactive}
       pitchEnabled={interactive}
       toolbarEnabled={false}
-      onMapReady={isAndroid ? undefined : handleReady}
-      onMapLoaded={handleReady}
+      onMapLoaded={handleLoaded}
       onRegionChangeComplete={(region, details) => {
         onRegionChange?.(region, details);
       }}
