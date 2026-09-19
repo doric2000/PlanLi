@@ -59,6 +59,7 @@ export default function GooglePlacesInput({
   const formVariant = variant === 'form';
   const inlineDropdown = dropdownLayout === 'inline';
   const isGoogleMode = mode === 'google';
+  const canSelectGooglePlace = typeof onSelect === 'function';
   const isControlled = typeof value === 'string' && typeof onChangeValue === 'function';
 
   const normalizedLocalResults = Array.isArray(localResults) ? localResults : [];
@@ -214,6 +215,8 @@ export default function GooglePlacesInput({
   }, [isGoogleMode, query]);
 
   // Local-first: arm the single Google debounce only when local search has no match.
+  // A parent render may replace onSelect without changing the search. Only its
+  // availability matters here; restarting would abort requests and clear results.
   useEffect(() => {
     if (explicitSearch) return undefined;
     const text = query.trim();
@@ -228,14 +231,14 @@ export default function GooglePlacesInput({
     if (searchKey.length < MIN_QUERY_LENGTH) return;
     if (localResultsLoading) return;
     if (normalizedLocalResults.length > 0) return;
-    if (typeof onSelect !== 'function') return;
+    if (!canSelectGooglePlace) return;
 
     const generation = latestSearchGenerationRef.current + 1;
     latestSearchGenerationRef.current = generation;
     setGoogleTriggerQuery(text);
     setGoogleSearchGeneration(generation);
     return undefined;
-  }, [explicitSearch, query, showList, normalizedLocalResults.length, localResultsLoading, onSelect]);
+  }, [explicitSearch, query, showList, normalizedLocalResults.length, localResultsLoading, canSelectGooglePlace]);
 
   useEffect(() => {
     if (!isGoogleMode) {

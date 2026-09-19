@@ -328,6 +328,51 @@ describe('GooglePlacesInput recent destinations', () => {
     }
   });
 
+  it('preserves the debounce, pending request, and results across parent callback changes', async () => {
+    jest.useFakeTimers();
+    const prediction = { place_id: 'stable-place', description: 'New York' };
+    let resolveSearch;
+    const googleSearchFn = jest.fn(() => new Promise((resolve) => { resolveSearch = resolve; }));
+    const selected = jest.fn();
+    const input = (revision) => (
+      <ControlledInput
+        dropdownLayout="inline"
+        googleFallbackDelayMs={3000}
+        googleSearchFn={googleSearchFn}
+        onSelect={(placeId) => selected(placeId, revision)}
+      />
+    );
+    let screen;
+    try {
+      screen = render(input(0));
+      fireEvent(screen.getByTestId('places-input'), 'focus');
+      fireEvent.changeText(screen.getByTestId('places-input'), 'new york');
+      act(() => jest.advanceTimersByTime(1500));
+      screen.rerender(input(1));
+      act(() => jest.advanceTimersByTime(1500));
+      expect(googleSearchFn).toHaveBeenCalledTimes(1);
+
+      const signal = googleSearchFn.mock.calls[0][1].signal;
+      screen.rerender(input(2));
+      expect(signal.aborted).toBe(false);
+      expect(screen.getByTestId('google-places-loading')).toBeTruthy();
+      await act(async () => { resolveSearch([prediction]); });
+      const result = screen.getByTestId('google-place-result-stable-place');
+
+      screen.rerender(input(3));
+      expect(screen.queryByTestId('google-places-loading')).toBeNull();
+      expect(screen.getByTestId('google-place-result-stable-place')).toBe(result);
+      act(() => jest.advanceTimersByTime(6000));
+      expect(googleSearchFn).toHaveBeenCalledTimes(1);
+      fireEvent.press(screen.getByTestId('google-place-result-stable-place'));
+      expect(selected).toHaveBeenCalledWith('stable-place', 3);
+      expect(screen.queryByTestId('places-input-results')).toBeNull();
+    } finally {
+      screen?.unmount();
+      jest.useRealTimers();
+    }
+  });
+
   it('allows Home autocomplete to use the exact shared tab-header field geometry', () => {
     const screen = render(
       <ControlledInput
