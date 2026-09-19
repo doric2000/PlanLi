@@ -25,6 +25,46 @@ The existing Text Search quota remains zero. See
 
 ## Current environment status
 
+### Trip planner stop-list and map-readiness OTA (2026-09-19)
+
+PR [#410](https://github.com/doric2000/PlanLi/pull/410) fixes the two
+device-only failures reported after the first map recovery release. The draggable
+stop list now gives its native outer container real flex height, so a trip whose
+counter reports stops cannot collapse to an invisible list. Map fitting now waits
+for the native map readiness event, with a deduplicated iOS region-ready fallback,
+instead of issuing an imperative camera command while MapKit is still starting.
+
+The iOS production channel now serves group
+`e81e1c26-e9b5-4b3d-b331-b77c3e74e349`, update
+`01a0b9ef-5dfb-7e50-82f3-967832ff0df6`, from source
+`101327917ebc680e942271814fb0bfa32bd1c5fe`. It was published at
+`2026-09-19T13:51:07.259Z` for runtime `1.3.0` and targets TestFlight
+**1.1.1 (30)**. Verified staging group
+`40c64744-73f3-444c-a65f-621cacaf7b89` and production contain the same
+10,947,020-byte bundle with SHA-256
+`817F10DB73D4F4E3048AAA9FFC2C887812AA99E264E483A2872E0C39BDEE3B8B`.
+
+The Android production channel now serves group
+`fb38f97f-d7ba-460b-92d3-d0e90450951a`, update
+`01a0b9f9-a76c-70b8-a09a-df76310d3173`, from source
+`5a30b3ccf4332f60e00b6e4473304a52b2a03b4f` (the same client code plus the
+iOS release record). It was published at `2026-09-19T14:02:21.420Z` for
+runtime `1.3.0` and targets Google Play internal-test **1.1.0 (10)**.
+Verified staging group `a31bf945-de80-46bf-a10f-5a05e63826f3` and production
+contain the same 10,948,120-byte bundle with SHA-256
+`50C2D90BFEECE0366183091B0A43E899031A898AB564D559D8FB29FBFF5DD9F5`.
+
+Focused map/editor regression coverage passed 19 tests, and release readiness
+passed all 89 affected client suites for both platforms. GitHub affected-client,
+CodeQL, Semgrep, secret and project-security checks passed before merge. Both
+platforms passed production-candidate, native-compatibility, immutable-artifact
+and production read-back verification. No native build, dependency/runtime/version
+change, store submission, Firebase or Hosting deployment occurred. Installed-device
+download and physical iPhone/Android rendering remain unverified. Immediate rollback
+targets are the preceding verified groups
+`86ae251a-3751-4950-a2da-e3247e22add2` for iOS and
+`55ec4021-f017-4d00-9470-f65c301f7d16` for Android.
+
 ### Trip planner iPhone map recovery OTA (2026-09-19)
 
 PR [#405](https://github.com/doric2000/PlanLi/pull/405) restores the
