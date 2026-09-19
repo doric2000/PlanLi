@@ -112,6 +112,7 @@ export const tripPlannerStyles = StyleSheet.create({
   discoveryCard: { minHeight: 82, flexDirection: 'row-reverse', alignItems: 'center', gap: 10, padding: 10, borderRadius: 18, borderWidth: 1, borderColor: '#E1E7EB', backgroundColor: '#FFFFFF' },
   discoveryCardSelected: { borderColor: orange, backgroundColor: '#FFF9F1' },
   discoveryThumb: { width: 62, height: 62, borderRadius: 14, backgroundColor: '#E9EEF2' },
+  checkTouchTarget: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   check: { width: 28, height: 28, borderRadius: 14, borderWidth: 2, borderColor: '#B9C4CC', alignItems: 'center', justifyContent: 'center' },
   checkSelected: { backgroundColor: orange, borderColor: orange },
   selectionTray: { position: 'absolute', left: 12, right: 12, bottom: 12, minHeight: 72, borderRadius: 22, backgroundColor: navy, padding: 10, flexDirection: 'row-reverse', alignItems: 'center', gap: 10, shadowColor: '#102A43', shadowOpacity: 0.24, shadowRadius: 10, elevation: 10 },

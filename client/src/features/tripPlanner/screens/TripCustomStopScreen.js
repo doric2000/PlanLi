@@ -8,7 +8,7 @@ import AppText from '../../../components/AppText';
 import AppTextInput from '../../../components/AppTextInput';
 import ExactLocationPicker from '../../../components/ExactLocationPicker';
 import { colors, tripPlannerStyles as styles } from '../../../styles';
-import { applyPrivateTripOperations, cacheTrip, getPrivateTrip, hasQueuedTripOperations, isOfflineTripError, loadCachedTrip, operationId, queueTripOperations, tripErrorMessage } from '../../../services/TripService';
+import { applyPrivateTripOperations, cacheTrip, getPrivateTrip, hasQueuedTripOperations, isCorruptTripQueueError, isOfflineTripError, loadCachedTrip, operationId, queueTripOperations, tripErrorMessage } from '../../../services/TripService';
 import TripPlannerMap from '../components/TripPlannerMap';
 import { applyOperationsLocally } from '../utils/tripPlannerModel';
 
@@ -38,7 +38,7 @@ export default function TripCustomStopScreen({ navigation, route }) {
     let active = true;
     Promise.all([hasQueuedTripOperations(tripId), loadCachedTrip(tripId)]).then(async ([pending, cached]) => {
       if (pending && cached) return cached;
-      return getPrivateTrip(tripId, { cache: false }).catch((cause) => {
+      return getPrivateTrip(tripId, { cache: !pending }).catch((cause) => {
         if (cached) return cached;
         throw cause;
       });
@@ -86,14 +86,18 @@ export default function TripCustomStopScreen({ navigation, route }) {
       navigation.goBack();
     } catch (cause) {
       if (isOfflineTripError(cause)) {
+        let cached = null;
         try {
-          const cached = await loadCachedTrip(tripId);
+          cached = await loadCachedTrip(tripId);
           if (!cached) throw new Error('Missing local trip');
           await cacheTrip(applyOperationsLocally(cached, [operation]));
           await queueTripOperations({ tripId, expectedRevision: currentRevision, operations: [operation], id });
           navigation.goBack();
-        } catch {
-          setError('לא הצלחנו לשמור את העצירה במכשיר. נסו שוב כשהחיבור יחזור.');
+        } catch (queueCause) {
+          if (cached) await cacheTrip(cached).catch(() => {});
+          setError(isCorruptTripQueueError(queueCause)
+            ? 'יש שינוי מקומי שלא ניתן לקרוא. חזרו לטיול כדי לשמור עותק שלו ולהמשיך.'
+            : 'לא הצלחנו לשמור את העצירה במכשיר. נסו שוב כשהחיבור יחזור.');
         }
       } else setError(tripErrorMessage(cause));
     } finally { setSaving(false); }

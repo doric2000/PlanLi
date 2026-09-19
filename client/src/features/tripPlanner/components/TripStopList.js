@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import AppText from '../../../components/AppText';
 import CachedImage from '../../../components/CachedImage';
-import { getMediaVariantUrl } from '../../../utils/mediaAssets';
+import { getRecommendationImageUrls } from '../../../utils/mediaAssets';
 import { colors, tripPlannerStyles as styles } from '../../../styles';
 
 function Action({ label, icon, onPress, disabled = false, danger = false }) {
@@ -19,7 +19,7 @@ function Action({ label, icon, onPress, disabled = false, danger = false }) {
 
 function StopRow({ item, index, count, selected, readOnly, drag, isActive, onSelect, onDelete, onMove, onMoveToDay, onOpenRecommendation, onEditCustom }) {
   const custom = item.sourceType === 'custom';
-  const thumb = getMediaVariantUrl(item.media, 'thumb');
+  const thumb = getRecommendationImageUrls(item, 'thumb')[0];
   return (
     <View style={[styles.stopRow, selected && styles.stopRowSelected]} testID={`trip-stop-${item.id}`}>
       <TouchableOpacity activeOpacity={0.82} onPress={() => onSelect?.(item.id)} disabled={isActive} style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 10, flex: 1 }} accessibilityRole="button" accessibilityLabel={`${index + 1}, ${item.title}`} accessibilityState={{ expanded: selected }}>

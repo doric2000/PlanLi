@@ -322,6 +322,67 @@ test('idempotent operations add mixed stops once and reject stale revisions', as
   }), (error) => error.code === 'aborted' && error.details?.reason === 'REVISION_CONFLICT');
 });
 
+test('recommendation stop ids remain stable across dependent operations and old clients remain supported', async () => {
+  const admin = fakeAdmin({ 'recommendations/rec-1': activeRecommendation });
+  const created = await createPrivateTrip({ admin, auth, data: { title: 'Stable IDs' } });
+  const added = await applyPrivateTripOperations({
+    admin, auth, idempotencyKey: 'stable-add',
+    data: {
+      tripId: created.tripId, expectedRevision: 1, operationId: 'stable-add',
+      operations: [{
+        type: 'add_recommendation_stops', dayId: created.firstDayId,
+        recommendationIds: ['rec-1'], clientStopIds: ['stop-client-rec-1'],
+      }],
+    },
+  });
+  assert.deepEqual(added.createdStopIds, ['stop-client-rec-1']);
+  assert.ok(admin.documents.has(`trips/${created.tripId}/days/${created.firstDayId}/stops/stop-client-rec-1`));
+
+  await applyPrivateTripOperations({
+    admin, auth, idempotencyKey: 'stable-reorder',
+    data: {
+      tripId: created.tripId, expectedRevision: 2, operationId: 'stable-reorder',
+      operations: [{ type: 'reorder_stops', dayId: created.firstDayId, stopIds: ['stop-client-rec-1'] }],
+    },
+  });
+  await applyPrivateTripOperations({
+    admin, auth, idempotencyKey: 'stable-delete',
+    data: {
+      tripId: created.tripId, expectedRevision: 3, operationId: 'stable-delete',
+      operations: [{ type: 'delete_stop', dayId: created.firstDayId, stopId: 'stop-client-rec-1' }],
+    },
+  });
+  assert.equal(admin.documents.has(`trips/${created.tripId}/days/${created.firstDayId}/stops/stop-client-rec-1`), false);
+
+  const legacy = await applyPrivateTripOperations({
+    admin, auth, idempotencyKey: 'legacy-add',
+    data: {
+      tripId: created.tripId, expectedRevision: 4, operationId: 'legacy-add',
+      operations: [{ type: 'add_recommendation_stops', dayId: created.firstDayId, recommendationIds: ['rec-1'] }],
+    },
+  });
+  assert.equal(legacy.createdStopIds.length, 1);
+  assert.notEqual(legacy.createdStopIds[0], 'stop-client-rec-1');
+});
+
+test('recommendation client stop ids must align with recommendation ids', () => {
+  assert.throws(() => cleanOperations([{
+    type: 'add_recommendation_stops', dayId: 'day-1',
+    recommendationIds: ['rec-1', 'rec-2'], clientStopIds: ['stop-1'],
+  }]), (error) => error.details?.reason === 'INVALID_STOP_IDS');
+  assert.throws(() => cleanOperations([{
+    type: 'add_recommendation_stops', dayId: 'day-1',
+    recommendationIds: ['rec-1', 'rec-2'], clientStopIds: ['stop-1', 'stop-1'],
+  }]), (error) => error.details?.reason === 'INVALID_STOP_IDS');
+  assert.throws(() => cleanOperations([{
+    type: 'add_recommendation_stops', dayId: 'day-1',
+    recommendationIds: ['rec-1'], clientStopIds: ['stop-1'],
+  }, {
+    type: 'add_custom_stop', dayId: 'day-1', clientId: 'stop-1',
+    stop: { title: 'Collision', locationMode: 'general', coordinates: null },
+  }]), (error) => error.details?.reason === 'INVALID_STOP_IDS');
+});
+
 test('operations reject access to another owner trip', async () => {
   const admin = fakeAdmin({
     'trips/trip-1': {

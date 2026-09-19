@@ -294,7 +294,7 @@ function prepareOperations(tripRef, operations) {
     if (operation.type === 'add_recommendation_stops') {
       return {
         ...operation,
-        createdStopIds: operation.recommendationIds.map(() => (
+        createdStopIds: operation.clientStopIds || operation.recommendationIds.map(() => (
           tripRef.collection('days').doc(operation.dayId).collection('stops').doc().id
         )),
       };

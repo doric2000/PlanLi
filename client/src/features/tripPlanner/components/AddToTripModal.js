@@ -2,13 +2,14 @@ import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Modal, ScrollView, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import uuid from 'react-native-uuid';
 
 import AppText from '../../../components/AppText';
 import { colors, tripPlannerStyles as styles } from '../../../styles';
-import { applyPrivateTripOperations, cacheTrip, createPrivateTrip, getPrivateTrip, hasQueuedTripOperations, isOfflineTripError, listMyTrips, loadCachedTrip, operationId, queueTripOperations, tripErrorMessage } from '../../../services/TripService';
+import { applyPrivateTripOperations, cacheTrip, createPrivateTrip, getPrivateTrip, hasQueuedTripOperations, isCorruptTripQueueError, isOfflineTripError, listMyTrips, loadCachedTrip, operationId, queueTripOperations, tripErrorMessage } from '../../../services/TripService';
 import { applyOperationsLocally, orderedDays } from '../utils/tripPlannerModel';
 
-export default function AddToTripModal({ visible, recommendationId, onClose, onAdded }) {
+export default function AddToTripModal({ visible, recommendationId, recommendationPreview, onClose, onAdded }) {
   const navigation = useNavigation();
   const [trips, setTrips] = useState([]);
   const [chosenTrip, setChosenTrip] = useState(null);
@@ -30,6 +31,7 @@ export default function AddToTripModal({ visible, recommendationId, onClose, onA
   useEffect(() => {
     if (!visible || !recommendationId) return;
     setChosenTrip(null); setTargetDayId(''); setAddedTripId(''); setQueued(false);
+    addAttempt.current = null;
     load();
   }, [visible, recommendationId]);
 
@@ -38,7 +40,7 @@ export default function AddToTripModal({ visible, recommendationId, onClose, onA
     try {
       const pending = await hasQueuedTripOperations(tripId);
       const cached = await loadCachedTrip(tripId);
-      const trip = pending && cached ? cached : await getPrivateTrip(tripId, { cache: false }).catch((cause) => {
+      const trip = pending && cached ? cached : await getPrivateTrip(tripId, { cache: !pending }).catch((cause) => {
         if (cached) return cached;
         throw cause;
       });
@@ -51,10 +53,14 @@ export default function AddToTripModal({ visible, recommendationId, onClose, onA
   const add = async () => {
     if (!chosenTrip || !targetDayId || busy || alreadyAdded) return;
     setBusy(true); setError('');
-    const operation = { type: 'add_recommendation_stops', dayId: targetDayId, recommendationIds: [recommendationId] };
-    const fingerprint = JSON.stringify({ tripId: chosenTrip.id, operation });
-    if (addAttempt.current?.fingerprint !== fingerprint) addAttempt.current = { fingerprint, id: operationId('add-recommendation') };
-    const id = addAttempt.current.id;
+    const fingerprint = JSON.stringify({ tripId: chosenTrip.id, dayId: targetDayId, recommendationId });
+    if (addAttempt.current?.fingerprint !== fingerprint) addAttempt.current = {
+      fingerprint,
+      id: operationId('add-recommendation'),
+      clientStopIds: [`stop-${uuid.v4()}`],
+    };
+    const { id, clientStopIds } = addAttempt.current;
+    const operation = { type: 'add_recommendation_stops', dayId: targetDayId, recommendationIds: [recommendationId], clientStopIds };
     try {
       if (await hasQueuedTripOperations(chosenTrip.id)) throw Object.assign(new Error('Pending offline changes'), { code: 'functions/unavailable' });
       await applyPrivateTripOperations({ tripId: chosenTrip.id, expectedRevision: chosenTrip.revision, operations: [operation], id });
@@ -63,18 +69,21 @@ export default function AddToTripModal({ visible, recommendationId, onClose, onA
     } catch (cause) {
       if (isOfflineTripError(cause)) {
         try {
-          await cacheTrip(applyOperationsLocally(chosenTrip, [operation]));
+          await cacheTrip(applyOperationsLocally(chosenTrip, [operation], recommendationPreview
+            ? { [recommendationId]: recommendationPreview } : {}));
           await queueTripOperations({ tripId: chosenTrip.id, expectedRevision: chosenTrip.revision, operations: [operation], id });
           setQueued(true);
           setAddedTripId(chosenTrip.id);
           onAdded?.(chosenTrip.id);
-        } catch {
+        } catch (queueCause) {
           await cacheTrip(chosenTrip).catch(() => {});
-          setError('לא הצלחנו לשמור את ההמלצה במכשיר. נסו שוב כשהחיבור יחזור.');
+          setError(isCorruptTripQueueError(queueCause)
+            ? 'יש שינוי מקומי שלא ניתן לקרוא. פתחו את הטיול כדי לשמור עותק שלו ולהמשיך.'
+            : 'לא הצלחנו לשמור את ההמלצה במכשיר. נסו שוב כשהחיבור יחזור.');
         }
       } else {
         setError(tripErrorMessage(cause));
-        try { setChosenTrip(await getPrivateTrip(chosenTrip.id, { cache: false })); } catch { /* Retain the selection for an explicit retry. */ }
+        try { setChosenTrip(await getPrivateTrip(chosenTrip.id)); } catch { /* Retain the selection for an explicit retry. */ }
       }
     } finally { setBusy(false); }
   };

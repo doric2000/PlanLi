@@ -106,12 +106,12 @@ export function applyOperationsLocally(tripValue, operations, recommendationPrev
       trip.stopCount += 1;
     }
     if (operation.type === 'add_recommendation_stops') {
-      operation.recommendationIds.forEach((id) => {
+      operation.recommendationIds.forEach((id, index) => {
         const preview = recommendationPreviews[id] || {};
         const raw = preview.place?.coordinates;
         const lat = Number(raw?.lat ?? raw?.latitude);
         const lng = Number(raw?.lng ?? raw?.longitude);
-        day.stops.push({ id: `pending-${id}-${day.stops.length}`, sourceType: 'recommendation', recommendationId: id,
+        day.stops.push({ id: operation.clientStopIds?.[index] || `pending-${id}-${day.stops.length}`, sourceType: 'recommendation', recommendationId: id,
           title: preview.title || 'המלצה שנבחרה', subtitle: preview.place?.address || preview.destination?.cityName || preview.description || '',
           media: preview.media || [], coordinates: Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null,
           order: day.stops.length });

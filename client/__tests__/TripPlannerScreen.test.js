@@ -4,13 +4,18 @@ import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 const mockGetPrivateTrip = jest.fn();
 const mockLoadCachedTrip = jest.fn(async () => null);
 const mockFlushQueue = jest.fn(async () => ({ applied: 0, remaining: 0 }));
+const mockHasQueued = jest.fn(async () => false);
+const mockQuarantineQueue = jest.fn(async () => ({ quarantined: true }));
+const mockCacheTrip = jest.fn(async () => {});
 const mockApply = jest.fn();
 const mockQueue = jest.fn();
 const mockIsOffline = jest.fn(() => false);
+let mockFocusCallback;
 
 jest.mock('@react-navigation/native', () => ({
   useFocusEffect: (callback) => {
     const ReactModule = require('react');
+    mockFocusCallback = callback;
     ReactModule.useEffect(callback, [callback]);
   },
 }));
@@ -28,14 +33,17 @@ jest.mock('../src/features/tripPlanner/components/TripPlannerMap', () => () => n
 jest.mock('../src/features/tripPlanner/components/TripShareModal', () => () => null);
 jest.mock('../src/services/TripService', () => ({
   applyPrivateTripOperations: (...args) => mockApply(...args),
-  cacheTrip: jest.fn(async () => {}),
+  cacheTrip: (...args) => mockCacheTrip(...args),
   computePrivateTripRoute: jest.fn(),
   createPrivateTrip: jest.fn(),
   flushTripOperationQueue: (...args) => mockFlushQueue(...args),
   getPrivateTrip: (...args) => mockGetPrivateTrip(...args),
+  hasQueuedTripOperations: (...args) => mockHasQueued(...args),
+  isCorruptTripQueueError: (error) => error?.code === 'trip/local-queue-corrupt',
   isOfflineTripError: (...args) => mockIsOffline(...args),
   loadCachedTrip: (...args) => mockLoadCachedTrip(...args),
   operationId: jest.fn(() => 'mutate:test-id'),
+  quarantineTripOperationQueue: (...args) => mockQuarantineQueue(...args),
   queueTripOperations: (...args) => mockQueue(...args),
   tripErrorMessage: jest.fn(() => 'שגיאה'),
   tripErrorReason: jest.fn(() => ''),
@@ -61,6 +69,9 @@ beforeEach(() => {
   mockGetPrivateTrip.mockResolvedValue(trip);
   mockApply.mockResolvedValue({ revision: 2 });
   mockQueue.mockResolvedValue({});
+  mockCacheTrip.mockResolvedValue();
+  mockHasQueued.mockResolvedValue(false);
+  mockQuarantineQueue.mockResolvedValue({ quarantined: true });
   mockIsOffline.mockReturnValue(false);
 });
 
@@ -72,7 +83,8 @@ test('loading an existing trip settles after one request instead of retriggering
   await waitFor(() => expect(screen.getByDisplayValue('טיול יציב')).toBeTruthy());
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 30)); });
   expect(mockGetPrivateTrip).toHaveBeenCalledTimes(1);
-  expect(mockFlushQueue).toHaveBeenCalledTimes(1);
+  expect(mockGetPrivateTrip).toHaveBeenCalledWith('trip-1');
+  expect(mockFlushQueue).not.toHaveBeenCalled();
 });
 
 test('the real stop list and add actions stay visible for a trip with one stop', async () => {
@@ -154,9 +166,89 @@ test('a locally queued stop remains in the list when reopening without network',
     ...trip.days[1], stopCount: 1, stops: [{ id: 'pending-rec-1', title: 'המלצה אופליין', recommendationId: 'rec-1', sourceType: 'recommendation', order: 0 }],
   }] };
   mockLoadCachedTrip.mockResolvedValueOnce(cached);
+  mockHasQueued.mockResolvedValue(true);
+  mockFlushQueue.mockResolvedValue({ applied: 0, remaining: 1 });
   mockGetPrivateTrip.mockRejectedValue(new Error('offline'));
   const screen = render(<TripPlannerScreen navigation={{ goBack: jest.fn(), navigate: jest.fn() }} route={{ params: { tripId: 'trip-1' } }} />);
   await waitFor(() => expect(screen.getByTestId('trip-stop-pending-rec-1')).toBeTruthy(), { timeout: 5000 });
   expect(screen.getByText('המלצה אופליין')).toBeTruthy();
   expect(screen.getByText('שמור במכשיר · ממתין לסנכרון')).toBeTruthy();
+});
+
+test('returning from discovery replaces a mounted graph with the queued cached stop', async () => {
+  const cached = { ...trip, revision: 2, stopCount: 1, days: [trip.days[0], {
+    ...trip.days[1], stopCount: 1, stops: [{ id: 'stop-offline-1', title: 'נוספה מהבורר', recommendationId: 'rec-1', sourceType: 'recommendation', order: 0 }],
+  }] };
+  const screen = render(<TripPlannerScreen navigation={{ goBack: jest.fn(), navigate: jest.fn() }} route={{ params: { tripId: 'trip-1' } }} />);
+  await waitFor(() => expect(screen.getByDisplayValue('טיול יציב')).toBeTruthy());
+
+  mockHasQueued.mockResolvedValue(true);
+  mockLoadCachedTrip.mockResolvedValue(cached);
+  mockFlushQueue.mockResolvedValue({ applied: 0, remaining: 1 });
+  act(() => { mockFocusCallback(); });
+
+  await waitFor(() => expect(screen.getByTestId('trip-stop-stop-offline-1')).toBeTruthy());
+  expect(screen.getByText('נוספה מהבורר')).toBeTruthy();
+  expect(screen.getByText('שמור במכשיר · ממתין לסנכרון')).toBeTruthy();
+});
+
+test('a successful mutation with a failed refresh exposes a working reload action', async () => {
+  mockGetPrivateTrip.mockResolvedValueOnce(trip).mockRejectedValueOnce(new Error('refresh failed'));
+  const refreshed = { ...trip, revision: 2, days: [trip.days[0], { ...trip.days[1], travelMode: 'WALK' }] };
+  const screen = render(<TripPlannerScreen navigation={{ goBack: jest.fn(), navigate: jest.fn() }} route={{ params: { tripId: 'trip-1' } }} />);
+  await waitFor(() => expect(screen.getByDisplayValue('טיול יציב')).toBeTruthy());
+  fireEvent.press(screen.getByLabelText('הליכה'));
+  await waitFor(() => expect(screen.getByLabelText('טעינה מחדש של הטיול')).toBeTruthy());
+
+  mockGetPrivateTrip.mockResolvedValue(refreshed);
+  fireEvent.press(screen.getByLabelText('טעינה מחדש של הטיול'));
+  await waitFor(() => expect(mockGetPrivateTrip).toHaveBeenCalledTimes(3));
+  await waitFor(() => expect(screen.queryByLabelText('טעינה מחדש של הטיול')).toBeNull());
+});
+
+test('a corrupt queue can be backed up before the server graph is restored', async () => {
+  mockHasQueued.mockResolvedValue(true);
+  mockLoadCachedTrip.mockResolvedValue(trip);
+  mockFlushQueue.mockResolvedValue({ applied: 0, remaining: 1, corrupt: true });
+  const serverTrip = { ...trip, revision: 5, title: 'גרסת השרת' };
+  const screen = render(<TripPlannerScreen navigation={{ goBack: jest.fn(), navigate: jest.fn() }} route={{ params: { tripId: 'trip-1' } }} />);
+  await waitFor(() => expect(screen.getByText('שמירת עותק והמשך')).toBeTruthy());
+
+  mockGetPrivateTrip.mockResolvedValue(serverTrip);
+  fireEvent.press(screen.getByText('שמירת עותק והמשך'));
+  await waitFor(() => expect(mockQuarantineQueue).toHaveBeenCalledWith('trip-1'));
+  await waitFor(() => expect(screen.getByDisplayValue('גרסת השרת')).toBeTruthy());
+});
+
+test('a rejected online mutation restores the last confirmed graph in the cache', async () => {
+  mockApply.mockRejectedValue({ details: { reason: 'RECOMMENDATION_UNAVAILABLE' } });
+  const screen = render(<TripPlannerScreen navigation={{ goBack: jest.fn(), navigate: jest.fn() }} route={{ params: { tripId: 'trip-1' } }} />);
+  await waitFor(() => expect(screen.getByDisplayValue('טיול יציב')).toBeTruthy());
+  fireEvent.press(screen.getByLabelText('הליכה'));
+
+  await waitFor(() => expect(screen.getByText('שגיאה')).toBeTruthy());
+  expect(mockCacheTrip).toHaveBeenLastCalledWith(trip);
+});
+
+test('a quarantined queue never leaves the stale local graph editable when the server is unavailable', async () => {
+  mockHasQueued.mockResolvedValue(true);
+  mockLoadCachedTrip.mockResolvedValue(trip);
+  mockFlushQueue.mockResolvedValue({ applied: 0, remaining: 1, corrupt: true });
+  const screen = render(<TripPlannerScreen navigation={{ goBack: jest.fn(), navigate: jest.fn(), replace: jest.fn() }} route={{ params: { tripId: 'trip-1' } }} />);
+  await waitFor(() => expect(screen.getByText('שמירת עותק והמשך')).toBeTruthy());
+  mockGetPrivateTrip.mockRejectedValue(new Error('offline'));
+  fireEvent.press(screen.getByText('שמירת עותק והמשך'));
+
+  await waitFor(() => expect(screen.getByText('לא הצלחנו לפתוח את הטיול')).toBeTruthy());
+  expect(screen.queryByTestId('trip-add-recommendations')).toBeNull();
+  expect(screen.getByText('העותק המקומי נשמר בבטחה, אבל לא הצלחנו לטעון את גרסת השרת. נסו שוב כשהחיבור יחזור.')).toBeTruthy();
+});
+
+test('a permanently rejected queued change offers backup and recovery instead of endless sync retries', async () => {
+  mockHasQueued.mockResolvedValue(true);
+  mockLoadCachedTrip.mockResolvedValue(trip);
+  mockFlushQueue.mockResolvedValue({ applied: 0, remaining: 1, conflict: true });
+  const screen = render(<TripPlannerScreen navigation={{ goBack: jest.fn(), navigate: jest.fn() }} route={{ params: { tripId: 'trip-1' } }} />);
+  await waitFor(() => expect(screen.getByText('שמירת עותק והמשך')).toBeTruthy());
+  expect(screen.getByText('שינוי מקומי לא יכול להסתנכרן עם גרסת השרת. אפשר לשמור עותק שלו במכשיר ולהמשיך מהגרסה העדכנית.')).toBeTruthy();
 });

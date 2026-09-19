@@ -86,6 +86,7 @@ const ActionBar = ({ item, onCommentPress, collectionName = 'recommendations', o
 			<AddToTripModal
 				visible={showAddToTrip}
 				recommendationId={item.id}
+				recommendationPreview={item}
 				onClose={() => setShowAddToTrip(false)}
 			/>
 		</>

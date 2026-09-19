@@ -10,8 +10,9 @@ import AppTextInput from '../../../components/AppTextInput';
 import { colors, tripPlannerStyles as styles } from '../../../styles';
 import {
   applyPrivateTripOperations, cacheTrip, computePrivateTripRoute,
-  flushTripOperationQueue, getPrivateTrip, isOfflineTripError, loadCachedTrip,
-  operationId, queueTripOperations, tripErrorMessage, tripErrorReason,
+  flushTripOperationQueue, getPrivateTrip, hasQueuedTripOperations,
+  isCorruptTripQueueError, isOfflineTripError, loadCachedTrip,
+  operationId, quarantineTripOperationQueue, queueTripOperations, tripErrorMessage, tripErrorReason,
 } from '../../../services/TripService';
 import TripDayTabs from '../components/TripDayTabs';
 import TripPlannerMap from '../components/TripPlannerMap';
@@ -53,28 +54,46 @@ export default function TripPlannerScreen({ navigation, route }) {
   const load = useCallback(async ({ quiet = false } = {}) => {
     if (!tripId) return;
     if (!quiet) setLoading(true);
+    let cached = null;
+    let pending = false;
     try {
-      const cached = await loadCachedTrip(tripId);
-      if (cached && !tripRef.current) absorb(cached);
-      const fresh = await getPrivateTrip(tripId, { cache: false });
-      const flushed = await flushTripOperationQueue(tripId);
-      if (flushed.remaining) {
-        offlineChanges.current = true;
-        absorb(cached || fresh);
-        setSaveStatus('offline');
-        setBanner({ kind: 'offline', text: flushed.conflict
-          ? 'יש שינוי שלא סונכרן כי הטיול השתנה או שהעצירה אינה זמינה. השינוי עדיין שמור במכשיר; נסו לסנכרן שוב.'
-          : 'יש שינויים שממתינים לסנכרון. נסו שוב כשהחיבור יתייצב.' });
-      } else {
-        offlineChanges.current = false;
-        absorb(flushed.applied ? await getPrivateTrip(tripId) : fresh);
-        setSaveStatus('saved');
-        setBanner((current) => current?.kind === 'offline' ? null : current);
+      [pending, cached] = await Promise.all([
+        hasQueuedTripOperations(tripId),
+        loadCachedTrip(tripId),
+      ]);
+      if (cached && (pending || !tripRef.current)) absorb(cached);
+      if (pending) {
+        const flushed = await flushTripOperationQueue(tripId);
+        if (flushed.corrupt || flushed.conflict) {
+          offlineChanges.current = true;
+          setSaveStatus('error');
+          setBanner({ kind: 'queue-corrupt', text: flushed.corrupt
+            ? 'לא הצלחנו לקרוא שינוי מקומי שממתין לסנכרון. אפשר לשמור עותק שלו במכשיר ולהמשיך מהגרסה שבשרת.'
+            : 'שינוי מקומי לא יכול להסתנכרן עם גרסת השרת. אפשר לשמור עותק שלו במכשיר ולהמשיך מהגרסה העדכנית.' });
+          return;
+        }
+        if (flushed.remaining) {
+          offlineChanges.current = true;
+          setSaveStatus('offline');
+          setBanner({ kind: 'offline', text: flushed.conflict
+            ? 'יש שינוי שלא סונכרן כי הטיול השתנה או שהעצירה אינה זמינה. השינוי עדיין שמור במכשיר; נסו לסנכרן שוב.'
+            : 'יש שינויים שממתינים לסנכרון. נסו שוב כשהחיבור יתייצב.' });
+          return;
+        }
       }
+      const fresh = await getPrivateTrip(tripId);
+      offlineChanges.current = false;
+      absorb(fresh);
+      setSaveStatus('saved');
+      setBanner((current) => ['offline', 'refresh', 'queue-corrupt'].includes(current?.kind) ? null : current);
     } catch (cause) {
+      offlineChanges.current = pending;
+      if (cached && (pending || !tripRef.current)) absorb(cached);
       if (tripRef.current) {
-        setSaveStatus('offline');
-        setBanner({ kind: 'offline', text: 'מוצג העותק השמור במכשיר. אפשר להמשיך לתכנן; נסנכרן כשהחיבור יחזור.' });
+        setSaveStatus(pending ? 'offline' : 'saved');
+        setBanner({ kind: pending ? 'offline' : 'refresh', text: pending
+          ? 'מוצג העותק השמור במכשיר. אפשר להמשיך לתכנן; נסנכרן כשהחיבור יחזור.'
+          : 'מוצג העותק האחרון במכשיר. לא הצלחנו לבדוק אם הטיול השתנה; נסו לטעון מחדש.' });
       } else setBanner({ kind: 'error', text: tripErrorMessage(cause, 'לא הצלחנו לטעון את הטיול.') });
     } finally { setLoading(false); }
   }, [absorb, tripId]);
@@ -92,18 +111,22 @@ export default function TripPlannerScreen({ navigation, route }) {
   const graphMismatch = Boolean(trip && actualStopCount !== Number(trip.stopCount));
 
   useEffect(() => {
-    if (!tripId || !selectedDayId || locatedStops.length < 2) { setRouteData(null); return undefined; }
+    if (!tripId || !selectedDayId || locatedStops.length < 2 || offlineChanges.current) { setRouteData(null); return undefined; }
     let active = true;
     setRouteData(null);
     const timer = setTimeout(() => {
       computePrivateTripRoute(tripId, selectedDayId).then((result) => {
         if (active) { setRouteData(result); setBanner((current) => current?.kind === 'route' ? null : current); }
       }).catch((cause) => {
-        if (active) { setRouteData(null); setBanner({ kind: 'route', text: tripErrorMessage(cause) }); }
+        if (active) {
+          setRouteData(null);
+          setBanner((current) => ['offline', 'refresh', 'queue-corrupt'].includes(current?.kind)
+            ? current : { kind: 'route', text: tripErrorMessage(cause) });
+        }
       });
     }, 450);
     return () => { active = false; clearTimeout(timer); };
-  }, [selectedDayId, stops.map((stop) => `${stop.id}:${stop.order}`).join('|'), tripId, trip?.revision]);
+  }, [saveStatus, selectedDayId, stops.map((stop) => `${stop.id}:${stop.order}`).join('|'), tripId, trip?.revision]);
 
   useEffect(() => {
     if (!locatedStops.length || mapReady) return undefined;
@@ -127,7 +150,7 @@ export default function TripPlannerScreen({ navigation, route }) {
         if (offlineChanges.current) throw Object.assign(new Error('Pending offline changes'), { code: 'functions/unavailable' });
         const result = await applyPrivateTripOperations({ tripId: base.id, expectedRevision: base.revision, operations, id });
         try { absorb(await getPrivateTrip(base.id)); }
-        catch { setBanner({ kind: 'error', text: 'השינוי נשמר, אבל לא הצלחנו לרענן את הטיול. לחצו לטעינה מחדש.' }); }
+        catch { setBanner({ kind: 'refresh', text: 'השינוי נשמר, אבל לא הצלחנו לרענן את הטיול. לחצו לטעינה מחדש.' }); }
         setSaveStatus('saved');
         return result;
       } catch (cause) {
@@ -139,11 +162,13 @@ export default function TripPlannerScreen({ navigation, route }) {
             return null;
           }
           try { await queueTripOperations({ tripId: base.id, expectedRevision: base.revision, operations, id }); }
-          catch {
+          catch (queueCause) {
             absorb(base);
             await cacheTrip(base).catch(() => {});
             setSaveStatus('error');
-            setBanner({ kind: 'error', text: 'לא הצלחנו לשמור את השינוי במכשיר. נסו שוב.' });
+            setBanner(isCorruptTripQueueError(queueCause)
+              ? { kind: 'queue-corrupt', text: 'לא הצלחנו לקרוא שינוי מקומי שממתין לסנכרון. שמרו עותק שלו והמשיכו מהגרסה שבשרת.' }
+              : { kind: 'error', text: 'לא הצלחנו לשמור את השינוי במכשיר. נסו שוב.' });
             return null;
           }
           offlineChanges.current = true;
@@ -152,10 +177,15 @@ export default function TripPlannerScreen({ navigation, route }) {
           return { queued: true };
         }
         if (tripErrorReason(cause) === 'REVISION_CONFLICT') {
-          try { absorb(await getPrivateTrip(base.id)); } catch { absorb(base); }
+          try { absorb(await getPrivateTrip(base.id)); }
+          catch {
+            absorb(base);
+            await cacheTrip(base).catch(() => {});
+          }
           setConflict({ operations, message: tripErrorMessage(cause) });
         } else {
           absorb(base);
+          await cacheTrip(base).catch(() => {});
           setBanner({ kind: 'error', text: tripErrorMessage(cause) });
         }
         setSaveStatus('error');
@@ -193,6 +223,29 @@ export default function TripPlannerScreen({ navigation, route }) {
   const openDiscovery = () => navigation.navigate('TripDiscovery', { tripId, dayId: selectedDay.id });
   const openCustom = (stop) => navigation.navigate('TripCustomStop', { tripId, dayId: selectedDay.id, stopId: stop?.id, revision: tripRef.current?.revision });
   const retryMap = () => { setMapFailed(false); setMapReady(false); setMapKey((current) => current + 1); };
+  const recoverCorruptQueue = async () => {
+    setSaveStatus('saving');
+    try {
+      await quarantineTripOperationQueue(tripId);
+    } catch {
+      setSaveStatus('error');
+      setBanner({ kind: 'queue-corrupt', text: 'לא הצלחנו לשמור עותק של השינוי המקומי. הוא נשאר במכשיר ולא נמחק; נסו שוב.' });
+      return;
+    }
+    offlineChanges.current = false;
+    tripRef.current = null;
+    setTrip(null);
+    setTitle('');
+    setLoading(true);
+    try {
+      absorb(await getPrivateTrip(tripId));
+      setSaveStatus('saved');
+      setBanner(null);
+    } catch {
+      setSaveStatus('saved');
+      setBanner({ kind: 'refresh', text: 'העותק המקומי נשמר בבטחה, אבל לא הצלחנו לטעון את גרסת השרת. נסו שוב כשהחיבור יחזור.' });
+    } finally { setLoading(false); }
+  };
 
   if (!tripId) return <View style={styles.fullScreen} />;
   if (loading && !trip) return <View style={styles.fullScreen}><StatusBar barStyle="dark-content" /><View style={styles.loadingOverlay}><ActivityIndicator size="large" color={colors.primary} /><AppText style={styles.loadingText}>טוענים את הטיול…</AppText></View></View>;
@@ -218,7 +271,7 @@ export default function TripPlannerScreen({ navigation, route }) {
         </View>
         <AppText style={styles.editorStatus} accessibilityLiveRegion="polite">{saveStatus === 'saving' ? 'שומר את השינויים…' : saveStatus === 'offline' ? 'שמור במכשיר · ממתין לסנכרון' : saveStatus === 'error' ? 'לא נשמר · בדקו את ההודעה' : 'כל השינויים נשמרו'}</AppText>
       </View>
-      {banner ? <View style={[styles.banner, { position: 'relative', top: 0, left: 0, right: 0, margin: 10 }, banner.kind === 'offline' && styles.bannerOffline]}><Ionicons name={banner.kind === 'offline' ? 'cloud-offline-outline' : 'information-circle-outline'} size={20} color={colors.primary} /><AppText style={styles.bannerText}>{banner.text}</AppText>{banner.kind === 'offline' ? <TouchableOpacity onPress={() => load({ quiet: true })} style={styles.stopDetailButton} accessibilityRole="button" accessibilityLabel="ניסיון סנכרון"><Ionicons name="refresh" size={18} color={colors.primary} /></TouchableOpacity> : null}<TouchableOpacity onPress={() => setBanner(null)} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="סגירה"><Ionicons name="close" size={18} color={colors.primary} /></TouchableOpacity></View> : null}
+      {banner?.kind === 'queue-corrupt' ? <View style={[styles.conflictCard, { margin: 10 }]} accessibilityRole="alert"><AppText style={styles.errorText}>{banner.text}</AppText><View style={{ flexDirection: 'row-reverse', gap: 8 }}><TouchableOpacity style={[styles.primaryButton, { flex: 1 }]} onPress={recoverCorruptQueue} accessibilityRole="button" accessibilityLabel="שמירת עותק מקומי והמשך מגרסת השרת"><AppText style={styles.primaryButtonText}>שמירת עותק והמשך</AppText></TouchableOpacity><TouchableOpacity style={[styles.secondaryButton, { flex: 1 }]} onPress={() => load({ quiet: true })} accessibilityRole="button" accessibilityLabel="ניסיון נוסף לקריאת השינויים המקומיים"><AppText style={styles.secondaryButtonText}>ניסיון נוסף</AppText></TouchableOpacity></View></View> : banner ? <View style={[styles.banner, { position: 'relative', top: 0, left: 0, right: 0, margin: 10 }, banner.kind === 'offline' && styles.bannerOffline]}><Ionicons name={banner.kind === 'offline' ? 'cloud-offline-outline' : 'information-circle-outline'} size={20} color={colors.primary} /><AppText style={styles.bannerText}>{banner.text}</AppText>{banner.kind === 'offline' || banner.kind === 'refresh' ? <TouchableOpacity onPress={() => load({ quiet: true })} style={styles.stopDetailButton} accessibilityRole="button" accessibilityLabel={banner.kind === 'offline' ? 'ניסיון סנכרון' : 'טעינה מחדש של הטיול'}><Ionicons name="refresh" size={18} color={colors.primary} /></TouchableOpacity> : null}<TouchableOpacity onPress={() => setBanner(null)} style={styles.iconButton} accessibilityRole="button" accessibilityLabel="סגירה"><Ionicons name="close" size={18} color={colors.primary} /></TouchableOpacity></View> : null}
       {graphMismatch ? <TouchableOpacity style={styles.conflictCard} onPress={() => load({ quiet: true })} accessibilityRole="button" accessibilityLabel="טעינה מחדש של עצירות הטיול"><AppText style={styles.errorText}>מספר העצירות לא תואם לרשימה. לחצו לטעינה מחדש.</AppText></TouchableOpacity> : null}
       <View style={styles.editorBody}>
         <TripDayTabs trip={trip} selectedDayId={selectedDayId} onSelect={(id) => { setSelectedDayId(id); setSelectedStopId(''); }} onAddDay={addDay} />
