@@ -25,6 +25,49 @@ The existing Text Search quota remains zero. See
 
 ## Current environment status
 
+### Trip planner iPhone map recovery OTA (2026-09-19)
+
+PR [#405](https://github.com/doric2000/PlanLi/pull/405) restores the
+personal-trip map on iPhone by using Apple Maps on iOS, retaining Google Maps
+on Android, and waiting for each platform's reliable native readiness event.
+The trip editor now shows explicit loading and retry states instead of a silent
+gray map, resets map state when a day gains its first located stop, and keeps
+the inline map usable after closing full-screen mode. PR
+[#406](https://github.com/doric2000/PlanLi/pull/406), merged before release,
+also stabilizes place-search results across parent re-renders.
+
+The iOS production channel now serves group
+`86ae251a-3751-4950-a2da-e3247e22add2`, update
+`01a0b96e-8d3b-70e3-a609-bdb83a3a3a6c`, from source
+`64f88c15d04e89cfe90c04105c57a418bf1c7a45`. It was published at
+`2026-09-19T11:30:25.211Z` for runtime `1.3.0` and targets TestFlight
+**1.1.1 (30)**. Verified staging group
+`312ba1c4-68b1-49e0-87e3-452b6c488a64` and production contain the same
+10,970,300-byte bundle with SHA-256
+`28D840C8119AD12B19864D3C5AE253B97D128C5AA7675FE078F1BEC2323CCC09`.
+
+The Android production channel now serves group
+`55ec4021-f017-4d00-9470-f65c301f7d16`, update
+`01a0b97b-2293-758b-8043-2f8f4612cc24`, from source
+`015c085115ef10fda71727c02e3b7b3cdbda30c4` (the same client code plus the
+iOS release record). It was published at `2026-09-19T11:44:09.875Z` for
+runtime `1.3.0` and targets Google Play internal-test **1.1.0 (10)**.
+Verified staging group `0669fd0e-f4b3-4387-810e-3bca60364753` and production
+contain the same 10,888,088-byte bundle with SHA-256
+`59D5A2AD33A00DB22CF8A15291E2587EFA9880B7A42A87065BB198D7D5F6EFCC`.
+
+Release readiness passed 89 affected client suites for both platforms; the
+implementation's focused map/editor selection passed 17 tests. GitHub client,
+CodeQL, Semgrep, secret and project-security checks passed before merge. EAS
+build metadata, reviewed optional-native compatibility, staging/production
+source identity and immutable bundle hashes were independently verified for
+both platforms. No native build, dependency/runtime/version change, store
+submission, Firebase or Hosting deployment occurred. Installed-device download
+and physical iPhone/Android behavior remain unverified. Immediate rollback
+targets are the preceding verified groups
+`68ed932b-5146-43c8-a97f-2b3511d5eb9d` for iOS and
+`37a0acef-ad5b-4b0a-b744-9df4c02c951d` for Android.
+
 ### Personal trip operation compatibility deployment (2026-09-19)
 
 Under explicit release authorization, Firebase CLI **15.30.2** deployed only the
