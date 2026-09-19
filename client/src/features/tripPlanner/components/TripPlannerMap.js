@@ -9,13 +9,22 @@ export default function TripPlannerMap({
   stops = [], route, selectedStopId, onSelectStop, onRegionChange, onMapPress, onReady, style,
 }) {
   const mapRef = useRef(null);
+  const nativeReadyRef = useRef(false);
+  const readyReportedRef = useRef(false);
   const points = useMemo(() => stops.map(coordinatesForStop).filter(Boolean), [stops]);
   const initialRegion = useMemo(() => regionForStops(stops), []);
   const line = useMemo(() => routeCoordinates(route, stops), [route, stops]);
   const pointKey = points.map((point) => `${point.latitude}:${point.longitude}`).join('|');
   const isAndroid = Platform.OS === 'android';
+  const reportReady = () => {
+    if (readyReportedRef.current) return;
+    readyReportedRef.current = true;
+    onReady?.();
+  };
   useEffect(() => {
-    if (points.length && mapRef.current) mapRef.current.fitToCoordinates(points, { edgePadding: { top: 40, right: 40, bottom: 45, left: 40 }, animated: true });
+    if (nativeReadyRef.current && points.length && mapRef.current) {
+      mapRef.current.fitToCoordinates(points, { edgePadding: { top: 40, right: 40, bottom: 45, left: 40 }, animated: true });
+    }
   }, [pointKey]);
   return (
     <MapView
@@ -23,12 +32,21 @@ export default function TripPlannerMap({
       provider={isAndroid ? PROVIDER_GOOGLE : undefined}
       style={[styles.map, style]}
       initialRegion={initialRegion}
+      mapType="standard"
+      loadingEnabled
       onMapReady={() => {
+        nativeReadyRef.current = true;
         if (points.length) mapRef.current?.fitToCoordinates(points, { edgePadding: { top: 40, right: 40, bottom: 45, left: 40 }, animated: false });
-        if (!isAndroid) onReady?.();
+        if (!isAndroid) reportReady();
       }}
-      onMapLoaded={isAndroid ? onReady : undefined}
-      onRegionChangeComplete={onRegionChange}
+      onMapLoaded={isAndroid ? reportReady : undefined}
+      onRegionChangeComplete={(region, details) => {
+        if (!isAndroid && !nativeReadyRef.current) {
+          nativeReadyRef.current = true;
+          reportReady();
+        }
+        onRegionChange?.(region, details);
+      }}
       onPress={(event) => onMapPress?.(event?.nativeEvent?.coordinate)}
       accessibilityLabel="מפת תכנון הטיול"
     >

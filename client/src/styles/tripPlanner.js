@@ -70,7 +70,7 @@ export const tripPlannerStyles = StyleSheet.create({
   modeButtonSelected: { backgroundColor: '#FFFFFF', shadowColor: '#102A43', shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 },
   modeText: { color: '#647280', fontSize: 12 },
   modeTextSelected: { color: navy, fontFamily: fontFamilies.semiBold },
-  list: { flex: 1 },
+  list: { flex: 1, minHeight: 0 },
   listContent: { paddingHorizontal: 14, paddingBottom: 20, gap: 10 },
   stopRow: { minHeight: 82, gap: 10, borderWidth: 1, borderColor: '#E7EBEF', backgroundColor: '#FFFFFF', borderRadius: 18, padding: 10 },
   stopRowSelected: { borderColor: orange, backgroundColor: '#FFF9F1' },
