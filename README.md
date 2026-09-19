@@ -5235,3 +5235,13 @@ part of this follow-up.
 - Message: Restore trip stops and defer iPhone map fitting
 - Device application and post-update security smoke tests: pending.
 - Rollback: republish the immediately preceding verified production group; never change the runtime URL or channel in-app.
+
+## Android production OTA release
+
+- Source commit: `5a30b3ccf4332f60e00b6e4473304a52b2a03b4f`.
+- EAS Update group: `fb38f97f-d7ba-460b-92d3-d0e90450951a`; channel `production`; runtime `1.3.0`.
+- EAS environment: `production`; published at `2026-09-19T14:02:21.420Z`.
+- Immutable Android launch bundle: update `01a0b9f9-a76c-70b8-a09a-df76310d3173`; 10948120 bytes; SHA-256 `50C2D90BFEECE0366183091B0A43E899031A898AB564D559D8FB29FBFF5DD9F5`.
+- Message: Restore trip stops and stabilize planner map readiness
+- Device application and post-update security smoke tests: pending.
+- Rollback: republish the immediately preceding verified production group; never change the runtime URL or channel in-app.
