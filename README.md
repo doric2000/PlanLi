@@ -5162,3 +5162,13 @@ part of this follow-up.
 - Previous verified production group: `e7a9dcf4-074b-4ed5-9d6d-3ba983ec2f20`.
 - Device application and post-update security smoke tests: pending.
 - Rollback: republish the immediately preceding verified production group; never change the runtime URL or channel in-app.
+
+## iOS production OTA release
+
+- Source commit: `64f88c15d04e89cfe90c04105c57a418bf1c7a45`.
+- EAS Update group: `86ae251a-3751-4950-a2da-e3247e22add2`; channel `production`; runtime `1.3.0`.
+- EAS environment: `production`; published at `2026-09-19T11:30:25.211Z`.
+- Immutable iOS launch bundle: update `01a0b96e-8d3b-70e3-a609-bdb83a3a3a6c`; 10970300 bytes; SHA-256 `28D840C8119AD12B19864D3C5AE253B97D128C5AA7675FE078F1BEC2323CCC09`.
+- Message: Fix trip planner map and place search stability
+- Device application and post-update security smoke tests: pending.
+- Rollback: republish the immediately preceding verified production group; never change the runtime URL or channel in-app.
