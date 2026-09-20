@@ -25,6 +25,53 @@ The existing Text Search quota remains zero. See
 
 ## Current environment status
 
+### Trip map initialization iOS OTA (2026-09-20)
+
+PR [#420](https://github.com/doric2000/PlanLi/pull/420) was merged to `main` as
+`5edb740372b6e9c031aec39f22510bc9451e1b6c`. The trip map now waits for measurable
+layout, initializes its camera after native readiness without waiting for tiles,
+and isolates inline, fullscreen, day and retry loading attempts. Direct map
+consumers retain their existing overlays. The precise cause of the reported
+blank native map remains unproven; physical rendering is still pending.
+
+The current iOS production OTA is
+[group 24b4da73](https://expo.dev/accounts/doric2000/projects/client/updates/24b4da73-475d-40cb-856b-e361b90bcb13),
+full ID `24b4da73-475d-40cb-856b-e361b90bcb13`, update
+`01a0bebf-7a47-7a0c-81bb-8bb3a0336461`, published at
+`2026-09-20T12:16:54.855Z` from the merged source above. Runtime, channel and
+environment are `1.3.0`, `production` and `production`. Verified staging group
+`f5613811-b540-4fbf-9e87-17cb85891c6f` was republished without another export.
+Both groups contain the same 10,910,800-byte bundle, SHA-256
+`E3DDF983EA05A4CE3EA29DE169C6081F45F5966C82546C086B5F9D7A09D92D17`.
+Independent public-channel delivery matched the production update at
+`2026-09-20T12:17:22.959Z`; a separate EAS read-back confirmed source, branch,
+runtime and publication time. This supersedes the earlier iOS OTA records below.
+
+The tester's installed binary remains TestFlight **1.1.2 (32)**, EAS build
+`6ae60b3a-b0a6-4659-a054-68a044004a35`, source
+`eb9770bc12c5accf16a8cb184e473d25d3f0b619`. No new binary or Apple submission was
+created. Installation/application of this OTA and visible streets/markers on the
+physical iPhone are **unverified**; keep the map incident open until that check.
+Acceptance steps and diagnostic limits are in
+[the map investigation](docs/trip-map-initialization.md).
+
+Validation passed 55 focused tests and the final iOS OTA readiness run of
+91 affected client suites / 635 tests. All applicable PR checks passed. The
+release review's direct-consumer overlay finding was corrected before merge.
+The native guard retained build 30 and its existing reviewed optional-module
+fingerprint `f5fac23f11fb1f2c0b1adbaf545b164644c461d3`; build 32's existing map API
+contract was separately source-reviewed. An initial preflight blocked leftover
+native dependency patches before upload. Those two generated files were backed
+up and restored from the integrity-verified locked package, after which the
+unchanged guard passed. No fingerprint bypass, dependency upgrade or native
+source change was made. The preserved build-32 patch branch remains available.
+
+This workflow published iOS only. Android remains on group
+`482b54f6-c7a7-4144-83fa-b8d7f9ee6d48`; no Firebase or Hosting deployment occurred.
+The immediate iOS rollback group is
+`586f1ad9-7715-450a-8e12-9720d9b789e3`, source
+`dd72177d4739b2b84987c3f2ef68cfe80fa8b292`.
+
 ### Android permission-video preparation (2026-09-20)
 
 Play Console was inspected for this recording task: production serves `1.1.0 (10)`;
@@ -5473,3 +5520,16 @@ part of this follow-up.
 - Message: Fix trip planner map loading on iPhone
 - Device application and post-update security smoke tests: pending.
 - Rollback: republish the immediately preceding verified production group; never change the runtime URL or channel in-app.
+
+## iOS production OTA release
+
+- Source commit: `5edb740372b6e9c031aec39f22510bc9451e1b6c`.
+- EAS Update group: `24b4da73-475d-40cb-856b-e361b90bcb13`; channel `production`; runtime `1.3.0`.
+- EAS environment: `production`; published at `2026-09-20T12:16:54.855Z`.
+- Immutable iOS launch bundle: update `01a0bebf-7a47-7a0c-81bb-8bb3a0336461`; 10910800 bytes; SHA-256 `E3DDF983EA05A4CE3EA29DE169C6081F45F5966C82546C086B5F9D7A09D92D17`.
+- Message: Fix trip map initialization and isolated loading
+- Device application and post-update security smoke tests: pending.
+- Target installed binary: TestFlight `1.1.2 (32)`, EAS build `6ae60b3a-b0a6-4659-a054-68a044004a35`; no new binary or submission.
+- Verified staging candidate: `f5613811-b540-4fbf-9e87-17cb85891c6f`; identical production bundle. Public-channel delivery verified at `2026-09-20T12:17:22.959Z`.
+- Validation: 55 focused tests, 91 affected client suites / 635 tests, applicable PR checks and corrected release-review finding. Physical map rendering remains unverified.
+- Rollback: republish iOS group `586f1ad9-7715-450a-8e12-9720d9b789e3`; never change the runtime URL or channel in-app.
