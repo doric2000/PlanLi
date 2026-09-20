@@ -1,8 +1,11 @@
 # Trip map initialization investigation
 
-Status on 2026-09-20: JavaScript correction prepared on
-`fix/trip-map-initialization`, based on `8c205ea610afd119c675211e862b21750def242f`.
-It has not been published or verified on a physical iPhone. Keep the incident open.
+Status on 2026-09-20: the JavaScript correction was merged in
+[PR #420](https://github.com/doric2000/PlanLi/pull/420), source
+`5edb740372b6e9c031aec39f22510bc9451e1b6c`, and published to iOS production group
+`24b4da73-475d-40cb-856b-e361b90bcb13` at `2026-09-20T12:16:54.855Z`.
+Public-channel delivery was independently verified. Application of this OTA and
+rendering on the physical iPhone remain unverified. Keep the incident open.
 
 ## Evidence and scope
 
@@ -43,13 +46,13 @@ No backend, native dependency, native patch or runtime version changes are inclu
 The prior `fix/react-native-maps-fabric-ready-replay` branch remains preserved.
 The Web map implementation is unchanged.
 
-Validation: the initial iOS OTA client-readiness check against production source
-`dd72177d4739b2b84987c3f2ef68cfe80fa8b292` passed 91 suites / 634 tests, including
+Validation: the final iOS OTA client-readiness check against production source
+`dd72177d4739b2b84987c3f2ef68cfe80fa8b292` passed 91 suites / 635 tests, including
 the native-event regression tests, Community, Web and trip-map consumers.
-`git diff --check` also passed. The release review identified and corrected an
-overlay regression for direct consumers; the added regression test and final
-validation are recorded with the release in README. Backend checks are outside
-this JavaScript change.
+The release review identified and corrected an overlay regression for direct
+consumers; all 55 focused tests passed after that correction. Applicable GitHub
+checks and `git diff --check` passed. Backend checks are outside this JavaScript
+change. Delivery and compatibility evidence are recorded in README.
 
 ## Delivery compatibility
 
@@ -66,13 +69,14 @@ event-replay patch does not change that contract. This source review does not
 substitute for the guard's fingerprint check or device evidence. Publishing an
 OTA does not remove a patch already compiled into a binary.
 
-The production iOS group read back during this investigation was
-`586f1ad9-7715-450a-8e12-9720d9b789e3` (recorded source
-`dd72177d4739b2b84987c3f2ef68cfe80fa8b292`). Use the guarded staging/promotion
-workflow after the source is committed and main is synchronized. Preserve the
-unrelated root `app.json` and the concurrent Google Play README edits. Update
-README with the actual source, group, runtime, binary and device outcome after
-an authorized release; do not infer the applied update from the installed build.
+The guarded staging/promotion workflow passed from synchronized, tracked-clean
+`main`. Staging group `f5613811-b540-4fbf-9e87-17cb85891c6f` and the production
+group above contain the identical verified bundle. The prior production group
+`586f1ad9-7715-450a-8e12-9720d9b789e3`, source
+`dd72177d4739b2b84987c3f2ef68cfe80fa8b292`, remains the immediate rollback target.
+The unrelated root `app.json` and concurrent Google Play README edits were
+preserved. Record the actual applied OTA identity with the device outcome;
+do not infer it from the installed binary build.
 
 ## Device acceptance still required
 
