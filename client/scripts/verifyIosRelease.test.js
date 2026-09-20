@@ -53,4 +53,3 @@ test('release gate rejects a parser that accepts malformed query input', () => {
   assert.equal(result.code, 1);
   assert.match(result.errors, /accepted an unbounded or unsupported path/);
 });
-
