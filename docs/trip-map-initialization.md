@@ -26,8 +26,9 @@ whether they explain every device failure.
 - A camera command requires native readiness and matching positive host/native
   dimensions. It does not wait for tiles. Coordinate or size changes apply a new
   camera once; repeated tile events and marker selection do not fit again.
-- The initial map is bare. Markers and the route mount after a tile-loaded event.
-  Native readiness alone never clears the loading state.
+- The editor's initial map is bare. Markers and the route mount after a tile-loaded
+  event. Direct consumers (shared trips, discovery and place picking) keep their
+  existing immediate overlays. Native readiness alone never clears loading state.
 - Inline, modal, day and retry instances own their state. Closing full screen
   unmounts its map. Late callbacks cannot complete a replacement instance.
 - Timeout reporting pauses while hidden or backgrounded. Retry remains explicit;
@@ -42,10 +43,13 @@ No backend, native dependency, native patch or runtime version changes are inclu
 The prior `fix/react-native-maps-fabric-ready-replay` branch remains preserved.
 The Web map implementation is unchanged.
 
-Validation: the final iOS OTA client-readiness check against production source
+Validation: the initial iOS OTA client-readiness check against production source
 `dd72177d4739b2b84987c3f2ef68cfe80fa8b292` passed 91 suites / 634 tests, including
 the native-event regression tests, Community, Web and trip-map consumers.
-`git diff --check` also passed. Backend checks were outside this JavaScript change.
+`git diff --check` also passed. The release review identified and corrected an
+overlay regression for direct consumers; the added regression test and final
+validation are recorded with the release in README. Backend checks are outside
+this JavaScript change.
 
 ## Delivery compatibility
 

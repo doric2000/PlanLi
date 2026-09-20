@@ -59,7 +59,7 @@ test('mounts Google in a measured non-collapsible host with a finite camera', ()
 
 test.each(['layout-first', 'ready-first'])('initializes once before tiles, with %s event order', (order) => {
   const ready = jest.fn();
-  const screen = render(<TripPlannerMap stops={stops} onReady={ready} />);
+  const screen = render(<TripPlannerMap stops={stops} onReady={ready} deferOverlaysUntilLoaded />);
   measureHost(screen);
   (order === 'layout-first' ? measureNative : nativeReady)(screen);
   expect(mockSetCamera).not.toHaveBeenCalled();
@@ -167,4 +167,15 @@ test('the real card only clears loading when its measured native map reports til
   load(screen);
   expect(screen.queryByTestId('trip-map-loading')).toBeNull();
   expect(screen.getByTestId('trip-route-line')).toBeTruthy();
+});
+
+test('direct map consumers retain markers and routes when tiles have not loaded', () => {
+  const ready = jest.fn();
+  const select = jest.fn();
+  const screen = render(<TripPlannerMap stops={stops} onReady={ready} onSelectStop={select} />);
+  measureHost(screen); measureNative(screen); nativeReady(screen);
+  expect(ready).not.toHaveBeenCalled();
+  expect(screen.getByTestId('trip-route-line')).toBeTruthy();
+  fireEvent.press(screen.getByTestId('trip-marker-1. תצפית'));
+  expect(select).toHaveBeenCalledWith('one');
 });

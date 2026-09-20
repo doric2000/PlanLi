@@ -10,7 +10,7 @@ import { tripMapCamera } from '../utils/tripMapCamera';
 
 export default function TripPlannerMap({
   stops = [], route, selectedStopId, onSelectStop, onRegionChange, onMapPress, onReady, style,
-  interactive = true, onStageChange, surface = 'other', attempt = 0,
+  interactive = true, onStageChange, surface = 'other', attempt = 0, deferOverlaysUntilLoaded = false,
 }) {
   const mapRef = useRef(null);
   const mountedRef = useRef(true);
@@ -126,7 +126,7 @@ export default function TripPlannerMap({
       onPress={(event) => { if (mountedRef.current) onMapPress?.(event?.nativeEvent?.coordinate); }}
       accessibilityLabel="מפת תכנון הטיול"
     >
-      {overlaysReady && line.length > 1 ? (
+      {(!deferOverlaysUntilLoaded || overlaysReady) && line.length > 1 ? (
         <Polyline
           coordinates={line}
           strokeColor={colors.primary}
@@ -134,7 +134,7 @@ export default function TripPlannerMap({
           lineDashPattern={route?.segments?.length ? undefined : [7, 7]}
         />
       ) : null}
-      {overlaysReady && stops.map((stop, index) => {
+      {(!deferOverlaysUntilLoaded || overlaysReady) && stops.map((stop, index) => {
         const coordinate = coordinatesForStop(stop);
         if (!coordinate) return null;
         const custom = stop.sourceType === 'custom';

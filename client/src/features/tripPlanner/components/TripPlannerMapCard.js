@@ -39,7 +39,7 @@ function MapAttempt({ expanded, attempt, onRetry, active, ...mapProps }) {
   }, [active, expanded, foreground, pointCount, ready]);
 
   return <>
-    <TripPlannerMap {...mapProps} interactive={expanded} attempt={attempt}
+    <TripPlannerMap {...mapProps} interactive={expanded} attempt={attempt} deferOverlaysUntilLoaded
       surface={expanded ? 'full' : 'inline'}
       onStageChange={(stage) => { if (mounted.current) lifecycle.current = stage; }}
       onReady={() => {
