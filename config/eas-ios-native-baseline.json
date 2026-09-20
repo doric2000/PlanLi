@@ -13,10 +13,10 @@
     "client/GoogleService-Info.plist": "9e9b779534d8bbb77d089a4c4e1dae1066df8817"
   },
   "reviewedOptionalDelta": {
-    "fingerprint": "f5fac23f11fb1f2c0b1adbaf545b164644c461d3",
+    "fingerprint": "f9c26614b2ebac29b63ee6df9d097175b6cfa036",
     "module": "PlanLiTransfers",
     "review": "docs/eas-native-compatibility.md",
-    "sourceCommit": "2781d29609b31878b6aab7974e87c1cae3326528",
+    "sourceCommit": "6c5fcbe0ebb38f38c521adaf618e3182262a5c99",
     "requiredSources": {
       "client/modules/planli-transfers/index.js": "ad518ab214c8ce8a2d106175d9869ab21137ff8a19a1cc9cc0941961968cfb01",
       "client/src/features/operations/BackgroundMediaService.js": "0c318285942355c63ac07946990722fcca97b7c9ff5423ebb780a31604b53d8d",

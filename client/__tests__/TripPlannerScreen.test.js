@@ -249,6 +249,7 @@ test.each([0, 62])('fullscreen retry stays below the header with a %s-point safe
     act(() => triggerMapTimeout());
     const errorStyle = StyleSheet.flatten(screen.getByTestId('trip-map-full-error').props.style);
     expect(errorStyle.top).toBe(8);
+    expect(errorStyle.bottom).toBe('auto');
     fireEvent.press(screen.getByTestId('trip-map-full-retry'));
     expect(screen.queryByTestId('trip-map-full-error')).toBeNull();
     expect(screen.getByTestId('trip-map-full-loading')).toBeTruthy();

@@ -112,6 +112,20 @@ do not infer it from the installed binary build.
 
 ## Device acceptance still required
 
+The 2026-09-20 layout correction passed 137 related client suites / 940 tests,
+21 client configuration/helper checks, and 42 release guard checks. The focused
+map/screen/Web set passed 41 tests. Independent review found no blocker. A browser
+fixture using the real Web map confirmed a 142px inline map and marker selection;
+the fullscreen layout fixture placed the 582px map below a 118px header (including
+a 62px safe area). The failure banner explicitly clears its inherited bottom
+constraint with `auto`, keeping it compact below the header across native and Web.
+This browser fixture does not prove native Google tile rendering.
+
+The build-readiness command did not pass Expo Doctor's patch-version check:
+19 newer Expo package patches are recommended. Manifest/lock and native dependencies
+are unchanged from the deployed OTA. Exact fingerprint delta review and its limits
+are documented in `eas-native-compatibility.md`; no dependency-check bypass was added.
+
 1. Record binary build, embedded/update identity and observation time. Open a
    one-stop day and a three-stop day. Require visible streets and correctly
    positioned markers; a missing spinner alone is not success.
