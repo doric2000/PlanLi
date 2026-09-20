@@ -1,5 +1,38 @@
 # OTA native compatibility
 
+## Android demo metadata review for the iOS map OTA (2026-09-20)
+
+Merged PR #423 added only the `android-demo` build profile to `client/eas.json`.
+The CRLF metadata digest is now `a2f077ce45880541cc6d5d16440dc18c54977b57`.
+Comparing the parsed file after removing that profile with production OTA source
+`5edb740` proved every existing profile/configuration identical. Executing both
+versions of app.config.js with the same production OTA environment also produced
+identical Expo configuration. The demo condition is false on production iOS,
+and the WorkManager fix changes Android source only; iOS module source is unchanged.
+All six optional-module fallback source hashes still match the existing receipt.
+
+Production-environment fingerprinting of source `6c5fcbe0ebb38f38c521adaf618e3182262a5c99`
+produced `f9c26614b2ebac29b63ee6df9d097175b6cfa036`. EAS comparison against the
+previous reviewed hash `f5fac23f11fb1f2c0b1adbaf545b164644c461d3` found exactly
+two changed inputs: the EAS metadata above and the new
+`scripts/androidDemoConfig.js` (SHA-1 `3a23738e2edd4fe1e658b9585e74418d87216620`).
+The helper returns null when the isolated demo flag is absent and rejects it in
+production or on iOS. Every other fingerprint source, including the generated
+Expo configuration, iOS native module and dependencies, is identical.
+
+The optional-delta receipt now accepts exactly this reviewed hash and retains
+all six fallback-source hashes. The installed build/fingerprint, source archive
+verification and unknown-fingerprint rejection stay intact. No runtime or native
+dependency was changed to make this comparison pass.
+
+The release client checks passed (137 related test files). Native configuration
+checks passed, while Expo Doctor reported 19 newly recommended patch versions.
+The package manifest and lockfile are identical to deployed source `5edb740`;
+the fingerprint comparison also proves unchanged native dependencies. These
+upgrade recommendations remain unresolved and are not a passing build-readiness
+receipt. This OTA retains the installed dependency set; no package-check override
+or dependency upgrade was introduced.
+
 ## Android OTA compatibility
 
 Android releases use the same guarded commands with explicit `--platform android`;

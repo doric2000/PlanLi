@@ -25,6 +25,31 @@ The existing Text Search quota remains zero. See
 
 ## Current environment status
 
+### Trip map layout root cause and Sentry access (2026-09-20)
+
+Sentry access is restored: disabling Chrome's Allow CORS extension restored the
+site, and the account owner replaced the invalid Windows user `SENTRY_AUTH_TOKEN`
+with `org:read`, `project:read`, `event:read` access at 13:43:47 UTC. Organization
+`planli-t2`, project `planli-mobile`, API `https://de.sentry.io`, environment
+`testflight`. Expiry is unknown. Read-only issue/event queries and a fresh process
+with a stale inherited value passed using the local wrapper
+`%USERPROFILE%\.codex\tools\sentry-access\Invoke-Sentry.ps1`. Use `-Check` before
+diagnosing and `event-detail EVENT_ID --include-entries` for breadcrumbs. The
+wrapper reads the current Windows user value each time and fails immediately on
+401; replace the token locally instead of retrying it. Local setup/details are in
+the adjacent README and Set-SentryToken.ps1. Keep Allow CORS off. The EAS build
+credential is separate. A full Codex application restart has not been tested.
+
+[PLANLI-MOBILE-1C](https://planli-t2.sentry.io/issues/148207399/) confirms the
+iPhone applied update `01a0bebf-7a47-7a0c-81bb-8bb3a0336461` on TestFlight
+`1.1.2 (32)`, runtime `1.3.0`, and failed at `layout_pending` three times.
+The root cause is the removed `StyleSheet.absoluteFillObject` API: it leaves
+the trip map host with an empty style and zero height. The pending layout fix
+restores fill styles and places the fullscreen error below the header. A failing
+regression reproduced the empty host style. No additional OTA has been published
+for this correction yet; physical rendering remains unverified. See
+[the investigation](docs/trip-map-initialization.md).
+
 ### Trip map initialization iOS OTA (2026-09-20)
 
 PR [#420](https://github.com/doric2000/PlanLi/pull/420) was merged to `main` as
@@ -50,8 +75,9 @@ runtime and publication time. This supersedes the earlier iOS OTA records below.
 The tester's installed binary remains TestFlight **1.1.2 (32)**, EAS build
 `6ae60b3a-b0a6-4659-a054-68a044004a35`, source
 `eb9770bc12c5accf16a8cb184e473d25d3f0b619`. No new binary or Apple submission was
-created. Installation/application of this OTA and visible streets/markers on the
-physical iPhone are **unverified**; keep the map incident open until that check.
+created. Application of this OTA was subsequently verified by Sentry; it still
+failed to render. Visible streets/markers after the new layout fix remain
+**unverified**; keep the map incident open until that check.
 Acceptance steps and diagnostic limits are in
 [the map investigation](docs/trip-map-initialization.md).
 

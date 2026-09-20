@@ -42,6 +42,9 @@ test('mounts Google in a measured non-collapsible host with a finite camera', ()
   const screen = render(<TripPlannerMap stops={stops} interactive={false} />);
   expect(screen.queryByTestId('trip-map')).toBeNull();
   expect(screen.getByTestId('trip-map-host').props.collapsable).toBe(false);
+  expect(StyleSheet.flatten(screen.getByTestId('trip-map-host').props.style)).toEqual(expect.objectContaining({
+    position: 'absolute', top: 0, right: 0, bottom: 0, left: 0,
+  }));
   measureHost(screen, { width: 340, height: 0 });
   expect(screen.queryByTestId('trip-map')).toBeNull();
   measureHost(screen);
