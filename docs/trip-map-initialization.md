@@ -4,8 +4,40 @@ Status on 2026-09-20: the JavaScript correction was merged in
 [PR #420](https://github.com/doric2000/PlanLi/pull/420), source
 `5edb740372b6e9c031aec39f22510bc9451e1b6c`, and published to iOS production group
 `24b4da73-475d-40cb-856b-e361b90bcb13` at `2026-09-20T12:16:54.855Z`.
-Public-channel delivery was independently verified. Application of this OTA and
-rendering on the physical iPhone remain unverified. Keep the incident open.
+Public-channel delivery was independently verified. Subsequent Sentry events
+confirmed that the iPhone applied this OTA, but the map still failed. Keep the
+incident open until visible streets and markers are verified after the layout fix.
+
+## Confirmed layout failure
+
+After repairing Sentry access, issue
+[PLANLI-MOBILE-1C](https://planli-t2.sentry.io/issues/148207399/) showed three
+timeouts at 12:32:38, 12:32:50 and 12:33:04 UTC on 2026-09-20: inline, full screen,
+and full-screen retry. Each mount identifies update
+`01a0bebf-7a47-7a0c-81bb-8bb3a0336461`, runtime `1.3.0`, binary `1.1.2 (32)`.
+All stopped at `layout_pending`; no positive host-layout event was recorded.
+
+The trip styles still spread `StyleSheet.absoluteFillObject`, which React Native
+[removed in 0.85](https://reactnative.dev/blog/2026/04/07/react-native-0.85#stylesheetabsolutefillobject-removed).
+In the installed 0.86.3 runtime the spread silently yields `{}`. The empty host
+therefore has no height, so its measured-layout gate never mounts the native map.
+A focused regression using the actual installed StyleSheet failed with precisely
+that empty object. Earlier tests injected positive layout events without checking
+the host's real style, so they did not cover this failure.
+
+The correction uses `StyleSheet.absoluteFill` for the trip host and loading/Web
+overlays. The fullscreen editor header now occupies normal layout above the map;
+its failure banner is positioned inside the remaining map area, rather than at
+a fixed screen offset that overlaps tall iPhone safe areas. Existing camera,
+readiness, retry and native provider behavior remains in place. No new native
+build is needed for these JavaScript/style changes.
+
+Validation of the correction: 41 tests passed across the real trip-map component,
+card, editor and Web preview suites. Host geometry is asserted before any manual
+layout event. Fullscreen failure/retry/close paths cover zero and 62-point top
+safe areas. Installed react-native-web 0.21.0 also resolves the replacement fill
+style to the same five positioning properties. These checks do not establish
+native tile rendering on the physical iPhone.
 
 ## Evidence and scope
 
@@ -13,8 +45,8 @@ rendering on the physical iPhone remain unverified. Keep the incident open.
 recorded `google_ios_3_points_tiles_pending` at `2026-09-20T09:03:34.223Z`
 on TestFlight 1.1.2 (32). Native readiness was observed; tile completion was not.
 The tester reported a blank map after timeout, including a one-stop day, while
-Community rendered streets in the same installation. The precise native rendering
-cause is still unproven.
+Community rendered streets in the same installation. These older events predate
+the confirmed layout failure above and do not prove a separate native defect.
 
 The previous trip map used an initial region before its native frame was known,
 and requested camera fitting from tile-loaded callbacks. Repeated callbacks could

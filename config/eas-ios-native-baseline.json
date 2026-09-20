@@ -9,7 +9,7 @@
   "fingerprint": "0b5dd5996352ba381e65fc1a036a28eae3000516",
   "metadataCrlfSha1": {
     "client/.gitignore": "51c70b9fea9a53cc5bcb5838c8c31df64d04c1d4",
-    "client/eas.json": "ec959d780a56e727649ab24b2bdc8e01d9592f98",
+    "client/eas.json": "a2f077ce45880541cc6d5d16440dc18c54977b57",
     "client/GoogleService-Info.plist": "9e9b779534d8bbb77d089a4c4e1dae1066df8817"
   },
   "reviewedOptionalDelta": {

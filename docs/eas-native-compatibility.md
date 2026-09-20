@@ -1,5 +1,21 @@
 # OTA native compatibility
 
+## Android demo metadata review for the iOS map OTA (2026-09-20)
+
+Merged PR #423 added only the `android-demo` build profile to `client/eas.json`.
+The CRLF metadata digest is now `a2f077ce45880541cc6d5d16440dc18c54977b57`.
+Comparing the parsed file after removing that profile with production OTA source
+`5edb740` proved every existing profile/configuration identical. Executing both
+versions of app.config.js with the same production OTA environment also produced
+identical Expo configuration. The demo condition is false on production iOS,
+and the WorkManager fix changes Android source only; iOS module source is unchanged.
+All six optional-module fallback source hashes still match the existing receipt.
+
+This updates only the reviewed metadata bytes accepted by source archiving.
+The installed build/fingerprint and unknown-fingerprint rejection stay intact.
+The production-environment native fingerprint must still pass before uploading
+an OTA; this source comparison alone does not authorize an unknown fingerprint.
+
 ## Android OTA compatibility
 
 Android releases use the same guarded commands with explicit `--platform android`;

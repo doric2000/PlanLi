@@ -16,6 +16,7 @@ let mockFocusCallback;
 let mockMapProps;
 let mockDayTabsProps;
 let mockMissingDragIndex = false;
+let mockSafeAreaTop = 0;
 
 jest.mock('@react-navigation/native', () => ({
   useFocusEffect: (callback) => {
@@ -24,7 +25,7 @@ jest.mock('@react-navigation/native', () => ({
     ReactModule.useEffect(callback, [callback]);
   },
 }));
-jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0 }) }));
+jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: mockSafeAreaTop, bottom: 0 }) }));
 jest.mock('react-native-draggable-flatlist', () => {
   const ReactModule = require('react');
   const { FlatList } = require('react-native');
@@ -83,6 +84,7 @@ const trip = {
 beforeEach(() => {
   jest.clearAllMocks();
   mockMissingDragIndex = false;
+  mockSafeAreaTop = 0;
   mockMapProps = null;
   mockGetPrivateTrip.mockResolvedValue(trip);
   mockApply.mockResolvedValue({ revision: 2 });
@@ -219,6 +221,41 @@ test('a map timeout keeps the map mounted and exposes a compact retry', async ()
   } finally {
     timeoutSpy.mockRestore();
   }
+});
+
+test.each([0, 62])('fullscreen retry stays below the header with a %s-point safe area', async (safeAreaTop) => {
+  mockSafeAreaTop = safeAreaTop;
+  let triggerMapTimeout;
+  const realSetTimeout = global.setTimeout;
+  const timeoutSpy = jest.spyOn(global, 'setTimeout').mockImplementation((callback, delay, ...args) => {
+    if (delay === 10000) { triggerMapTimeout = callback; return 101; }
+    return realSetTimeout(callback, delay, ...args);
+  });
+  try {
+    mockGetPrivateTrip.mockResolvedValue({ ...trip, stopCount: 1, days: [trip.days[0], {
+      ...trip.days[1], stopCount: 1,
+      stops: [{ id: 'one', title: 'עצירה', coordinates: { lat: 32.8, lng: 35 } }],
+    }] });
+    const screen = render(<TripPlannerScreen navigation={{ goBack: jest.fn(), navigate: jest.fn() }} route={{ params: { tripId: 'trip-1' } }} />);
+    await waitFor(() => expect(screen.getByTestId('trip-map-loading')).toBeTruthy());
+    fireEvent.press(screen.getByLabelText('מפה במסך מלא'));
+    const header = screen.getByTestId('trip-map-full-header');
+    const fullScreen = screen.getByTestId('trip-map-full-screen');
+    const headerStyle = StyleSheet.flatten(header.props.style);
+    expect(headerStyle.paddingTop).toBe(Math.max(safeAreaTop, 8));
+    expect(headerStyle.position).not.toBe('absolute');
+    expect(fullScreen.children[0].props.testID).toBe('trip-map-full-header');
+    expect(StyleSheet.flatten(screen.getByTestId('trip-map-full-card').props.style).flex).toBe(1);
+    act(() => triggerMapTimeout());
+    const errorStyle = StyleSheet.flatten(screen.getByTestId('trip-map-full-error').props.style);
+    expect(errorStyle.top).toBe(8);
+    fireEvent.press(screen.getByTestId('trip-map-full-retry'));
+    expect(screen.queryByTestId('trip-map-full-error')).toBeNull();
+    expect(screen.getByTestId('trip-map-full-loading')).toBeTruthy();
+    fireEvent.press(screen.getByLabelText('חזרה לרשימת העצירות'));
+    expect(screen.queryByTestId('trip-map-full-card')).toBeNull();
+    expect(screen.getByTestId('trip-map-card')).toBeTruthy();
+  } finally { timeoutSpy.mockRestore(); }
 });
 
 test('changing days starts a new map and rejects the previous day readiness', async () => {
