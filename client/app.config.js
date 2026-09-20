@@ -131,6 +131,7 @@ function assertProtectedFirebaseEnvironment(env = process.env) {
 }
 
 function configureApp({ config }) {
+  const demo = require('./scripts/androidDemoConfig').androidDemoConfig(process.env);
   const emulatorEnabled = process.env.EXPO_PUBLIC_USE_FIREBASE_EMULATORS === 'true';
   const localE2e = process.env.PLANLI_LOCAL_E2E === 'true';
   if (emulatorEnabled || localE2e) {
@@ -142,15 +143,15 @@ function configureApp({ config }) {
     }
   }
   assertProtectedFirebaseEnvironment(process.env);
-  const iosKey = String(process.env.GOOGLE_MAPS_IOS_KEY || '').trim();
-  const androidKey = String(process.env.GOOGLE_MAPS_ANDROID_KEY || '').trim();
+  const iosKey = demo ? '' : String(process.env.GOOGLE_MAPS_IOS_KEY || '').trim();
+  const androidKey = demo ? '' : String(process.env.GOOGLE_MAPS_ANDROID_KEY || '').trim();
   const releaseBuild = ['release-candidate', 'production'].includes(
     process.env.EAS_BUILD_PROFILE
   );
   const protectedNativeFiles = process.env.EAS_BUILD
     ? assertProtectedNativeFirebaseFiles(process.env)
     : null;
-  if (process.env.EAS_BUILD && (!iosKey || !androidKey)) {
+  if (process.env.EAS_BUILD && !demo && (!iosKey || !androidKey)) {
     throw new Error('GOOGLE_MAPS_IOS_KEY and GOOGLE_MAPS_ANDROID_KEY are required for native builds.');
   }
   if (process.env.EAS_BUILD && releaseBuild) {
@@ -177,6 +178,9 @@ function configureApp({ config }) {
 
   return {
     ...config,
+    ...(demo ? { name: 'PlanLi Demo', scheme: demo.packageName,
+      updates: { ...config.updates, enabled: false },
+      extra: { ...config.extra, androidDemoFirebase: demo.firebase } } : {}),
     ...(localE2e ? { name: 'PlanLi Local E2E', scheme: 'com.planli.planlitravels.e2e', updates: { ...config.updates, enabled: false } } : {}),
     plugins: [
       ...plugins,
@@ -198,6 +202,7 @@ function configureApp({ config }) {
     },
     android: {
       ...config.android,
+      ...(demo ? { package: demo.packageName, googleServicesFile: demo.nativePath } : {}),
       ...(localE2e ? { package: 'com.planli.planlitravels.e2e',
         googleServicesFile: require('node:path').resolve(__dirname, '../.codex_tmp/android/google-services.json') } : {}),
       ...(protectedNativeFiles ? { googleServicesFile: protectedNativeFiles.androidPath } : {}),

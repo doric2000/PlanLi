@@ -203,10 +203,12 @@ class PlanLiTransfersModule : Module() {
           check(scheduler.schedule(info) == JobScheduler.RESULT_SUCCESS)
         }
       } else {
-      val work = OneTimeWorkRequestBuilder<PlanLiTransferWorker>().setInputData(workDataOf("id" to id))
-        .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()).build()
-      WorkManager.getInstance(context).enqueueUniqueWork("planli-transfer-$id", ExistingWorkPolicy.KEEP, work).result.get()
+        val work = OneTimeWorkRequestBuilder<PlanLiTransferWorker>().setInputData(workDataOf("id" to id))
+          .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()).build()
+        WorkManager.getInstance(context).enqueueUniqueWork("planli-transfer-$id", ExistingWorkPolicy.KEEP, work).result.get()
       }
+      // Await scheduling errors, but do not send WorkManager's SUCCESS object over the Expo bridge.
+      Unit
     }
     AsyncFunction("remove") { id: String, owner: String -> TransferStore(requireNotNull(appContext.reactContext)).remove(id, owner) }
   }

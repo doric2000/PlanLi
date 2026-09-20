@@ -115,10 +115,130 @@ app, native App Check reached Play Integrity but returned HTTP 403
 attestation remains blocked and upload recording could not proceed. App Check
 enforcement and integrity requirements were not weakened. No APK/source change
 was needed for the API allowlist update.
-The applied OTA group and native upload completion remain unverified. No permission
-demo video, Play declaration submission, new build, OTA or deployment was produced
-by this recording task. Local preparation artifacts are ignored under
-`.codex_tmp/validation/play-permission-video/`.
+An authorized temporary recommendation test reached the server at
+`2026-09-20T11:29:30Z`, but failed before its photo uploaded. The 179.339-second
+diagnostic recording is `.codex_tmp/validation/play-permission-video/planli-upload-demo-attempt.mp4`;
+it is not a successful permission demonstration. No public recommendation was
+created. Operation `47f70e7b-b1d6-46bb-82d0-31ae05c9e9b8` timed out and was discarded
+through the app at `2026-09-20T12:10:42.151Z`; its metadata cleanup is scheduled
+for the following day. Saved draft `65a668b8-a020-4357-8ee9-7a15a0a937d2` and its
+version were deleted through the app and independently returned HTTP 404.
+Cleanup retries are paused. The applied OTA group and production native upload
+completion remain unverified; no Play declaration or store submission was made
+during this production recording attempt.
+
+### Isolated Android development demo (2026-09-20, recording verified)
+
+The user authorized a separate test environment and Android development build
+after the Play binary failed emulator attestation. Project `planli-staging-demo`
+(`326511814867`) is billing-enabled, with a Standard Firestore database in `eur3`
+and bucket `planli-staging-demo-media-eu` in `europe-west1`. Repository Firestore
+and Storage rules were deployed unchanged; all 138 indexes reached READY.
+Only a synthetic test account and London destination were seeded. No production
+data was copied, and this setup has not changed production services.
+
+The separate package is `com.planli.planlitravels.demo`, Android Firebase app
+`1:326511814867:android:d8b8f6a9258dddf69b8c26`, with SDK bridge app
+`1:326511814867:web:73ecd103ffe521af9b8c26`. Its configuration uses dedicated
+`PLANLI_DEMO_*` file variables in EAS's development environment. The existing
+development-only debug App Check provider is retained, and OTA is disabled for
+the demo package. Runtime remains `1.3.0`, app version `1.1.0`, Android build `1`.
+EAS build `899e1e60-5eef-47c0-bd32-5c0f5d4e5aca` was created at
+`2026-09-20T12:32:35.690Z` and finished successfully at
+`2026-09-20T12:55:12.685Z`. ADB installed it on `emulator-5582` at
+`2026-09-20T12:57:10Z`; package readback confirms `1.1.0` / `1`.
+The development bundle loaded; the user accepted notification permission and signed
+in as the synthetic demo account. At `2026-09-20T13:24:33Z`, operation
+`6f7e9480-59fe-417e-8c49-fdfa4e4e8d3e` successfully published temporary recommendation
+`rec_i1agDBxsPa-K_NNspaou` with its processed photo. The UI nevertheless reported
+failure: the Android WorkManager scheduling branch implicitly returned
+`Operation.State.SUCCESS`, which the Expo bridge cannot serialize. The local native
+fix now returns `Unit` after awaiting scheduling; nine related JavaScript tests
+passed. Replacement demo build `5188cb24-f061-4104-8b38-1665d960209c` was created
+at `2026-09-20T13:33:35.152Z` (same app version/build `1.1.0` / `1`) and finished
+successfully at `2026-09-20T13:55:50.363Z`. Its APK SHA-256 is
+`53221c0d564b4c1534b56a8b140df6be8a5bef52be4c622459442a561c541b9e`;
+ADB installed the replacement on `emulator-5582` at `2026-09-20T13:59:33Z`,
+preserving notification permission. Package readback confirms `1.1.0` / `1` and
+target SDK 36. Native runtime verification passed: operation
+`27b94dae-eb9a-479b-8413-68b3552879a1` published `rec_-Gr6XynUwlbh03mmVTPF`
+with client and server success; the WorkManager bridge error did not recur.
+The first demo video is diagnostic only; it did not clearly capture the foreground
+notification. The temporary recommendation was removed through `deleteContent`
+after the demo media account's App Check token-verifier permission propagated.
+Independent readback returned 404, the processed media prefix contains zero objects,
+and the current recommendation draft is null.
+The final unedited recording is
+`.codex_tmp/validation/play-permission-video/planli-upload-notification-success.mp4`
+(168.347 seconds, 540 x 960). Frame inspection confirmed photo selection/save,
+the actual Android upload notification around 115-132 seconds, and successful
+publication around 155 seconds. Final operation
+`9b984c7c-5364-4a60-83c5-5c90184cbf03` transferred 363,575 bytes and completed
+successfully; the recommendation updated at `2026-09-20T14:32:40.661Z`.
+Android deferred the notification for short transfers. A temporary loopback
+HTTP CONNECT limiter slowed encrypted Storage upload bytes without intercepting
+TLS or changing app behavior. It was stopped and the emulator proxy removed;
+Wi-Fi and unrestricted network speed/zero added latency were restored.
+
+The final temporary post was deleted through `deleteContent` at
+`2026-09-20T14:35:15Z`. Its saved draft is null and both temporary recommendation
+IDs independently returned 404. Two superseded test-photo versions remained
+because the optional recommendation media cleanup trigger was not in the selected
+demo deployment. A dry-run checked their exact six object paths, synthetic owner,
+creation times, missing asset registry entries, and lack of live content/profile
+references; generation-conditional deletion completed at `2026-09-20T14:39:28Z`.
+At `2026-09-20T14:40:14Z`, both `media/android-permission-demo/` and
+`media-staging/android-permission-demo/` contained zero objects. Operation history
+remains available. No store submission or review had been requested at cleanup
+completion; the subsequent Play Console submission is recorded below.
+
+#### Google Play declaration and store-listing review (2026-09-20)
+
+The verified recording was edited to 30.000 seconds (H.264, 540 x 960, 30 fps;
+SHA-256 `84130a8cf7d1f3c160833c0c9867184a7d5e3f42182d4bf7b886f3812e0f6371`).
+It shows photo selection/save, the real upload notification, and return to the
+successfully published recommendation. The original recording remains unchanged.
+The review copy is stored in the existing demo bucket at
+`review-evidence/2026-09-20/planli-foreground-service-demo-30s-84130a8c.mp4`.
+Its shareable download link returned anonymous HTTP 200 with `video/mp4` and
+the matching checksum at `2026-09-20T15:17:35Z`. Bucket IAM, public-access
+prevention, Storage rules, and App Check settings were not changed. Keep this
+review-evidence object available while Google reviews the submission; its link
+and upload receipt are in ignored local validation artifacts.
+
+The `FOREGROUND_SERVICE_DATA_SYNC` declaration was saved with
+**Network processing > Other (uploading/downloading)** and that video URL.
+The user-authorized review request also includes the already-pending Hebrew
+(`iw-IL`) phone-screenshot store-listing change. At `2026-09-20T15:19Z`, Play
+Console showed **Changes in review**, with automated quick checks still running
+and a notice that forwarding to review follows successful checks. Managed
+publishing remains off. Review approval and publication are not yet verified;
+this request contains no new APK/AAB or native-fix release.
+
+The demo was built from the then-uncommitted `chore/android-permission-demo` working tree based on
+`f255030b730f5a7ad051d178c9710b70c12fb3ea`. Nineteen configuration guard tests and
+seven focused Firebase/App Check tests passed. The initial 19 selected demo Functions
+finished deployment at `2026-09-20T12:49:00Z`; independent inventory confirmed all
+19 ACTIVE, the demo media bucket, and `PLANLI_ENFORCE_APP_CHECK=true`. Supporting
+`getCurrentRouteDraft`, `resolveRecommendationDestination`, and `getReactionState`
+were subsequently deployed for the signed-in home/composer/detail flow. The last
+endpoint updated at `2026-09-20T13:39:19.761Z`; independent inventory at
+`2026-09-20T13:43Z` confirmed all 22 demo Functions ACTIVE. Firestore
+and Storage App Check enforcement is enabled. The emulator debug token is registered
+only in the demo project; its token exchange succeeded. Initial failed creation
+left 12 callable transport IAM bindings missing; these were restored to the standard
+Firebase callable configuration, with Auth/App Check checks retained. The demo core
+service account also received the specific App Check token-verifier role required
+by the existing guest-session replay protection. An authenticated draft read returned
+200 with no draft, an unauthenticated read returned 401, and authenticated London
+catalog search returned the approved synthetic destination. Its catalog entry was
+derived using the existing `catalogData` helper. Upload, foreground-service
+notification, successful publication, and temporary-content cleanup were exercised
+on Android 13 with the corrected demo native module. This is demo-build evidence;
+the production Play binary and Android 14+ transfer branch were not revalidated.
+Logs and environment receipts are
+ignored under `.codex_tmp/android-demo/`. No production build, OTA or deployment
+is part of this demo setup.
 
 ### Background-upload rollout and Narguila recovery (2026-09-20)
 
