@@ -14,6 +14,7 @@ const mockIsOffline = jest.fn(() => false);
 const mockCaptureDiagnosticException = jest.fn();
 let mockFocusCallback;
 let mockMapProps;
+let mockDayTabsProps;
 let mockMissingDragIndex = false;
 
 jest.mock('@react-navigation/native', () => ({
@@ -37,7 +38,7 @@ jest.mock('react-native-draggable-flatlist', () => {
     }),
   });
 });
-jest.mock('../src/features/tripPlanner/components/TripDayTabs', () => () => null);
+jest.mock('../src/features/tripPlanner/components/TripDayTabs', () => (props) => { mockDayTabsProps = props; return null; });
 jest.mock('../src/features/tripPlanner/components/TripPlannerMap', () => (props) => {
   mockMapProps = props;
   return null;
@@ -142,14 +143,14 @@ test('a located stop shows progress until its native map surface is ready', asyn
   }] });
   const screen = render(<TripPlannerScreen navigation={{ goBack: jest.fn(), navigate: jest.fn() }} route={{ params: { tripId: 'trip-1' } }} />);
   await waitFor(() => expect(screen.getByTestId('trip-map-loading')).toBeTruthy());
-  expect(screen.queryByLabelText('מפה במסך מלא')).toBeNull();
+  expect(screen.getByLabelText('מפה במסך מלא')).toBeTruthy();
   expect(mockMapProps.interactive).toBe(false);
   act(() => mockMapProps.onReady());
   expect(screen.queryByTestId('trip-map-loading')).toBeNull();
   expect(screen.getByLabelText('מפה במסך מלא')).toBeTruthy();
 });
 
-test('adding a located stop on the active day resets map loading for the new viewport', async () => {
+test('adding a located stop keeps an already loaded map mounted', async () => {
   const oneStopTrip = { ...trip, stopCount: 1, days: [trip.days[0], {
     ...trip.days[1], stopCount: 1,
     stops: [{ id: 'stop-1', title: 'תצפית הכרמל', order: 0, coordinates: { lat: 32.8, lng: 35 } }],
@@ -170,7 +171,7 @@ test('adding a located stop on the active day resets map loading for the new vie
   act(() => mockFocusCallback());
 
   await waitFor(() => expect(screen.getByText('הנמל')).toBeTruthy());
-  expect(screen.getByTestId('trip-map-loading')).toBeTruthy();
+  expect(screen.queryByTestId('trip-map-loading')).toBeNull();
   expect(mockMapProps.stops).toHaveLength(2);
 });
 
@@ -197,6 +198,7 @@ test('a map timeout keeps the map mounted and exposes a compact retry', async ()
     });
     expect(screen.getByTestId('trip-map-loading')).toBeTruthy();
     expect(triggerMapTimeout).toEqual(expect.any(Function));
+    act(() => mockMapProps.onStageChange('tiles_pending'));
     act(() => triggerMapTimeout());
     expect(screen.getByTestId('trip-map-error')).toBeTruthy();
     expect(screen.getByText('מלון לירו')).toBeTruthy();
@@ -206,17 +208,35 @@ test('a map timeout keeps the map mounted and exposes a compact retry', async ()
       expect.objectContaining({
         operation: 'trip_planner_map_load',
         code: 'map_load_timeout',
-        reason: expect.stringMatching(/^google_.+_1_points$/),
+        reason: expect.stringMatching(/^google_.+_1_points_tiles_pending_inline$/),
       }),
     );
     fireEvent.press(screen.getByTestId('trip-map-retry'));
     expect(screen.queryByTestId('trip-map-error')).toBeNull();
     expect(screen.getByTestId('trip-map-loading')).toBeTruthy();
     act(() => triggerMapTimeout());
-    expect(mockCaptureDiagnosticException).toHaveBeenCalledTimes(1);
+    expect(mockCaptureDiagnosticException).toHaveBeenCalledTimes(2);
   } finally {
     timeoutSpy.mockRestore();
   }
+});
+
+test('changing days starts a new map and rejects the previous day readiness', async () => {
+  const stop = { id: 'one', title: 'עצירה', coordinates: { lat: 32.8, lng: 35 } };
+  mockGetPrivateTrip.mockResolvedValue({ ...trip, stopCount: 2, days: [trip.days[0],
+    { ...trip.days[1], stops: [stop], stopCount: 1 },
+    { ...trip.days[1], id: 'day-2', order: 2, stops: [{ ...stop, id: 'two' }], stopCount: 1 },
+  ] });
+  const screen = render(<TripPlannerScreen navigation={{ goBack: jest.fn(), navigate: jest.fn() }} route={{ params: { tripId: 'trip-1' } }} />);
+  await waitFor(() => expect(screen.getByTestId('trip-map-loading')).toBeTruthy());
+  const oldMap = mockMapProps;
+  act(() => oldMap.onReady());
+  act(() => mockDayTabsProps.onSelect('day-2'));
+  act(() => oldMap.onReady());
+  expect(screen.getByTestId('trip-map-loading')).toBeTruthy();
+  expect(mockMapProps.stops[0].id).toBe('two');
+  act(() => mockMapProps.onReady());
+  expect(screen.queryByTestId('trip-map-loading')).toBeNull();
 });
 
 test('opening the planner without an id returns to the library without creating a trip', async () => {

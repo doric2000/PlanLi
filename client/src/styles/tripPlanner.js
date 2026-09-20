@@ -13,6 +13,8 @@ export const tripPlannerStyles = StyleSheet.create({
   editorBody: { flex: 1, backgroundColor: '#FFFFFF' },
   editorMapCard: { height: 142, marginHorizontal: 16, marginTop: 12, marginBottom: 12, borderRadius: 20, overflow: 'hidden', backgroundColor: '#EDF2F6' },
   editorMapOverlay: { position: 'absolute', bottom: 10, left: 10, borderRadius: 14, backgroundColor: '#FFFFFF', paddingHorizontal: 12, minHeight: 44, flexDirection: 'row-reverse', alignItems: 'center', gap: 6 },
+  editorMapExpand: { position: 'absolute', top: 6, left: 6, zIndex: 3, borderRadius: 14, backgroundColor: '#FFFFFF', paddingHorizontal: 12, minHeight: 44, flexDirection: 'row-reverse', alignItems: 'center', gap: 6 },
+  nativeMap: { flex: 1 },
   editorMapHint: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 5, paddingHorizontal: 20 },
   editorMapLoadingOverlay: { ...StyleSheet.absoluteFillObject, zIndex: 2, backgroundColor: 'rgba(237,242,246,0.82)' },
   editorMapFailureBanner: { position: 'absolute', zIndex: 2, left: 8, right: 8, bottom: 8, minHeight: 48, borderRadius: 14, paddingHorizontal: 10, backgroundColor: 'rgba(255,255,255,0.96)', flexDirection: 'row-reverse', alignItems: 'center', gap: 8, shadowColor: '#102A43', shadowOpacity: 0.12, shadowRadius: 8, elevation: 3 },

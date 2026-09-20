@@ -1,140 +1,181 @@
 import React from 'react';
 import { fireEvent, render } from '@testing-library/react-native';
-import { Platform, View } from 'react-native';
+import { StyleSheet } from 'react-native';
 
-const mockFitToCoordinates = jest.fn();
-
+const mockSetCamera = jest.fn();
+const mockBreadcrumb = jest.fn();
+jest.mock('expo-updates', () => ({ isEmbeddedLaunch: false, updateId: 'test-update', runtimeVersion: '1.3.0' }));
+jest.mock('../src/services/ErrorReporting', () => ({
+  addDiagnosticBreadcrumb: (...args) => mockBreadcrumb(...args),
+  captureDiagnosticException: jest.fn(),
+}));
 jest.mock('react-native-maps', () => {
   const ReactModule = require('react');
-  const { View: NativeView } = require('react-native');
+  const { View } = require('react-native');
   return {
     __esModule: true,
     default: ReactModule.forwardRef(({ children, ...props }, ref) => {
-      ReactModule.useImperativeHandle(ref, () => ({
-        fitToCoordinates: mockFitToCoordinates,
-      }));
-      return ReactModule.createElement(NativeView, { ...props, testID: 'trip-map' }, children);
+      ReactModule.useImperativeHandle(ref, () => ({ setCamera: mockSetCamera }));
+      return ReactModule.createElement(View, { ...props, testID: 'trip-map' }, children);
     }),
-    Marker: (props) => ReactModule.createElement(NativeView, { ...props, testID: `trip-marker-${props.title}` }),
-    Polyline: (props) => ReactModule.createElement(NativeView, { ...props, testID: 'trip-route-line' }),
+    Marker: (props) => ReactModule.createElement(View, { ...props, testID: `trip-marker-${props.title}` }),
+    Polyline: (props) => ReactModule.createElement(View, { ...props, testID: 'trip-route-line' }),
     PROVIDER_GOOGLE: 'google',
   };
 });
 
 const TripPlannerMap = require('../src/features/tripPlanner/components/TripPlannerMap').default;
-const originalPlatform = Platform.OS;
+const TripPlannerMapCard = require('../src/features/tripPlanner/components/TripPlannerMapCard').default;
+const stops = [
+  { id: 'one', title: 'תצפית', coordinates: { lat: 32.8, lng: 35 } },
+  { id: 'two', title: 'נמל', coordinates: { lat: 32.82, lng: 34.99 } },
+];
+const size = { width: 340, height: 142 };
+const measureHost = (screen, layout = size) => fireEvent(screen.getByTestId('trip-map-host'), 'layout', { nativeEvent: { layout } });
+const measureNative = (screen, layout = size) => fireEvent(screen.getByTestId('trip-map'), 'layout', { nativeEvent: { layout } });
+const nativeReady = (screen) => fireEvent(screen.getByTestId('trip-map'), 'mapReady');
+const load = (screen) => fireEvent(screen.getByTestId('trip-map'), 'mapLoaded');
 
-afterEach(() => {
-  mockFitToCoordinates.mockClear();
-  Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatform });
-});
+beforeEach(() => jest.clearAllMocks());
 
-test('iPhone uses the proven Google provider without a cached snapshot', () => {
-  Object.defineProperty(Platform, 'OS', { configurable: true, value: 'ios' });
-  const select = jest.fn();
-  const ready = jest.fn();
-  const screen = render(<View style={{ height: 200 }}><TripPlannerMap
-    stops={[{ id: 'stop-1', title: 'תצפית הכרמל', coordinates: { lat: 32.8, lng: 35 } }]}
-    onSelectStop={select}
-    onReady={ready}
-    interactive={false}
-  /></View>);
+test('mounts Google in a measured non-collapsible host with a finite camera', () => {
+  const screen = render(<TripPlannerMap stops={stops} interactive={false} />);
+  expect(screen.queryByTestId('trip-map')).toBeNull();
+  expect(screen.getByTestId('trip-map-host').props.collapsable).toBe(false);
+  measureHost(screen, { width: 340, height: 0 });
+  expect(screen.queryByTestId('trip-map')).toBeNull();
+  measureHost(screen);
   const map = screen.getByTestId('trip-map');
   expect(map.props.provider).toBe('google');
-  expect(map.props.loadingEnabled).toBeUndefined();
+  expect(StyleSheet.flatten(map.props.style)).toEqual({ flex: 1 });
+  expect(map.props.initialRegion).toBeUndefined();
   expect(map.props.cacheEnabled).toBeUndefined();
+  expect(map.props.loadingEnabled).toBeUndefined();
   expect(map.props.scrollEnabled).toBe(false);
-  expect(map.props.initialRegion).toEqual({ latitude: 32.8, longitude: 35, latitudeDelta: 0.06, longitudeDelta: 0.06 });
-  expect(map.props.region).toBeUndefined();
-  expect(mockFitToCoordinates).not.toHaveBeenCalled();
-  expect(map.props.onMapReady).toBeUndefined();
-  fireEvent(map, 'mapLoaded');
-  expect(ready).toHaveBeenCalledTimes(1);
-  expect(mockFitToCoordinates).not.toHaveBeenCalled();
-  const marker = screen.getByTestId('trip-marker-1. תצפית הכרמל');
-  expect(marker.props.coordinate).toEqual({ latitude: 32.8, longitude: 35 });
-  fireEvent(marker, 'press');
-  expect(select).toHaveBeenCalledWith('stop-1');
+  expect(map.props.initialCamera.center.latitude).toBeCloseTo(32.81);
+  expect(Number.isFinite(map.props.initialCamera.zoom)).toBe(true);
+  expect(mockSetCamera).not.toHaveBeenCalled();
 });
 
-test('interactive coordinates are never fitted before Google tiles load', () => {
-  Object.defineProperty(Platform, 'OS', { configurable: true, value: 'ios' });
-  const stops = [{ id: 'stop-1', title: 'תצפית הכרמל', coordinates: { lat: 32.8, lng: 35 } }];
-  const screen = render(<TripPlannerMap stops={stops} />);
-  expect(mockFitToCoordinates).not.toHaveBeenCalled();
-
-  screen.rerender(<TripPlannerMap stops={[...stops, { id: 'stop-2', title: 'הנמל', coordinates: { lat: 32.82, lng: 34.99 } }]} />);
-  expect(mockFitToCoordinates).not.toHaveBeenCalled();
-
-  fireEvent(screen.getByTestId('trip-map'), 'mapLoaded');
-  expect(mockFitToCoordinates).toHaveBeenCalledTimes(1);
-});
-
-test('an interactive loaded map refits when its stop coordinates change', () => {
-  const stops = [
-    { id: 'stop-1', coordinates: { lat: 32.8, lng: 35 } },
-    { id: 'stop-2', coordinates: { lat: 32.82, lng: 34.99 } },
-  ];
-  const screen = render(<TripPlannerMap stops={stops} />);
-  fireEvent(screen.getByTestId('trip-map'), 'mapLoaded');
-  mockFitToCoordinates.mockClear();
-
-  screen.rerender(<TripPlannerMap stops={[
-    ...stops,
-    { id: 'stop-3', coordinates: { lat: 32.84, lng: 34.97 } },
-  ]} />);
-
-  expect(mockFitToCoordinates).toHaveBeenCalledWith(
-    expect.arrayContaining([{ latitude: 32.84, longitude: 34.97 }]),
-    expect.objectContaining({ animated: true }),
-  );
-});
-
-test('region changes are forwarded without acting as a tile-loaded event', () => {
-  Object.defineProperty(Platform, 'OS', { configurable: true, value: 'ios' });
+test.each(['layout-first', 'ready-first'])('initializes once before tiles, with %s event order', (order) => {
   const ready = jest.fn();
-  const regionChanged = jest.fn();
-  const screen = render(<TripPlannerMap
-    stops={[{ id: 'stop-1', title: 'תצפית הכרמל', coordinates: { lat: 32.8, lng: 35 } }]}
-    onReady={ready}
-    onRegionChange={regionChanged}
-  />);
-  const map = screen.getByTestId('trip-map');
+  const screen = render(<TripPlannerMap stops={stops} onReady={ready} deferOverlaysUntilLoaded />);
+  measureHost(screen);
+  (order === 'layout-first' ? measureNative : nativeReady)(screen);
+  expect(mockSetCamera).not.toHaveBeenCalled();
+  (order === 'layout-first' ? nativeReady : measureNative)(screen);
+  expect(mockSetCamera).toHaveBeenCalledTimes(1);
+  expect(ready).not.toHaveBeenCalled();
+  expect(screen.queryByTestId('trip-route-line')).toBeNull();
+  expect(screen.queryByTestId('trip-marker-1. תצפית')).toBeNull();
+  load(screen);
+  expect(ready).toHaveBeenCalledTimes(1);
+  expect(screen.getByTestId('trip-route-line')).toBeTruthy();
+  expect(screen.getByTestId('trip-marker-1. תצפית')).toBeTruthy();
+});
+
+test('one-stop inline maps also initialize before tiles without fitting bounds', () => {
+  const screen = render(<TripPlannerMap stops={[stops[0]]} interactive={false} />);
+  measureHost(screen); measureNative(screen); nativeReady(screen);
+  expect(mockSetCamera).toHaveBeenCalledWith(expect.objectContaining({ center: { latitude: 32.8, longitude: 35 } }));
+  expect(screen.queryByTestId('trip-route-line')).toBeNull();
+});
+
+test('retains an early tile event until layout and native readiness arrive', () => {
+  const ready = jest.fn();
+  const screen = render(<TripPlannerMap stops={stops} onReady={ready} />);
+  measureHost(screen); load(screen); measureNative(screen);
+  expect(ready).not.toHaveBeenCalled();
+  nativeReady(screen);
+  expect(ready).toHaveBeenCalledTimes(1);
+});
+
+test('region changes do not imply readiness and repeated tile events never refit', () => {
+  const ready = jest.fn();
+  const changed = jest.fn();
+  const screen = render(<TripPlannerMap stops={stops} onReady={ready} onRegionChange={changed} />);
+  measureHost(screen); measureNative(screen); nativeReady(screen);
   const region = { latitude: 32.8, longitude: 35, latitudeDelta: 0.06, longitudeDelta: 0.06 };
-  fireEvent(map, 'regionChangeComplete', region, { isGesture: false });
+  fireEvent(screen.getByTestId('trip-map'), 'regionChangeComplete', region, { isGesture: false });
+  expect(changed).toHaveBeenCalledWith(region, { isGesture: false });
   expect(ready).not.toHaveBeenCalled();
-  expect(regionChanged).toHaveBeenCalledWith(region, { isGesture: false });
-
-  fireEvent(map, 'mapLoaded');
+  load(screen); load(screen); nativeReady(screen); measureNative(screen);
   expect(ready).toHaveBeenCalledTimes(1);
+  expect(mockSetCamera).toHaveBeenCalledTimes(1);
 });
 
-test('camera failures cannot suppress tile-loaded readiness', () => {
-  Object.defineProperty(Platform, 'OS', { configurable: true, value: 'ios' });
-  mockFitToCoordinates.mockImplementationOnce(() => { throw new Error('native camera unavailable'); });
-  const ready = jest.fn();
-  const screen = render(<TripPlannerMap
-    stops={[
-      { id: 'stop-1', coordinates: { lat: 32.8, lng: 35 } },
-      { id: 'stop-2', coordinates: { lat: 32.82, lng: 34.99 } },
-    ]}
-    onReady={ready}
-  />);
-  expect(() => fireEvent(screen.getByTestId('trip-map'), 'mapLoaded')).not.toThrow();
-  expect(ready).toHaveBeenCalledTimes(1);
+test('updates an inline camera for changed coordinates but not selection', () => {
+  const select = jest.fn();
+  const screen = render(<TripPlannerMap stops={stops} interactive={false} onSelectStop={select} />);
+  measureHost(screen); measureNative(screen); nativeReady(screen); load(screen);
+  const updated = [...stops, { id: 'three', coordinates: { lat: 32.9, lng: 34.98 } }];
+  screen.rerender(<TripPlannerMap stops={updated} interactive={false} onSelectStop={select} />);
+  expect(mockSetCamera).toHaveBeenCalledTimes(2);
+  screen.rerender(<TripPlannerMap stops={[...updated]} selectedStopId="one" interactive={false} onSelectStop={select} />);
+  expect(mockSetCamera).toHaveBeenCalledTimes(2);
+  fireEvent.press(screen.getByTestId('trip-marker-1. תצפית'));
+  expect(select).toHaveBeenCalledWith('one');
 });
 
-test('Android also waits for Google tiles before reporting readiness', () => {
-  Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
+test('waits for the native frame to match a changed host size', () => {
+  const screen = render(<TripPlannerMap stops={stops} />);
+  measureHost(screen); measureNative(screen); nativeReady(screen); load(screen);
+  const rotatedSize = { width: 700, height: 350 };
+  measureHost(screen, rotatedSize);
+  expect(mockSetCamera).toHaveBeenCalledTimes(1);
+  measureNative(screen, rotatedSize);
+  expect(mockSetCamera).toHaveBeenCalledTimes(2);
+});
+
+test('ignores native callbacks after unmount', () => {
   const ready = jest.fn();
-  const screen = render(<TripPlannerMap
-    stops={[{ id: 'stop-1', title: 'תצפית הכרמל', coordinates: { lat: 32.8, lng: 35 } }]}
-    onReady={ready}
-  />);
-  const map = screen.getByTestId('trip-map');
-  expect(map.props.provider).toBe('google');
-  expect(map.props.onMapReady).toBeUndefined();
+  const screen = render(<TripPlannerMap stops={stops} onReady={ready} />);
+  measureHost(screen);
+  const callbacks = screen.getByTestId('trip-map').props;
+  screen.unmount();
+  callbacks.onMapReady(); callbacks.onMapLoaded(); callbacks.onLayout({ nativeEvent: { layout: size } });
+  expect(mockSetCamera).not.toHaveBeenCalled();
   expect(ready).not.toHaveBeenCalled();
-  fireEvent(map, 'mapLoaded');
-  expect(ready).toHaveBeenCalledTimes(1);
+});
+
+test('a failed native camera command does not report successful initialization', () => {
+  mockSetCamera.mockImplementationOnce(() => { throw new Error('camera unavailable'); });
+  const ready = jest.fn();
+  const stage = jest.fn();
+  const screen = render(<TripPlannerMap stops={stops} onReady={ready} onStageChange={stage} />);
+  measureHost(screen); measureNative(screen); nativeReady(screen); load(screen);
+  expect(ready).not.toHaveBeenCalled();
+  expect(stage).toHaveBeenCalledWith('camera_failed');
+});
+
+test('diagnostics identify layout and OTA without stop names or coordinates', () => {
+  const screen = render(<TripPlannerMap stops={stops} />);
+  measureHost(screen); measureNative(screen); nativeReady(screen);
+  const diagnostics = JSON.stringify(mockBreadcrumb.mock.calls);
+  expect(diagnostics).toContain('test-update');
+  expect(diagnostics).toContain('340x142');
+  expect(diagnostics).not.toContain('32.8');
+  expect(diagnostics).not.toContain('תצפית');
+});
+
+test('the real card only clears loading when its measured native map reports tiles', () => {
+  const screen = render(<TripPlannerMapCard stops={stops} />);
+  expect(screen.getByTestId('trip-map-loading')).toBeTruthy();
+  measureHost(screen); measureNative(screen); nativeReady(screen);
+  expect(screen.getByTestId('trip-map-loading')).toBeTruthy();
+  expect(screen.queryByTestId('trip-route-line')).toBeNull();
+  load(screen);
+  expect(screen.queryByTestId('trip-map-loading')).toBeNull();
+  expect(screen.getByTestId('trip-route-line')).toBeTruthy();
+});
+
+test('direct map consumers retain markers and routes when tiles have not loaded', () => {
+  const ready = jest.fn();
+  const select = jest.fn();
+  const screen = render(<TripPlannerMap stops={stops} onReady={ready} onSelectStop={select} />);
+  measureHost(screen); measureNative(screen); nativeReady(screen);
+  expect(ready).not.toHaveBeenCalled();
+  expect(screen.getByTestId('trip-route-line')).toBeTruthy();
+  fireEvent.press(screen.getByTestId('trip-marker-1. תצפית'));
+  expect(select).toHaveBeenCalledWith('one');
 });
