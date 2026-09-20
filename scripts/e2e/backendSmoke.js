@@ -89,6 +89,10 @@ async function backendSmoke() {
   } while (Date.now() < publicationDeadline);
   assert.equal(publication.status, 'success', `Background publication failed: ${JSON.stringify(publication.error || { status: publication.status })}`);
   assert.ok(publication.result.recommendationId);
+  await require('./backgroundOperationSmoke').backgroundOperationSmoke({ call, fixture, bytes,
+    upload: (stagingPath, operationId) => uploadBytes(ref(storage, stagingPath), bytes, { ...metadata,
+      customMetadata: { ...metadata.customMetadata, operationId } }),
+  });
   await require('./recommendationEditSmoke').recommendationEditSmoke({ call, fixture,
     recommendationId: saved.recommendationId, media, uploadPrepared: async () => {
       const stagingPath = `media-staging/${fixture.uid}/${crypto.randomUUID()}.jpg`;

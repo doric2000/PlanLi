@@ -139,6 +139,8 @@ function plan() {
       ...commonRoles.map((role) => ({ role, member: core })),
       ...commonRoles.map((role) => ({ role, member: media })),
       { role: 'roles/firebaseauth.admin', member: media },
+      { role: 'roles/serviceusage.serviceUsageConsumer', member: media },
+      { role: 'roles/pubsub.publisher', member: `serviceAccount:service-${PROJECT_NUMBER}@gs-project-accounts.iam.gserviceaccount.com` },
     ],
     bucketBindings: [
       { role: 'roles/storage.objectViewer', member: core },
@@ -149,6 +151,8 @@ function plan() {
       { secretId: 'OPENWEATHER_API_KEY', member: core },
       { secretId: 'UNSPLASH_ACCESS_KEY', member: core },
       { secretId: 'PUBLIC_RATE_LIMIT_KEY', member: core },
+      { secretId: 'REST_COUNTRIES_KEY', member: media },
+      { secretId: 'PUBLIC_RATE_LIMIT_KEY', member: media },
     ],
   };
 }

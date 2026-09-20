@@ -1267,6 +1267,21 @@
   ],
   "fieldOverrides": [
     {
+      "collectionGroup": "jobs",
+      "fieldPath": "cleanupAfter",
+      "indexes": [{ "order": "ASCENDING", "queryScope": "COLLECTION" }]
+    },
+    {
+      "collectionGroup": "stops",
+      "fieldPath": "mediaCleanupKeys",
+      "indexes": [
+        { "order": "ASCENDING", "queryScope": "COLLECTION" },
+        { "order": "DESCENDING", "queryScope": "COLLECTION" },
+        { "arrayConfig": "CONTAINS", "queryScope": "COLLECTION" },
+        { "arrayConfig": "CONTAINS", "queryScope": "COLLECTION_GROUP" }
+      ]
+    },
+    {
       "collectionGroup": "items",
       "fieldPath": "mediaCleanupKeys",
       "indexes": [{ "arrayConfig": "CONTAINS", "queryScope": "COLLECTION_GROUP" }]

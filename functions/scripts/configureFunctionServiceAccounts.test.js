@@ -18,3 +18,15 @@ test('runtime accounts receive distinct bucket permissions and no key creation',
     entry.member.endsWith(MEDIA_EMAIL) && entry.role === 'roles/storage.objectAdmin'));
   assert.equal(JSON.stringify(configuration).includes('serviceAccountKeys'), false);
 });
+
+test('background publication grants only its provider secrets and the Storage event publisher', () => {
+  const configuration = plan();
+  assert.deepEqual(configuration.secretBindings.filter((entry) => entry.member.endsWith(MEDIA_EMAIL))
+    .map((entry) => entry.secretId).sort(), ['PUBLIC_RATE_LIMIT_KEY', 'REST_COUNTRIES_KEY']);
+  assert(configuration.projectBindings.some((entry) => entry.member.endsWith(MEDIA_EMAIL)
+    && entry.role === 'roles/serviceusage.serviceUsageConsumer'));
+  assert.deepEqual(configuration.projectBindings.filter((entry) => entry.role === 'roles/pubsub.publisher'), [{
+    role: 'roles/pubsub.publisher',
+    member: `serviceAccount:service-${configuration.projectNumber}@gs-project-accounts.iam.gserviceaccount.com`,
+  }]);
+});

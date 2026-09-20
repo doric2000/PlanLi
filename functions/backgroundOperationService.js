@@ -262,7 +262,9 @@ async function acknowledgeBackgroundOperation({ admin, auth, data }) {
     const job = (await transaction.get(ref)).data();
     assert(job?.ownerUid === auth.uid, 'OPERATION_NOT_FOUND', 'not-found');
     if (!['success', 'review'].includes(job.status) || job.acknowledgedAt) return;
-    transaction.update(ref, { acknowledgedAt: Date.now(), expireAt: new Date(Date.now() + 30 * 86400000) });
+    // The shared jobs.expireAt TTL deletes only parents, leaving media items behind.
+    // Maintenance owns recursive cleanup through a separate, indexed timestamp.
+    transaction.update(ref, { acknowledgedAt: Date.now(), cleanupAfter: new Date(Date.now() + 30 * 86400000) });
   });
   return { acknowledged: true };
 }
@@ -274,7 +276,8 @@ async function discardBackgroundOperation({ admin, auth, data }) {
     const job = (await transaction.get(ref)).data();
     assert(job?.ownerUid === auth.uid, 'OPERATION_NOT_FOUND', 'not-found');
     assert(['failed', 'discarded'].includes(job.status) && !job.committedResult, 'OPERATION_STILL_RUNNING');
-    transaction.update(ref, { status: 'discarded', stage: 'discarded', updatedAt: Date.now(), expireAt: new Date(Date.now() + 86400000) });
+    if (job.status === 'discarded') return;
+    transaction.update(ref, { status: 'discarded', stage: 'discarded', updatedAt: Date.now(), cleanupAfter: new Date(Date.now() + 86400000) });
   });
   return { discarded: true };
 }
@@ -488,7 +491,7 @@ async function maintainBackgroundOperations(options) {
     });
     if (failed) await notify({ admin, id: item.id, job: failed });
   }
-  const expired = await db.collection(JOBS).where('expireAt', '<=', new Date()).limit(50).get();
+  const expired = await db.collection(JOBS).where('cleanupAfter', '<=', new Date()).limit(50).get();
   for (const item of expired.docs) await db.recursiveDelete(item.ref);
 }
 

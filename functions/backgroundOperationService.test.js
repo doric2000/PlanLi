@@ -183,12 +183,55 @@ test('unseen server outcomes are retained until their owner acknowledges them', 
   await service.recordBackgroundUpload({ admin: f.admin, object: f.finalized, mediaBucket: bucket });
   await service.processBackgroundOperation(f.worker);
   assert.equal(f.records.get(f.jobPath).expireAt, undefined);
+  assert.equal(f.records.get(f.jobPath).cleanupAfter, undefined);
   await assert.rejects(service.acknowledgeBackgroundOperation({ ...f.options, auth: { uid: 'other' } }));
   await service.acknowledgeBackgroundOperation(f.options);
-  const expiry = f.records.get(f.jobPath).expireAt;
+  const expiry = f.records.get(f.jobPath).cleanupAfter;
   assert(expiry > new Date());
+  assert.equal(f.records.get(f.jobPath).expireAt, undefined);
   await service.acknowledgeBackgroundOperation(f.options);
-  assert.equal(f.records.get(f.jobPath).expireAt, expiry);
+  assert.equal(f.records.get(f.jobPath).cleanupAfter, expiry);
+});
+
+test('discard is idempotent and schedules recursive cleanup without parent-only TTL', async () => {
+  const f = fixture(); await service.startBackgroundOperation(f.options);
+  f.records.get(f.jobPath).status = 'failed';
+  await service.discardBackgroundOperation(f.options);
+  const job = f.records.get(f.jobPath);
+  assert.equal(job.expireAt, undefined);
+  assert(job.cleanupAfter > new Date());
+  await service.discardBackgroundOperation(f.options);
+  assert.equal(f.records.get(f.jobPath).cleanupAfter, job.cleanupAfter);
+});
+
+test('maintenance recursively removes expired outcomes and retains unacknowledged or retryable work', async () => {
+  const f = fixture(); await service.startBackgroundOperation(f.options);
+  const future = new Date(Date.now() + 86400000);
+  const past = new Date(Date.now() - 1000);
+  for (const [name, data] of Object.entries({
+    success: { status: 'success', acknowledgedAt: 1, cleanupAfter: past },
+    review: { status: 'review', acknowledgedAt: 1, cleanupAfter: past },
+    discarded: { status: 'discarded', cleanupAfter: past },
+    unseen: { status: 'success' },
+    failed: { status: 'failed', error: { retryable: true } },
+    retained: { status: 'success', acknowledgedAt: 1, cleanupAfter: future },
+  })) {
+    const path = `${service.JOBS}/${name}`;
+    f.records.set(path, data);
+    f.records.set(`${path}/items/source`, { mediaCleanupKeys: ['owner/asset'] });
+  }
+  // Other jobs use the shared TTL and must remain outside this cleanup scope.
+  f.records.set('system/moderation/jobs/unrelated', { expireAt: past });
+  await service.maintainBackgroundOperations(f.worker);
+  for (const name of ['success', 'review', 'discarded']) {
+    assert.equal(f.records.has(`${service.JOBS}/${name}`), false);
+    assert.equal(f.records.has(`${service.JOBS}/${name}/items/source`), false);
+  }
+  for (const name of ['unseen', 'failed', 'retained']) {
+    assert(f.records.has(`${service.JOBS}/${name}/items/source`));
+  }
+  assert(f.records.has(f.itemPath));
+  assert(f.records.has('system/moderation/jobs/unrelated'));
 });
 
 test('maintenance cannot replace a completion that raced its pending query', async () => {
