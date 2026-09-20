@@ -25,6 +25,54 @@ The existing Text Search quota remains zero. See
 
 ## Current environment status
 
+### Android permission-video preparation (2026-09-20)
+
+Play Console was inspected for this recording task: production serves `1.1.0 (10)`;
+internal testing serves `1.1.0 (11)`. Version 11 corresponds to EAS build
+`bc52a84a-61b9-43dc-8b07-95992c41322f`, runtime `1.3.0`, production channel,
+reported source commit `431d382229a39d457575ccab31df49e900c16b7a`.
+The Google-signed universal APK downloaded from Play Console was installed on
+`PlanLi_E2E_API34` at `2026-09-20T09:35:08Z`. Its SHA-256 is
+`5D07955F686B1D982281F0253466EF38EF4C374DA6D4F59D8EC9633662F3354D`.
+Launch was blocked by the Play installer/license check because that emulator lacks
+the Play Store. Logs also reported `API_KEY_SERVICE_BLOCKED` for Firebase
+Installations and an HTTP 403 for the App Check challenge API; the later approved
+API allowlist correction is recorded below. Native uploads and the applied OTA
+group remain unverified.
+
+The old emulator was stopped. A separate `PlanLi_Play_API33` / `emulator-5582`
+was created with the official Android 13 Google Play system image (revision 9),
+software graphics, Vulkan disabled, two CPU cores, 2048 MB guest RAM, 540x960
+display and 30 Hz refresh. It booted successfully and contains the Play Store.
+Play Store initially stopped responding; restarting that app reached its sign-in
+screen. The user subsequently signed into Google Play. On 2026-09-20 the store
+installed `1.1.0 (10)` with installer `com.android.vending`. Updating with the
+Google-signed version 11 APK succeeded at `2026-09-20T10:56:23Z`, but launch
+displayed "Get this app from Play". The internal-testing invitation was opened in Chrome and
+initially showed "Accept invite". After the user accepted, Play recognized the
+account as an internal tester and installed version 11 at
+`2026-09-20T11:01:04Z`, verified with installer `com.android.vending`. The app
+passed the installer gate and reached the PlanLi sign-in screen; notification
+permission was granted. Read-only inspection confirmed the APK's
+`google_api_key` matches `planli-android-maps-sdk`, which initially allowed only
+`maps-android-backend.googleapis.com`. With explicit user approval, at
+`2026-09-20T11:13:38.451762Z` its API targets were updated to exactly Maps Android,
+`firebaseappcheck.googleapis.com`, and `firebaseinstallations.googleapis.com`.
+Independent read-back confirmed these three targets and preserved package
+`com.planli.planlitravels` with both existing signing-certificate restrictions.
+Operation: `akmf.p10-633543026638-f8b31632-fa1b-4a89-b7e5-89864b25ea3d`.
+The user signed into PlanLi successfully before this change. After restarting the
+app, native App Check reached Play Integrity but returned HTTP 403
+`App attestation failed` at `2026-09-20T11:14:21Z` and `11:14:26Z`, followed by
+`Too many attempts`. The original API service restriction is resolved; emulator
+attestation remains blocked and upload recording could not proceed. App Check
+enforcement and integrity requirements were not weakened. No APK/source change
+was needed for the API allowlist update.
+The applied OTA group and native upload completion remain unverified. No permission
+demo video, Play declaration submission, new build, OTA or deployment was produced
+by this recording task. Local preparation artifacts are ignored under
+`.codex_tmp/validation/play-permission-video/`.
+
 ### Background-upload rollout and Narguila recovery (2026-09-20)
 
 The installed TestFlight client enables native background transfers, but the nine
