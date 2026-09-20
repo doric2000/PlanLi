@@ -76,6 +76,12 @@ const EXPLICIT_FUNCTION_TESTS = new Map([
     'functions/notificationWiring.test.js',
   ]],
 ]);
+// This script dynamically loads the operator's Firebase CLI only in --apply mode.
+// Its explicit proof executes the credential-free CLI dry run as well as policy tests.
+const SCRIPT_DRY_RUN_PROOFS = new Map([
+  ['functions/scripts/configureFunctionServiceAccounts.js',
+    'functions/scripts/configureFunctionServiceAccounts.test.js'],
+]);
 
 function normalizePath(value) {
   return String(value || '')
@@ -334,7 +340,8 @@ function createPlan(files, repoRoot = REPO_ROOT) {
         || explicit.includes(testFile);
     });
     const unresolved = !fs.existsSync(path.join(repoRoot, file));
-    if (covered && !unsupported.has(file)) continue;
+    const dryRunProof = SCRIPT_DRY_RUN_PROOFS.get(file);
+    if (covered && (!unsupported.has(file) || (dryRunProof && plan.functionsTests.includes(dryRunProof)))) continue;
     if (file.startsWith('functions/scripts/')) {
       plan.coverageGaps.push(`${file}: add a direct/transitive test or provide a defined dry-run proof`);
     } else {

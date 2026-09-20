@@ -245,7 +245,7 @@ test('prepared cleanup removes only expired unclaimed objects', async () => {
   assert.deepEqual(removed, ['expired']);
 });
 
-test('prepared cleanup protects media referenced by a route draft stop', async () => {
+for (const protectedCollection of ['stops', 'items']) test(`prepared cleanup protects media referenced by ${protectedCollection}`, async () => {
   const removed = [];
   const now = Date.now();
   const file = (assetId, variant) => ({
@@ -260,9 +260,10 @@ test('prepared cleanup protects media referenced by a route draft stop', async (
   const admin = {
     storage: () => ({ bucket: () => ({ getFiles: async () => [files] }) }),
     firestore: () => ({
-      collectionGroup: () => ({
+      collectionGroup: (name) => ({
         where: () => ({
-          get: async () => ({ docs: [{ data: () => ({ mediaCleanupKeys: ['owner/kept'] }) }] }),
+          get: async () => ({ docs: name === protectedCollection
+            ? [{ data: () => ({ mediaCleanupKeys: ['owner/kept'] }) }] : [] }),
         }),
       }),
     }),

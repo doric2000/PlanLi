@@ -64,6 +64,9 @@ and [Android transfer lifecycle](https://developer.android.com/develop/backgroun
 - Native session credentials are held by iOS URLSession or encrypted with Android
   Keystore. Native source files are excluded from backups and removed on completion
   or explicit discard. Prepared server assets are protected while referenced by a job.
+- Background jobs use indexed `cleanupAfter` timestamps and scheduled recursive
+  deletion. They never set the shared `jobs.expireAt` TTL, which would delete a
+  parent without its media items. Repeated acknowledgement/discard does not extend retention.
 
 ## Release requirements
 
@@ -76,8 +79,17 @@ cleanup, then build/install a binary containing the local module. The new endpoi
 are `startBackgroundOperation`, `getBackgroundOperations`, `retryBackgroundOperation`,
 `acknowledgeBackgroundOperation`, `discardBackgroundOperation`, and `reportBackgroundTransferFailure`; the workers are
 `onBackgroundMediaUploaded`, `onBackgroundOperationWritten`, and
-`maintainBackgroundOperationsScheduled`. Preserve the existing EU bucket, runtime
-service accounts, region and App Check enforcement. No Rules or IAM broadening is required.
+`maintainBackgroundOperationsScheduled`. Preserve the existing EU bucket, region
+and App Check enforcement. `retryBackgroundOperation` uses the media runtime
+account because it revalidates the Auth user before retrying.
+
+The media runtime needs Secret Accessor on only `REST_COUNTRIES_KEY` and
+`PUBLIC_RATE_LIMIT_KEY`, plus project Service Usage Consumer for Places OAuth.
+The Cloud Storage service agent needs project Pub/Sub Publisher for finalization
+events. Keep other runtime and bucket permissions intact; no Rules change is required.
+The `stops` and `items` collection groups require array-contains indexes on
+`mediaCleanupKeys`; `jobs.cleanupAfter` requires a collection ascending index,
+and Activity history requires the existing owner/created-at composite index.
 
 Required device evidence includes screen navigation during uploads, lock/unlock,
 app switching, connectivity loss, manual retry, cold restart, account switching,

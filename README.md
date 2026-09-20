@@ -25,6 +25,75 @@ The existing Text Search quota remains zero. See
 
 ## Current environment status
 
+### Background-upload rollout and Narguila recovery (2026-09-20)
+
+The installed TestFlight client enables native background transfers, but the nine
+background-operation Functions were absent from production. The user authorized
+completion of that backend rollout while retaining the existing iPhone binary and
+the failed Cusco/Narguila draft. Recovery is not yet device-verified.
+
+Source: `fix/background-upload-rollout`, commit
+`4cd18be85e9eded4278fca1b4d224a771a2af568`, based on main commit
+`f2a6de131f9bb84256d12c7ca9c6a76582618392`. Deployment ran from the reviewed
+working tree before this matching source commit was created. The prior map branch
+and unrelated root `app.json` remain preserved. The security review snapshot is
+`9b9eef348563762b36b680ebc43c469d0ece977d3b0c281e627b7efab86fe831`;
+the completed diff review found no reportable issues.
+
+At `2026-09-20T09:31Z`, the existing media runtime account was granted accessor
+access to only `REST_COUNTRIES_KEY` and `PUBLIC_RATE_LIMIT_KEY`, plus project
+Service Usage Consumer. The project's Cloud Storage service agent was initialized
+and granted Pub/Sub Publisher. The scoped index deploy submitted
+`jobs.cleanupAfter` (collection ascending) and `stops.mediaCleanupKeys`
+(collection-group array-contains, preserving the existing collection indexes).
+Both new index configurations were verified READY at `2026-09-20T09:36Z`. Existing
+`items.mediaCleanupKeys` is READY and the shared `jobs.expireAt` TTL remains ACTIVE;
+background jobs now use recursive scheduled retention through `cleanupAfter`.
+
+The existing `cleanupPreparedMediaScheduled` (media account) and
+`onNotificationPushWritten` (core account) were deployed with explicit Firebase
+CLI targets and independently verified ACTIVE, with update timestamps
+`2026-09-20T09:38:02Z`. The three workers were then independently verified ACTIVE:
+`onBackgroundMediaUploaded` at `09:43:02Z`, `onBackgroundOperationWritten` at
+`09:43:04Z`, and `maintainBackgroundOperationsScheduled` at `09:42:43Z`.
+Their media identities, EU bucket finalization filter, `eur3` Firestore job-path
+filter, retry policies, provider-secret bindings and enabled UTC five-minute
+schedule match the source. The five recovery callables
+`getBackgroundOperations`, `retryBackgroundOperation`,
+`acknowledgeBackgroundOperation`, `discardBackgroundOperation`, and
+`reportBackgroundTransferFailure` were deployed and independently verified ACTIVE,
+with update timestamps `2026-09-20T09:46:38Z`–`09:46:39Z`.
+Retry uses the Auth-capable media account; the other callables use the core account.
+Maintenance returned HTTP 200 on its scheduled `2026-09-20T09:47:00Z` run.
+Admission (`startBackgroundOperation`) was deployed last and verified ACTIVE at
+`2026-09-20T09:50:38Z`. All eleven targeted functions are now ACTIVE on Node.js 22
+in `europe-west1`, with minimum instances zero. The deployed worker archive
+`onBackgroundOperationWritten/function-source.zip`, generation
+`1789897306451099` in `gcf-v2-sources-633543026638-europe-west1`, exactly matches
+the reviewed local runtime, cleanup/deletion consumers and dependency lock.
+All six live callables returned HTTP 401 / `UNAUTHENTICATED` to identity-free
+requests at `2026-09-20T09:51:21Z`. The scoped runtime error read since the first
+consumer deployment returned zero errors; this does not prove device completion.
+
+Validation passed 266 focused backend tests and the isolated demo backend smoke:
+recommendation, route and avatar publication, interrupted transfer, explicit
+retry, duplicate events, ownership rejection and account deletion. Production
+source inspection confirms both deployed account-deletion functions already
+include background-job cleanup. A bounded read at `2026-09-20T09:32:35Z` checked
+all 71 recommendations and found no Narguila name match before recovery. The
+same pre-retry check at `2026-09-20T09:51:44Z` still found zero matches. The user
+has been asked to use the existing failed-job Retry control (retaining its
+operation ID), or Edit and resubmit the preserved draft when Retry is absent.
+
+Target device binary: TestFlight **1.1.2 (32)**, runtime/channel `1.3.0` /
+`production`, EAS build `6ae60b3a-b0a6-4659-a054-68a044004a35`, source
+`eb9770bc12c5accf16a8cb184e473d25d3f0b619`. The preserved map-branch release record
+reports Apple `VALID` / `IN_BETA_TESTING` on September 19 and submission
+`ddab3d31-1121-4310-905a-5cd3e4a06d9f`. The user confirmed the installed build as
+**1.1.2 (32)** and a retained failed draft. Photo rendering, Activity outcome,
+app-switch/lock recovery and single publication still require device evidence.
+This workflow creates no native build, OTA group or store submission.
+
 ### Trip planner map, numbering and spacing OTA (2026-09-19)
 
 PR [#414](https://github.com/doric2000/PlanLi/pull/414) fixes the

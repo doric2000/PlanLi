@@ -292,7 +292,7 @@ exports.startBackgroundOperation = callable({ access: 'active', timeoutSeconds: 
     mediaBucket: mediaStorageBucket.value() }));
 exports.getBackgroundOperations = callable({ access: 'signedIn', timeoutSeconds: 30 },
   (request) => backgroundOperations.getBackgroundOperations({ admin, auth: request.auth, data: request.data }));
-exports.retryBackgroundOperation = callable({ access: 'active', timeoutSeconds: 30 },
+exports.retryBackgroundOperation = callable({ access: 'active', timeoutSeconds: 30, serviceAccount: MEDIA_SERVICE_ACCOUNT },
   (request) => backgroundOperations.retryBackgroundOperation({ admin, auth: request.auth, data: request.data, mediaBucket: mediaStorageBucket.value() }));
 exports.acknowledgeBackgroundOperation = callable({ access: 'signedIn', timeoutSeconds: 30 },
   (request) => backgroundOperations.acknowledgeBackgroundOperation({ admin, auth: request.auth, data: request.data }));
