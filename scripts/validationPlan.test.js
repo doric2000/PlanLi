@@ -182,6 +182,24 @@ test('an untested maintenance script reports the gap instead of running unrelate
   assert.match(plan.coverageGaps.join('\n'), /changedScript.js.*direct\/transitive/);
 });
 
+test('only the named IAM dry-run proof covers its dynamic operator CLI load', (t) => {
+  const root = fixtureRepo({
+    'functions/scripts/configureFunctionServiceAccounts.js': 'module.exports = require(operatorCli);',
+    'functions/scripts/configureFunctionServiceAccounts.test.js': "require('./configureFunctionServiceAccounts');",
+    'functions/scripts/other.js': 'module.exports = require(operatorCli);',
+    'functions/scripts/other.test.js': "require('./other');",
+  });
+  t.after(() => removeFixture(root));
+  const approved = createPlan(['functions/scripts/configureFunctionServiceAccounts.js'], root);
+  assert.deepEqual(approved.coverageGaps, []);
+  assert.deepEqual(approved.functionsTests, ['functions/scripts/configureFunctionServiceAccounts.test.js']);
+  const other = createPlan(['functions/scripts/other.js'], root);
+  assert.match(other.coverageGaps.join('\n'), /other.js.*direct\/transitive/);
+  fs.unlinkSync(path.join(root, 'functions/scripts/configureFunctionServiceAccounts.test.js'));
+  const missing = createPlan(['functions/scripts/configureFunctionServiceAccounts.js'], root);
+  assert.match(missing.coverageGaps.join('\n'), /configureFunctionServiceAccounts.js.*direct\/transitive/);
+});
+
 test('client script tests run with Node and cover their changed dependencies', (t) => {
   const root = fixtureRepo({
     'client/app.config.js': 'module.exports = {};',

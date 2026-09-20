@@ -1,6 +1,14 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { execFileSync } = require('node:child_process');
 const { CORE_EMAIL, MEDIA_EMAIL, addMember, plan } = require('./configureFunctionServiceAccounts');
+
+test('CLI defaults to a credential-free dry run with the tested policy plan', () => {
+  const output = execFileSync(process.execPath, [require.resolve('./configureFunctionServiceAccounts')], {
+    encoding: 'utf8', env: { ...process.env, APPDATA: '' },
+  });
+  assert.deepEqual(JSON.parse(output), { mode: 'dry-run', ...plan() });
+});
 
 test('IAM policy additions are idempotent and preserve existing bindings', () => {
   const original = { version: 1, bindings: [{ role: 'roles/viewer', members: ['user:a@example.com'] }] };
