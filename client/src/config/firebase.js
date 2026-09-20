@@ -9,14 +9,21 @@ import { getFirestore, initializeFirestore, connectFirestoreEmulator } from "fir
 import { getStorage, connectStorageEmulator } from "firebase/storage";
 import { getFunctions, connectFunctionsEmulator } from "firebase/functions";
 import { Platform } from 'react-native'; // <--- Import Platform
+import Constants from 'expo-constants';
 import { initializePlanLiAppCheck } from './appCheck';
 import { resolveFirebaseEnvironment } from './firebaseEnvironment';
 import { secureAuthStorage } from './secureAuthStorage';
 import { localEmulatorSettings } from './localEmulators';
 
 const emulators = localEmulatorSettings();
+const demoFirebase = Constants.expoConfig?.extra?.androidDemoFirebase;
+if (demoFirebase && (!__DEV__ || Platform.OS !== 'android'
+  || Constants.expoConfig?.android?.package !== 'com.planli.planlitravels.demo'
+  || demoFirebase.projectId !== 'planli-staging-demo')) {
+  throw new Error('Demo Firebase configuration is restricted to the Android development app.');
+}
 
-const firebaseConfig = resolveFirebaseEnvironment({
+const firebaseConfig = resolveFirebaseEnvironment(demoFirebase || {
   apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
   projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
@@ -46,7 +53,7 @@ const db = emulators
   ? initializeFirestore(app, { experimentalForceLongPolling: true })
   : getFirestore(app);
 const mediaBucket =
-  process.env.EXPO_PUBLIC_FIREBASE_MEDIA_BUCKET ||
+  demoFirebase?.storageBucket || process.env.EXPO_PUBLIC_FIREBASE_MEDIA_BUCKET ||
   (firebaseConfig.projectId === "planli-f0b12"
     ? "planli-f0b12-media-eu"
     : firebaseConfig.storageBucket);

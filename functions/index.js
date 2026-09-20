@@ -188,13 +188,12 @@ const {
   reasonForLocationError,
 } = require('./locationDiagnostics');
 
-admin.initializeApp({ storageBucket: 'planli-f0b12-media-eu' });
+const runtime = require('./runtimeEnvironment').runtimeEnvironment();
+admin.initializeApp({ storageBucket: runtime.bucket });
 
 const REGION = 'europe-west1';
-const CORE_SERVICE_ACCOUNT =
-  'planli-core-functions@planli-f0b12.iam.gserviceaccount.com';
-const MEDIA_SERVICE_ACCOUNT =
-  'planli-media-functions@planli-f0b12.iam.gserviceaccount.com';
+const CORE_SERVICE_ACCOUNT = runtime.coreServiceAccount;
+const MEDIA_SERVICE_ACCOUNT = runtime.mediaServiceAccount;
 const restCountriesKey = defineSecret('REST_COUNTRIES_KEY');
 const openWeatherKey = defineSecret('OPENWEATHER_API_KEY');
 const unsplashAccessKey = defineSecret('UNSPLASH_ACCESS_KEY');
@@ -213,7 +212,7 @@ const appleSignInClientId = defineString('APPLE_SIGN_IN_CLIENT_ID', {
 });
 const mediaStorageBucket = defineString('MEDIA_STORAGE_BUCKET', {
   description: 'European Cloud Storage bucket used for PlanLi media.',
-  default: 'planli-f0b12-media-eu',
+  default: runtime.bucket,
 });
 // Keep false for private Development Build validation. Set PLANLI_ENFORCE_APP_CHECK=true only
 // after App Check providers and debug tokens are configured on every client.
