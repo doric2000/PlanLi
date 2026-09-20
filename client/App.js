@@ -3,6 +3,7 @@ import { NavigationContainer, createNavigationContainerRef } from "@react-naviga
 import { createStackNavigator } from "@react-navigation/stack";
 import { SafeAreaProvider, initialWindowMetrics } from "react-native-safe-area-context";
 import { AppState } from "react-native";
+import { sharedTripLinking } from "./src/navigation/sharedTripLinking";
 import AppFontProvider from "./src/components/AppFontProvider";
 
 import VerifyEmailScreen from "./src/features/auth/screens/VerifyEmailScreen";
@@ -83,10 +84,7 @@ const TripCustomStopActive = withRequireAuth(TripCustomStopScreen, CAPABILITIES.
 const MyTripsActive = withRequireAuth(MyTripsScreen, CAPABILITIES.ACTIVE);
 const SharedTripAuthed = withRequireAuth(SharedTripScreen);
 
-const linking = {
-	prefixes: ['com.planli.planlitravels://'],
-	config: { screens: { SharedTrip: 'shared-trip/:token' } },
-};
+
 
 /**
  * Main App Component.
@@ -142,7 +140,7 @@ export default function App() {
 				 <NoyaTourProvider currentRouteName={currentRouteName === 'CommunityFeed' ? 'Community' : currentRouteName} navigationReady={navigationReady} navigationRef={navigationRef}>
 				<NavigationContainer
 					ref={navigationRef}
-					linking={linking}
+					linking={sharedTripLinking}
 					onReady={() => {
 						setNavigationReady(true);
 						recordCurrentRoute();

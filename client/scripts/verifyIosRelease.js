@@ -331,10 +331,27 @@ const sourceFiles = walkFiles(path.join(clientRoot, 'src')).filter((file) => /\.
 const navigationEntrypoints = ['App.js', 'AdminWebApp.js']
   .map((file) => fs.readFileSync(path.join(clientRoot, file), 'utf8'))
   .join('\n');
-if (/\blinking\s*=/u.test(navigationEntrypoints)) {
-  fail(
-    'React Navigation deep linking requires a reviewed malformed-URL input bound before release.'
-  );
+const reviewedLinkingPath = path.join(clientRoot, 'src/navigation/sharedTripLinking.js');
+const linkingBindings = navigationEntrypoints.match(/\blinking\s*=\s*\{[^}]*\}/gu) || [];
+if (linkingBindings.length !== 1 || linkingBindings[0] !== 'linking={sharedTripLinking}'
+  || !navigationEntrypoints.includes('import { sharedTripLinking } from "./src/navigation/sharedTripLinking";')) {
+  fail('Navigation must use the reviewed bounded shared-trip URL parser.');
+}
+try {
+  const { sharedTripLinking } = require(reviewedLinkingPath);
+  const token = 'x'.repeat(43);
+  const parsed = sharedTripLinking.getStateFromPath(`shared-trip/${token}`);
+  if (JSON.stringify(parsed) !== JSON.stringify({ routes: [{ name: 'SharedTrip', params: { token } }] })) {
+    fail('The reviewed shared-trip parser must preserve the server-issued token.');
+  }
+  for (const unsafe of [`shared-trip/${token}?x=%E0%A4`, `shared-trip/${token}#x`,
+    `shared-trip/${'x'.repeat(100000)}`, 'AdminPanel']) {
+    if (sharedTripLinking.getStateFromPath(unsafe) !== undefined) {
+      fail('The shared-trip URL parser accepted an unbounded or unsupported path.');
+    }
+  }
+} catch {
+  fail('The reviewed bounded shared-trip URL parser is missing or invalid.');
 }
 const debugPatterns = [
   { pattern: /Alert\.alert\s*\(\s*['"]DEBUG['"]/, label: 'visible DEBUG alert' },
@@ -342,7 +359,8 @@ const debugPatterns = [
 ];
 sourceFiles.forEach((file) => {
   const source = fs.readFileSync(file, 'utf8');
-  if (/\bgetStateFromPath\b/u.test(source) || /from\s+['"]query-string['"]/u.test(source)) {
+  if ((file !== reviewedLinkingPath && /\bgetStateFromPath\b/u.test(source))
+    || /from\s+['"]query-string['"]/u.test(source)) {
     fail(`${path.relative(repoRoot, file)} adds an unreviewed URL parsing path.`);
   }
   debugPatterns.forEach(({ pattern, label }) => {
