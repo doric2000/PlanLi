@@ -224,10 +224,26 @@ img {
   margin-top: 30px;
 }
 
-.app-store-badge {
+.store-badge {
   display: inline-flex;
   min-height: 54px;
   align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  transition: transform 180ms ease, filter 180ms ease;
+}
+
+.store-badge:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.04);
+}
+
+.store-badge:focus-visible {
+  outline: 3px solid var(--orange);
+  outline-offset: 4px;
+}
+
+.app-store-badge {
   overflow: hidden;
   border-radius: 9px;
   background: #000;
@@ -239,39 +255,60 @@ img {
   height: auto;
 }
 
-.store-unavailable {
-  min-width: 162px;
-  min-height: 54px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 0 17px;
-  border: 1px solid currentColor;
+.google-play-badge {
+  width: 157px;
+  height: 54px;
+  overflow: hidden;
+  gap: 7px;
+  padding: 4px 9px 4px 7px;
+  border: 1px solid #a6a6a6;
   border-radius: 9px;
-  color: var(--navy);
-  opacity: 0.52;
-  font-size: 15px;
-  font-weight: 690;
-  cursor: not-allowed;
-  user-select: none;
+  background: #000;
+  color: #fff;
+  box-shadow: 0 12px 28px rgba(10, 25, 42, 0.15);
+  direction: rtl;
 }
 
-.store-unavailable::before {
-  width: 0;
-  height: 0;
-  border-top: 11px solid transparent;
-  border-bottom: 11px solid transparent;
-  border-right: 18px solid currentColor;
-  content: "";
-  opacity: 0.72;
+.google-play-mark {
+  position: relative;
+  width: 31px;
+  height: 34px;
+  flex: 0 0 31px;
+  overflow: hidden;
 }
 
-.store-unavailable small {
+.google-play-mark img {
+  position: absolute;
+  top: -22px;
+  left: -25px;
+  width: 194px;
+  max-width: none;
+  height: auto;
+}
+
+.google-play-copy {
   display: block;
-  font-size: 10px;
-  font-weight: 560;
+  min-width: 0;
+  text-align: center;
   line-height: 1;
+}
+
+.google-play-copy small {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 9px;
+  font-weight: 520;
+  line-height: 1;
+}
+
+.google-play-copy strong {
+  display: block;
+  direction: ltr;
+  font-size: 17px;
+  font-weight: 590;
+  letter-spacing: -0.4px;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .device {
@@ -757,8 +794,7 @@ img {
     margin-top: 22px;
   }
 
-  .app-store-badge,
-  .store-unavailable {
+  .store-badge {
     min-height: 47px;
   }
 
@@ -766,10 +802,31 @@ img {
     width: 137px;
   }
 
-  .store-unavailable {
-    min-width: 145px;
-    padding-inline: 12px;
-    font-size: 13px;
+  .google-play-badge {
+    width: 137px;
+    height: 47px;
+    gap: 6px;
+    padding: 3px 8px 3px 6px;
+  }
+
+  .google-play-mark {
+    width: 27px;
+    height: 30px;
+    flex-basis: 27px;
+  }
+
+  .google-play-mark img {
+    top: -19px;
+    left: -22px;
+    width: 170px;
+  }
+
+  .google-play-copy small {
+    font-size: 8px;
+  }
+
+  .google-play-copy strong {
+    font-size: 15px;
   }
 
   .visual-stage,

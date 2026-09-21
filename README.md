@@ -25,6 +25,32 @@ The existing Text Search quota remains zero. See
 
 ## Current environment status
 
+### Public store links on the landing page (2026-09-21)
+
+The landing page now links to the public PlanLi Travels listings on
+[App Store](https://apps.apple.com/il/app/planli-travels/id6801453067) and
+[Google Play](https://play.google.com/store/apps/details?id=com.planli.planlitravels).
+The former Google Play “coming soon” state was replaced by a Hebrew download
+badge matching the App Store treatment. The first Hosting-only deployment,
+release `sites/planli-f0b12/releases/1790016313580000` / version
+`sites/planli-f0b12/versions/355bd285475f40ee`, completed at
+`2026-09-21T18:45:13.580Z`. Browser verification exposed the prior one-hour CSS
+cache, so the stylesheet URL was versioned and a superseding Hosting-only
+release `sites/planli-f0b12/releases/1790016706728000` / version
+`sites/planli-f0b12/versions/4230070d6657972a` completed at
+`2026-09-21T18:51:46.728Z`; the CLI found 58 Hosting files.
+
+Both `planli.cc` and the Firebase fallback host matched the local landing HTML,
+stylesheet, Google Play badge, Admin, trip landing and named public pages
+byte-for-byte. A fresh live browser load displayed both active store links, the
+Hebrew `להורדה ב־` Google Play label, no “coming soon” text, no horizontal
+overflow, and no console warnings or errors. Source is committed as
+`1fa9eb8bea68d0cbad164304f0dbbdb383c224ad` in
+[PR #427](https://github.com/doric2000/PlanLi/pull/427), based on
+`e799e8aef756e0246afa81b8ed16dd103d8b85d9`.
+No Functions, Rules, indexes, Storage, Auth, IAM, native build, store submission
+or OTA action accompanied these Hosting releases.
+
 ### Trip map layout iOS OTA (2026-09-21)
 
 PR [#425](https://github.com/doric2000/PlanLi/pull/425) merged the correction as
