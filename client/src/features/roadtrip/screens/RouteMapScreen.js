@@ -5,7 +5,7 @@ import MapView, { Circle, Marker, Polyline, PROVIDER_GOOGLE } from 'react-native
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
-import CachedImage from '../../../components/CachedImage';
+import MapStopDetails from '../../../components/MapStopDetails';
 import OpenWithLocationSheet from '../../../components/OpenWithLocationSheet';
 import RouteStopMarker, { ROUTE_STOP_MARKER_ANCHOR } from '../components/RouteStopMarker';
 import { USER_MAP_ZOOM } from '../../../config/mapConfig';
@@ -280,31 +280,12 @@ export default function RouteMapScreen({ route, navigation }) {
       )}
 
       {!!selectedStop && (
-        <View style={styles.sheet}>
-          <View style={styles.sheetHeader}>
-            <TouchableOpacity onPress={() => setSelectedStop(null)} style={styles.sheetCloseButton} accessibilityLabel="סגירת פרטי העצירה">
-              <Ionicons name="close" size={18} color={colors.textPrimary} />
-            </TouchableOpacity>
-            <View style={styles.sheetTitleWrap}>
-              <AppText style={styles.sheetKicker}>יום {selectedStop.dayIndex + 1} · עצירה {selectedStop.stopIndex + 1}</AppText>
-              <AppText style={styles.sheetTitle} numberOfLines={2}>{selectedStop.title}</AppText>
-            </View>
-            {selectedStop.image || selectedStop.media ? (
-              <CachedImage source={{ uri: getMediaVariantUrl(selectedStop.media, 'thumb', selectedStop.image) }} style={styles.sheetImage} contentFit="cover" priority="high" />
-            ) : (
-              <View style={styles.sheetImageFallback}><AppText style={styles.sheetImageFallbackText}>{selectedStop.stopIndex + 1}</AppText></View>
-            )}
-          </View>
-          {[selectedStop.startTime, formatRouteDuration(selectedStop.durationMinutes)].filter(Boolean).length ? (
-            <AppText style={styles.sheetMeta}>{[selectedStop.startTime, formatRouteDuration(selectedStop.durationMinutes)].filter(Boolean).join(' · ')}</AppText>
-          ) : null}
-          <AppText style={styles.sheetAddress} numberOfLines={2}>{selectedStop.place?.address || selectedStop.location || selectedStop.place?.name}</AppText>
-          {!!selectedStop.description && <AppText style={styles.sheetDescription} numberOfLines={3}>{selectedStop.description}</AppText>}
-          <TouchableOpacity style={styles.primaryButton} onPress={() => setNavigationStop(selectedStop)} accessibilityRole="button">
-            <Ionicons name="navigate-outline" size={18} color={colors.white} />
-            <AppText style={styles.primaryButtonText}>אפשרויות ניווט</AppText>
-          </TouchableOpacity>
-        </View>
+        <MapStopDetails title={selectedStop.title} number={selectedStop.stopIndex + 1} dayLabel={`יום ${selectedStop.dayIndex + 1}`}
+          imageUrl={getMediaVariantUrl(selectedStop.media, 'thumb', selectedStop.image)}
+          meta={[selectedStop.startTime, formatRouteDuration(selectedStop.durationMinutes)].filter(Boolean).join(' · ')}
+          address={selectedStop.place?.address || selectedStop.location || selectedStop.place?.name}
+          description={selectedStop.description} onClose={() => setSelectedStop(null)}
+          actionLabel="אפשרויות ניווט" actionIcon="navigate-outline" onAction={() => setNavigationStop(selectedStop)} />
       )}
 
       <OpenWithLocationSheet

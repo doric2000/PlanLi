@@ -18,9 +18,10 @@ export default function RouteStopMarker({
   compact = false,
   displayNumber,
   displayDayNumber = null,
+  imageUrl: suppliedImageUrl,
 }) {
 	const number = Number(displayNumber ?? stop?.sequence ?? (Number(stop?.globalIndex ?? 0) + 1));
-	const imageUrl = getMediaVariantUrl(stop?.media, 'thumb', stop?.image);
+	const imageUrl = suppliedImageUrl ?? getMediaVariantUrl(stop?.media, 'thumb', stop?.image);
 	const label = stop?.title || stop?.place?.name || `עצירה ${number}`;
 	const accessibilityPrefix = displayDayNumber
 		? `יום ${displayDayNumber}, עצירה ${number}`
@@ -30,6 +31,7 @@ export default function RouteStopMarker({
     <View
       style={[styles.touchTarget, compact && styles.touchTargetCompact]}
       accessible
+		accessibilityState={{ selected }}
 		accessibilityLabel={`${accessibilityPrefix}: ${label}`}
 		testID={`route-stop-marker-${displayDayNumber ? `${displayDayNumber}-` : ''}${number}`}
     >

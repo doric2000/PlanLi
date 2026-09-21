@@ -71,9 +71,38 @@ Independent public-channel delivery matched the new update at
 
 Last confirmed tester installation: TestFlight **1.1.2 (32)**, EAS build
 `6ae60b3a-b0a6-4659-a054-68a044004a35`, native source
-`eb9770bc12c5accf16a8cb184e473d25d3f0b619`. Application of this new OTA and visible
-streets/markers on the iPhone are **pending**. No native build or Apple submission
-was created. The incident remains open until device rendering is confirmed.
+`eb9770bc12c5accf16a8cb184e473d25d3f0b619`. On September 21 the tester confirmed
+the map works; supplied iPhone screenshots show streets, route lines and stop
+markers in both Roadtrip and the private trip planner. The exact installed OTA
+ID was not read back from that device. Retry/rotation and Android device checks
+remain unverified. No native build or Apple submission was created.
+
+Follow-up on `fix/trip-map-ui-consistency`: private/shared trip maps now reuse
+Roadtrip numbered/photo pins and a common selected-stop card. Numbering follows
+the complete day list, including gaps for stops without coordinates. This UI
+follow-up has not been published as an OTA; the production IDs above
+still describe the loading fix. Native iPhone/Android validation of the new pins
+is pending.
+
+The follow-up passed 11 focused client test suites across native-map event
+handling, editor/shared-trip selection, Roadtrip, discovery, custom pins, camera
+and Web consumers. A local browser fixture using the real marker, Web map and
+detail-card components verified photos, numbering gaps, reordering, selection,
+closing details and unclipped compact markers. Native map events in Jest remain
+mocked. The subsequent review identified two regressions, now corrected:
+Web marker coordinates interpolate within the padded map area instead of
+collapsing at a clamped edge, and shared-trip map timeouts pause whenever the
+screen loses navigation focus, for both inline and fullscreen maps.
+
+Post-review validation passed 18 tests across the Web map, shared-trip screen
+and map-card suites. These cover short previews, equal/nearby coordinates,
+numbering, blur/refocus and readiness while away. A real-component browser
+fixture confirmed all three stops selectable at 220px and 142px heights and
+distinct positions after resizing to 440px. Existing Web style/extension console
+messages remain; this is focused behavior evidence, not a clean full-app console
+claim. The CLI review attempt could not start because the installed CLI is too
+old for its configured model; the two findings came from the later read-only
+review. No native-device validation or OTA of this follow-up has occurred.
 
 Validation: 137 related client suites / 940 tests, 21 client helper/configuration
 checks, 42 release guard tests and the final focused 41-test map/editor/Web run

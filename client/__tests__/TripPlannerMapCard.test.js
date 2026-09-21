@@ -109,3 +109,16 @@ test('full screen remains accessible during loading and after a timeout', () => 
   fireEvent.press(screen.getByLabelText('מפה במסך מלא'));
   expect(expand).toHaveBeenCalledTimes(2);
 });
+
+test('explains numbering gaps only after tiles load and never covers loading or retry', () => {
+  const withGap = [...stops, { id: 'general', title: 'מנוחה' }];
+  const screen = render(<TripPlannerMapCard stops={withGap} expanded />);
+  expect(screen.queryByTestId('trip-map-hidden-notice')).toBeNull();
+  act(() => jest.advanceTimersByTime(10000));
+  expect(screen.getByTestId('trip-map-full-error')).toBeTruthy();
+  expect(screen.queryByTestId('trip-map-hidden-notice')).toBeNull();
+  act(() => mockMapInstances.get('full-0').onReady());
+  expect(screen.getByText('עצירה אחת אינה מוצגת כי אין לה נקודה מדויקת.')).toBeTruthy();
+  screen.rerender(<TripPlannerMapCard stops={withGap} expanded selectedStopId="one" />);
+  expect(screen.queryByTestId('trip-map-hidden-notice')).toBeNull();
+});

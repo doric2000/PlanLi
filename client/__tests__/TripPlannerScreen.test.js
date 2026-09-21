@@ -277,6 +277,29 @@ test('changing days starts a new map and rejects the previous day readiness', as
   expect(screen.queryByTestId('trip-map-loading')).toBeNull();
 });
 
+test('map selection shows the same numbered detail card as Roadtrip and keeps the chosen list row open', async () => {
+  mockGetPrivateTrip.mockResolvedValue({ ...trip, stopCount: 2, days: [trip.days[0], {
+    ...trip.days[1], stopCount: 2, stops: [
+      { id: 'general', title: 'מנוחה', order: 0, sourceType: 'custom' },
+      { id: 'hotel', title: 'מלון לירו', subtitle: 'ולורה', order: 1, coordinates: { lat: 40.466, lng: 19.491 } },
+    ],
+  }] });
+  const screen = render(<TripPlannerScreen navigation={{ goBack: jest.fn(), navigate: jest.fn() }} route={{ params: { tripId: 'trip-1' } }} />);
+  await waitFor(() => expect(screen.getByTestId('trip-map-card')).toBeTruthy());
+  fireEvent.press(screen.getByLabelText('מפה במסך מלא'));
+  act(() => mockMapProps.onSelectStop('hotel'));
+  expect(screen.getByTestId('map-stop-details')).toBeTruthy();
+  expect(screen.getByText('יום 1 · עצירה 2')).toBeTruthy();
+  expect(screen.getByText('נקודה מדויקת אחת')).toBeTruthy();
+  fireEvent.press(screen.getByLabelText('סגירת פרטי העצירה'));
+  expect(screen.queryByTestId('map-stop-details')).toBeNull();
+  expect(screen.getByTestId('trip-map-full-card')).toBeTruthy();
+  act(() => mockMapProps.onSelectStop('hotel'));
+  fireEvent.press(screen.getByLabelText('חזרה לרשימה ולפרטי העצירה'));
+  expect(screen.queryByTestId('trip-map-full-card')).toBeNull();
+  expect(screen.getByLabelText('2, מלון לירו').props.accessibilityState.expanded).toBe(true);
+});
+
 test('opening the planner without an id returns to the library without creating a trip', async () => {
   const navigation = { goBack: jest.fn(), navigate: jest.fn(), replace: jest.fn() };
   render(<TripPlannerScreen navigation={navigation} route={{ params: {} }} />);

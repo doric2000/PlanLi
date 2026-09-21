@@ -16,6 +16,8 @@ import {
 } from '../../../services/TripService';
 import TripDayTabs from '../components/TripDayTabs';
 import TripPlannerMapCard from '../components/TripPlannerMapCard';
+import MapStopDetails from '../../../components/MapStopDetails';
+import { getRecommendationImageUrls } from '../../../utils/mediaAssets';
 import TripShareModal from '../components/TripShareModal';
 import TripStopList from '../components/TripStopList';
 import { applyOperationsLocally, coordinatesForStop, getDay, orderedStops, routeSummary } from '../utils/tripPlannerModel';
@@ -250,6 +252,7 @@ export default function TripPlannerScreen({ navigation, route }) {
   const renderMap = (expanded = false) => (
     <TripPlannerMapCard key={`${selectedDayId}-${expanded}`} stops={stops} route={routeData}
       selectedStopId={selectedStopId} onSelectStop={setSelectedStopId} expanded={expanded}
+      onMapPress={() => setSelectedStopId('')}
       active={focused && (expanded ? mapExpanded : !mapExpanded)}
       onExpand={() => setMapExpanded(true)} />
   );
@@ -285,11 +288,17 @@ export default function TripPlannerScreen({ navigation, route }) {
           <View style={[styles.editorMapFullHeader, { paddingTop: Math.max(insets.top, 8) }]} testID="trip-map-full-header">
             <View style={styles.headerRow}>
               <TouchableOpacity style={styles.iconButton} onPress={closeExpandedMap} accessibilityRole="button" accessibilityLabel="חזרה לרשימת העצירות"><Ionicons name="close" size={22} color={colors.primary} /></TouchableOpacity>
-              <AppText style={styles.pageHeaderTitle}>{selectedDay?.title || 'מפת הטיול'}</AppText>
+              <View style={styles.headerCopy}>
+                <AppText style={styles.editorMapFullTitle} numberOfLines={1}>{selectedDay?.title || 'מפת הטיול'}</AppText>
+                <AppText style={styles.headerSubtitle}>{locatedStops.length === 1 ? 'נקודה מדויקת אחת' : `${locatedStops.length} נקודות מדויקות`}</AppText>
+              </View>
             </View>
           </View>
           {mapExpanded && locatedStops.length ? renderMap(true) : null}
-          {selectedStop ? <TouchableOpacity style={styles.mapFullDetails} onPress={closeExpandedMap} accessibilityRole="button"><AppText style={styles.stopTitle}>{selectedStop.title}</AppText><AppText style={styles.stopSubtitle}>חזרה לרשימה ולפרטי העצירה ←</AppText></TouchableOpacity> : null}
+          {selectedStop ? <MapStopDetails title={selectedStop.title} number={stops.findIndex((stop) => stop.id === selectedStopId) + 1}
+            dayLabel={selectedDay?.title} imageUrl={getRecommendationImageUrls(selectedStop, 'thumb')[0]}
+            address={selectedStop.subtitle} description={selectedStop.note} style={{ bottom: Math.max(insets.bottom, 18) }}
+            onClose={() => setSelectedStopId('')} actionLabel="חזרה לרשימה ולפרטי העצירה" onAction={closeExpandedMap} /> : null}
         </View>
       </Modal>
       <Modal transparent visible={Boolean(movingStop)} animationType="fade" onRequestClose={() => setMovingStop(null)}><TouchableOpacity activeOpacity={1} style={styles.modalBackdrop} onPress={() => setMovingStop(null)}><View style={styles.modalSheet} accessibilityViewIsModal><AppText style={styles.modalTitle}>לאיזה יום להעביר?</AppText><AppText style={styles.modalText}>{movingStop?.title}</AppText>{(trip.days || []).filter((day) => day.id !== selectedDay?.id).sort((a, b) => a.order - b.order).map((day) => <TouchableOpacity key={day.id} onPress={() => moveStop(day.id)} style={styles.tripCard} accessibilityRole="button"><AppText style={styles.tripCardTitle}>{day.kind === 'ideas' ? 'רעיונות' : day.title}</AppText><AppText style={styles.tripCardMeta}>{day.stops?.length ?? day.stopCount ?? 0} עצירות</AppText></TouchableOpacity>)}</View></TouchableOpacity></Modal>
