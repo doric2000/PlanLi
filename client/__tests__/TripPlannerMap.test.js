@@ -4,6 +4,10 @@ import { StyleSheet } from 'react-native';
 
 const mockSetCamera = jest.fn();
 const mockBreadcrumb = jest.fn();
+jest.mock('../src/components/CachedImage', () => {
+  const { View } = require('react-native');
+  return (props) => <View {...props} testID="marker-thumbnail" />;
+});
 jest.mock('expo-updates', () => ({ isEmbeddedLaunch: false, updateId: 'test-update', runtimeVersion: '1.3.0' }));
 jest.mock('../src/services/ErrorReporting', () => ({
   addDiagnosticBreadcrumb: (...args) => mockBreadcrumb(...args),
@@ -18,7 +22,7 @@ jest.mock('react-native-maps', () => {
       ReactModule.useImperativeHandle(ref, () => ({ setCamera: mockSetCamera }));
       return ReactModule.createElement(View, { ...props, testID: 'trip-map' }, children);
     }),
-    Marker: (props) => ReactModule.createElement(View, { ...props, testID: `trip-marker-${props.title}` }),
+    Marker: (props) => ReactModule.createElement(View, { ...props, testID: props.testID }),
     Polyline: (props) => ReactModule.createElement(View, { ...props, testID: 'trip-route-line' }),
     PROVIDER_GOOGLE: 'google',
   };
@@ -70,11 +74,11 @@ test.each(['layout-first', 'ready-first'])('initializes once before tiles, with 
   expect(mockSetCamera).toHaveBeenCalledTimes(1);
   expect(ready).not.toHaveBeenCalled();
   expect(screen.queryByTestId('trip-route-line')).toBeNull();
-  expect(screen.queryByTestId('trip-marker-1. תצפית')).toBeNull();
+  expect(screen.queryByTestId('trip-map-marker-one')).toBeNull();
   load(screen);
   expect(ready).toHaveBeenCalledTimes(1);
   expect(screen.getByTestId('trip-route-line')).toBeTruthy();
-  expect(screen.getByTestId('trip-marker-1. תצפית')).toBeTruthy();
+  expect(screen.getByTestId('trip-map-marker-one')).toBeTruthy();
 });
 
 test('one-stop inline maps also initialize before tiles without fitting bounds', () => {
@@ -116,7 +120,7 @@ test('updates an inline camera for changed coordinates but not selection', () =>
   expect(mockSetCamera).toHaveBeenCalledTimes(2);
   screen.rerender(<TripPlannerMap stops={[...updated]} selectedStopId="one" interactive={false} onSelectStop={select} />);
   expect(mockSetCamera).toHaveBeenCalledTimes(2);
-  fireEvent.press(screen.getByTestId('trip-marker-1. תצפית'));
+  fireEvent.press(screen.getByTestId('trip-map-marker-one'));
   expect(select).toHaveBeenCalledWith('one');
 });
 
@@ -179,6 +183,41 @@ test('direct map consumers retain markers and routes when tiles have not loaded'
   measureHost(screen); measureNative(screen); nativeReady(screen);
   expect(ready).not.toHaveBeenCalled();
   expect(screen.getByTestId('trip-route-line')).toBeTruthy();
-  fireEvent.press(screen.getByTestId('trip-marker-1. תצפית'));
+  fireEvent.press(screen.getByTestId('trip-map-marker-one'));
   expect(select).toHaveBeenCalledWith('one');
+});
+
+test('uses the Roadtrip numbered/photo pins without native callouts and preserves list numbers across gaps and reorders', () => {
+  const select = jest.fn();
+  const mapPress = jest.fn();
+  const photoStop = { ...stops[1], media: [{ thumb: { url: 'https://example.test/thumb.jpg' } }] };
+  const withGap = [stops[0], { id: 'general', title: 'מנוחה', locationMode: 'general' }, photoStop];
+  const screen = render(<TripPlannerMap stops={withGap} selectedStopId="two" onSelectStop={select} onMapPress={mapPress} />);
+  measureHost(screen); measureNative(screen); nativeReady(screen); load(screen);
+  expect(screen.getByTestId('route-stop-marker-1')).toBeTruthy();
+  expect(screen.queryByTestId('route-stop-marker-2')).toBeNull();
+  expect(screen.getByLabelText('עצירה 3: נמל').props.accessibilityState.selected).toBe(true);
+  expect(screen.getByTestId('marker-thumbnail').props.source.uri).toBe('https://example.test/thumb.jpg');
+  const pin = screen.getByTestId('trip-map-marker-two');
+  expect(pin.props.title).toBeUndefined();
+  expect(pin.props.description).toBeUndefined();
+  expect(pin.props.pinColor).toBeUndefined();
+  expect(pin.props.anchor).toEqual({ x: 0.5, y: 50 / 64 });
+  expect(pin.props.stopPropagation).toBe(true);
+  expect(pin.props.zIndex).toBeGreaterThan(screen.getByTestId('trip-map-marker-one').props.zIndex);
+  fireEvent.press(pin);
+  expect(select).toHaveBeenCalledWith('two');
+  expect(mapPress).not.toHaveBeenCalled();
+
+  screen.rerender(<TripPlannerMap stops={[photoStop, withGap[1], stops[0]]} selectedStopId="two" onSelectStop={select} />);
+  expect(screen.getByLabelText('עצירה 1: נמל').props.accessibilityState.selected).toBe(true);
+  expect(screen.getByLabelText('עצירה 3: תצפית')).toBeTruthy();
+  expect(mockSetCamera).toHaveBeenCalledTimes(1);
+});
+
+test('inline previews use the same compact numbered pins as Roadtrip previews', () => {
+  const screen = render(<TripPlannerMap stops={stops} interactive={false} />);
+  measureHost(screen);
+  expect(screen.getByTestId('trip-map-marker-one').props.anchor).toEqual({ x: 0.5, y: 39 / 50 });
+  expect(StyleSheet.flatten(screen.getByTestId('route-stop-marker-1').props.style)).toMatchObject({ width: 44, height: 50 });
 });

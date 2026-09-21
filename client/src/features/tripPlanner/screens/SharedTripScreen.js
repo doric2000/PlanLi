@@ -1,18 +1,22 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Modal, StatusBar, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useIsFocused } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import AppText from '../../../components/AppText';
 import { colors, tripPlannerStyles as styles } from '../../../styles';
 import { copySharedTrip, getSharedTrip, tripErrorMessage } from '../../../services/TripService';
 import TripDayTabs from '../components/TripDayTabs';
-import TripPlannerMap from '../components/TripPlannerMap';
+import TripPlannerMapCard from '../components/TripPlannerMapCard';
+import MapStopDetails from '../../../components/MapStopDetails';
+import { getRecommendationImageUrls } from '../../../utils/mediaAssets';
 import TripStopList from '../components/TripStopList';
 import { coordinatesForStop, getDay, orderedStops } from '../utils/tripPlannerModel';
 
 export default function SharedTripScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
+  const focused = useIsFocused();
   const token = route.params?.token || '';
   const [trip, setTrip] = useState(null);
   const [dayId, setDayId] = useState('');
@@ -43,7 +47,8 @@ export default function SharedTripScreen({ navigation, route }) {
 
   const day = useMemo(() => getDay(trip, dayId), [dayId, trip]);
   const stops = useMemo(() => orderedStops(day), [day]);
-  const hasLocation = stops.some(coordinatesForStop);
+  const pointCount = stops.filter(coordinatesForStop).length;
+  const hasLocation = pointCount > 0;
   const selectedStop = stops.find((stop) => stop.id === selectedStopId);
   const copy = async () => {
     if (copying) return;
@@ -69,10 +74,30 @@ export default function SharedTripScreen({ navigation, route }) {
     <View style={styles.editorBody}>
       <TripDayTabs trip={trip} selectedDayId={dayId} onSelect={(id) => { setDayId(id); setSelectedStopId(''); }} readOnly />
       <View style={styles.summary}><View><AppText style={styles.summaryTitle}>{day?.kind === 'ideas' ? 'רעיונות' : day?.title}</AppText><AppText style={styles.summaryMeta}>{stops.length} עצירות</AppText></View></View>
-      {hasLocation ? <View style={styles.editorMapCard}><TripPlannerMap stops={stops} selectedStopId={selectedStopId} onSelectStop={setSelectedStopId} /><TouchableOpacity style={styles.editorMapOverlay} onPress={() => setMapExpanded(true)} accessibilityRole="button" accessibilityLabel="מפה במסך מלא"><Ionicons name="expand-outline" size={18} color={colors.primary} /><AppText style={styles.stopDetailText}>מפה מלאה</AppText></TouchableOpacity></View> : <View style={styles.editorMapCard}><View style={styles.editorMapHint}><Ionicons name="map-outline" size={26} color={colors.primary} /><AppText style={styles.editorMapHintText}>{stops.length ? 'לעצירות האלה אין מיקום במפה' : 'אין עדיין עצירות ביום הזה'}</AppText></View></View>}
+      {hasLocation ? <TripPlannerMapCard key={dayId} stops={stops} selectedStopId={selectedStopId} onSelectStop={setSelectedStopId}
+        onMapPress={() => setSelectedStopId('')} active={focused && !mapExpanded} onExpand={() => setMapExpanded(true)} />
+        : <View style={styles.editorMapCard}><View style={styles.editorMapHint}><Ionicons name="map-outline" size={26} color={colors.primary} /><AppText style={styles.editorMapHintText}>{stops.length ? 'לעצירות האלה אין מיקום במפה' : 'אין עדיין עצירות ביום הזה'}</AppText></View></View>}
       {stops.length ? <TripStopList stops={stops} selectedStopId={selectedStopId} onSelect={(id) => setSelectedStopId((current) => current === id ? '' : id)} onOpenRecommendation={(stop) => navigation.navigate('RecommendationDetail', { postId: stop.recommendationId })} readOnly /> : <View style={[styles.empty, { flex: 1 }]}><AppText style={styles.emptyTitle}>אין עצירות ביום הזה</AppText></View>}
     </View>
     <View style={[styles.editorFooter, { paddingBottom: Math.max(insets.bottom, 12) }]}><TouchableOpacity onPress={copy} disabled={copying} style={[styles.primaryButton, { flex: 1 }]} accessibilityRole="button" testID="shared-trip-copy">{copying ? <ActivityIndicator color="#FFFFFF" /> : <Ionicons name="copy-outline" size={18} color="#FFFFFF" />}<AppText style={styles.primaryButtonText}>יצירת עותק לתכנון משלי</AppText></TouchableOpacity></View>
-    <Modal visible={mapExpanded} animationType="slide" onRequestClose={() => setMapExpanded(false)}><View style={styles.mapFullScreen}><TripPlannerMap stops={stops} selectedStopId={selectedStopId} onSelectStop={setSelectedStopId} /><View style={[styles.mapFullHeader, { paddingTop: Math.max(insets.top, 8) }]}><View style={styles.headerRow}><TouchableOpacity style={styles.iconButton} onPress={() => setMapExpanded(false)} accessibilityRole="button" accessibilityLabel="חזרה לרשימת העצירות"><Ionicons name="close" size={22} color={colors.primary} /></TouchableOpacity><AppText style={styles.pageHeaderTitle}>{day?.title || 'מפת הטיול'}</AppText></View></View>{selectedStop ? <TouchableOpacity style={styles.mapFullDetails} onPress={() => setMapExpanded(false)} accessibilityRole="button"><AppText style={styles.stopTitle}>{selectedStop.title}</AppText><AppText style={styles.stopSubtitle}>חזרה לרשימה ←</AppText></TouchableOpacity> : null}</View></Modal>
+    <Modal visible={mapExpanded} animationType="slide" onRequestClose={() => setMapExpanded(false)}>
+      <View style={styles.mapFullScreen}>
+        <View style={[styles.editorMapFullHeader, { paddingTop: Math.max(insets.top, 8) }]} testID="shared-trip-map-header">
+          <View style={styles.headerRow}>
+            <TouchableOpacity style={styles.iconButton} onPress={() => setMapExpanded(false)} accessibilityRole="button" accessibilityLabel="חזרה לרשימת העצירות"><Ionicons name="close" size={22} color={colors.primary} /></TouchableOpacity>
+            <View style={styles.headerCopy}>
+              <AppText style={styles.editorMapFullTitle} numberOfLines={1}>{day?.title || 'מפת הטיול'}</AppText>
+              <AppText style={styles.headerSubtitle}>{pointCount === 1 ? 'נקודה מדויקת אחת' : `${pointCount} נקודות מדויקות`}</AppText>
+            </View>
+          </View>
+        </View>
+        {mapExpanded && hasLocation ? <TripPlannerMapCard key={dayId} stops={stops} selectedStopId={selectedStopId}
+          onSelectStop={setSelectedStopId} onMapPress={() => setSelectedStopId('')} active={focused && mapExpanded} expanded /> : null}
+        {selectedStop ? <MapStopDetails title={selectedStop.title} number={stops.findIndex((stop) => stop.id === selectedStopId) + 1}
+          dayLabel={day?.title} imageUrl={getRecommendationImageUrls(selectedStop, 'thumb')[0]}
+          address={selectedStop.subtitle} description={selectedStop.note} style={{ bottom: Math.max(insets.bottom, 18) }}
+          onClose={() => setSelectedStopId('')} actionLabel="חזרה לרשימה ולפרטי העצירה" onAction={() => setMapExpanded(false)} /> : null}
+      </View>
+    </Modal>
   </View>;
 }

@@ -7,6 +7,8 @@ import { colors, tripPlannerStyles as styles } from '../../../styles';
 import { addDiagnosticBreadcrumb } from '../../../services/ErrorReporting';
 import { coordinatesForStop, regionForStops, routeCoordinates } from '../utils/tripPlannerModel';
 import { tripMapCamera } from '../utils/tripMapCamera';
+import RouteStopMarker, { ROUTE_STOP_MARKER_ANCHOR, COMPACT_ROUTE_STOP_MARKER_ANCHOR } from '../../roadtrip/components/RouteStopMarker';
+import { getRecommendationImageUrls } from '../../../utils/mediaAssets';
 
 export default function TripPlannerMap({
   stops = [], route, selectedStopId, onSelectStop, onRegionChange, onMapPress, onReady, style,
@@ -137,17 +139,22 @@ export default function TripPlannerMap({
       {(!deferOverlaysUntilLoaded || overlaysReady) && stops.map((stop, index) => {
         const coordinate = coordinatesForStop(stop);
         if (!coordinate) return null;
-        const custom = stop.sourceType === 'custom';
+        const selected = selectedStopId === stop.id;
         return (
           <Marker
             key={stop.id}
+            testID={`trip-map-marker-${stop.id}`}
             coordinate={coordinate}
-            pinColor={custom ? colors.accentAction : colors.primary}
-            title={`${index + 1}. ${stop.title}`}
-            description={stop.subtitle || undefined}
-            opacity={selectedStopId && selectedStopId !== stop.id ? 0.7 : 1}
+            anchor={interactive ? ROUTE_STOP_MARKER_ANCHOR : COMPACT_ROUTE_STOP_MARKER_ANCHOR}
+            title={onSelectStop ? undefined : `${index + 1}. ${stop.title}`}
+            description={onSelectStop ? undefined : stop.subtitle || undefined}
+            zIndex={selected ? stops.length + 1 : index + 1}
+            stopPropagation
             onPress={() => onSelectStop?.(stop.id)}
-          />
+          >
+            <RouteStopMarker stop={stop} displayNumber={index + 1} selected={selected} compact={!interactive}
+              imageUrl={getRecommendationImageUrls(stop, 'thumb')[0]} />
+          </Marker>
         );
       })}
     </MapView> : null}

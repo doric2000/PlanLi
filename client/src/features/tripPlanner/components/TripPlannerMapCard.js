@@ -3,7 +3,7 @@ import { ActivityIndicator, AppState, Platform, TouchableOpacity, View } from 'r
 import { Ionicons } from '@expo/vector-icons';
 
 import AppText from '../../../components/AppText';
-import { colors, tripPlannerStyles as styles } from '../../../styles';
+import { colors, routeMapStyles, tripPlannerStyles as styles } from '../../../styles';
 import { captureDiagnosticException } from '../../../services/ErrorReporting';
 import { coordinatesForStop } from '../utils/tripPlannerModel';
 import TripPlannerMap from './TripPlannerMap';
@@ -17,6 +17,7 @@ function MapAttempt({ expanded, attempt, onRetry, active, ...mapProps }) {
   const reportedFailure = useRef(false);
   const prefix = expanded ? 'trip-map-full' : 'trip-map';
   const pointCount = (mapProps.stops || []).filter(coordinatesForStop).length;
+  const hiddenStopCount = (mapProps.stops || []).length - pointCount;
 
   useEffect(() => {
     mounted.current = true;
@@ -46,6 +47,13 @@ function MapAttempt({ expanded, attempt, onRetry, active, ...mapProps }) {
         if (!mounted.current) return;
         lifecycle.current = 'tiles_loaded'; setReady(true); setFailed(false);
       }} />
+    {expanded && ready && hiddenStopCount > 0 && !mapProps.selectedStopId ? (
+      <View pointerEvents="none" style={routeMapStyles.mapHiddenNotice} testID="trip-map-hidden-notice">
+        <AppText style={routeMapStyles.mapHiddenNoticeText}>{hiddenStopCount === 1
+          ? 'עצירה אחת אינה מוצגת כי אין לה נקודה מדויקת.'
+          : `${hiddenStopCount} עצירות אינן מוצגות כי אין להן נקודה מדויקת.`}</AppText>
+      </View>
+    ) : null}
     {!ready && !failed ? <View pointerEvents="none" style={[styles.editorMapHint, styles.editorMapLoadingOverlay]} testID={`${prefix}-loading`}>
       <ActivityIndicator color={colors.primary} /><AppText style={styles.editorMapHintText}>טוענים את המפה…</AppText>
     </View> : null}

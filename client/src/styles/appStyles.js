@@ -4218,7 +4218,7 @@ export const mediaGalleryModalStyles = StyleSheet.create({
 // features/roadtrip/components/RouteStopMarker.js
 export const routeStopMarkerStyles = StyleSheet.create({
 	touchTarget: { width: 56, height: 64, alignItems: 'center', justifyContent: 'flex-start' },
-	touchTargetCompact: { width: 42, height: 50 },
+	touchTargetCompact: { width: 44, height: 50 },
 	halo: {
 		width: 52, height: 58, borderRadius: 26, alignItems: 'center', paddingTop: 2,
 		backgroundColor: 'transparent',
@@ -4622,9 +4622,9 @@ export const routeMapStyles = StyleSheet.create({
 		gap: 10,
 	},
 	sheetCloseButton: {
-		width: 34,
-		height: 34,
-		borderRadius: 17,
+		width: 44,
+		height: 44,
+		borderRadius: 22,
 		alignItems: "center",
 		justifyContent: "center",
 		backgroundColor: colors.background,
