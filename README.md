@@ -25,6 +25,52 @@ The existing Text Search quota remains zero. See
 
 ## Current environment status
 
+### Trip map layout iOS OTA (2026-09-21)
+
+PR [#425](https://github.com/doric2000/PlanLi/pull/425) merged the correction as
+`e799e8aef756e0246afa81b8ed16dd103d8b85d9`. The removed React Native
+`StyleSheet.absoluteFillObject` left the map host at zero height; supported fill
+styles restore its dimensions. The fullscreen header now occupies normal layout,
+with a compact failure/retry banner below the safe area.
+
+The current iOS production OTA is
+[group 6bf13a9e](https://expo.dev/accounts/doric2000/projects/client/updates/6bf13a9e-24c0-46ae-a7b0-e34cc752fe91),
+update `01a0c543-c41c-70f6-a1d7-5205374a6c48`, published at
+`2026-09-21T18:39:07.804Z`; runtime `1.3.0`, channel/environment `production`.
+Staging group `3e6d504d-70e0-41f4-b4da-204261658fba` was republished without
+another export. Both remote bundles and the local export are 10,912,684 bytes,
+SHA-256 `87E03667A766EB98883BE991E1B5ABC52A06C8E530DF3AA38AE957906B090995`.
+Independent public-channel delivery matched the new update at
+`2026-09-21T18:39:38.714Z`.
+
+Last confirmed tester installation: TestFlight **1.1.2 (32)**, EAS build
+`6ae60b3a-b0a6-4659-a054-68a044004a35`, native source
+`eb9770bc12c5accf16a8cb184e473d25d3f0b619`. Application of this new OTA and visible
+streets/markers on the iPhone are **pending**. No native build or Apple submission
+was created. The incident remains open until device rendering is confirmed.
+
+Validation: 137 related client suites / 940 tests, 21 client helper/configuration
+checks, 42 release guard tests and the final focused 41-test map/editor/Web run
+passed. Browser proof verified marker selection, positive map dimensions and the
+48px retry banner below a 62px safe area. PR checks passed and release review
+found no blocker. Expo Doctor's 19 patch recommendations remain unresolved;
+manifest, lockfile and native dependencies are unchanged from the preceding OTA.
+
+The native guard retained build 30 and reviewed fingerprint
+`f9c26614b2ebac29b63ee6df9d097175b6cfa036`. During publication, concurrent Hosting
+work changed the checkout branch. Under explicit user authorization to publish
+in parallel, promotion used the existing immutable candidate and verified all
+1,216 archived files against the merged commit. Only Hosting/README divergence
+was permitted; source lineage, account/project, native compatibility, production
+environment and downloaded bundle checks remained enforced. The tracked release
+guards were not changed, and the landing-page files/branch were preserved.
+
+This workflow released iOS only. Android remains on group
+`482b54f6-c7a7-4144-83fa-b8d7f9ee6d48`; no backend or Hosting deployment was
+performed by this workflow. Immediate iOS rollback:
+`24b4da73-475d-40cb-856b-e361b90bcb13`, source
+`5edb740372b6e9c031aec39f22510bc9451e1b6c`.
+
 ### Trip map layout root cause and Sentry access (2026-09-20)
 
 Sentry access is restored: disabling Chrome's Allow CORS extension restored the
@@ -44,10 +90,10 @@ credential is separate. A full Codex application restart has not been tested.
 iPhone applied update `01a0bebf-7a47-7a0c-81bb-8bb3a0336461` on TestFlight
 `1.1.2 (32)`, runtime `1.3.0`, and failed at `layout_pending` three times.
 The root cause is the removed `StyleSheet.absoluteFillObject` API: it leaves
-the trip map host with an empty style and zero height. The pending layout fix
-restores fill styles and places the fullscreen error below the header. A failing
-regression reproduced the empty host style. No additional OTA has been published
-for this correction yet; physical rendering remains unverified. See
+the trip map host with an empty style and zero height. The correction restores
+fill styles and places the fullscreen error below the header. A failing regression
+reproduced the empty host style. The correction is now merged and published in
+the September 21 OTA above; physical rendering remains unverified. See
 [the investigation](docs/trip-map-initialization.md).
 
 ### Trip map initialization iOS OTA (2026-09-20)
@@ -56,10 +102,10 @@ PR [#420](https://github.com/doric2000/PlanLi/pull/420) was merged to `main` as
 `5edb740372b6e9c031aec39f22510bc9451e1b6c`. The trip map now waits for measurable
 layout, initializes its camera after native readiness without waiting for tiles,
 and isolates inline, fullscreen, day and retry loading attempts. Direct map
-consumers retain their existing overlays. The precise cause of the reported
-blank native map remains unproven; physical rendering is still pending.
+consumers retain their existing overlays. This earlier release did not correct
+the map host's zero-height style and is superseded by the layout correction above.
 
-The current iOS production OTA is
+The previous iOS production OTA was
 [group 24b4da73](https://expo.dev/accounts/doric2000/projects/client/updates/24b4da73-475d-40cb-856b-e361b90bcb13),
 full ID `24b4da73-475d-40cb-856b-e361b90bcb13`, update
 `01a0bebf-7a47-7a0c-81bb-8bb3a0336461`, published at
@@ -5679,3 +5725,16 @@ part of this follow-up.
 - Verified staging candidate: `f5613811-b540-4fbf-9e87-17cb85891c6f`; identical production bundle. Public-channel delivery verified at `2026-09-20T12:17:22.959Z`.
 - Validation: 55 focused tests, 91 affected client suites / 635 tests, applicable PR checks and corrected release-review finding. Physical map rendering remains unverified.
 - Rollback: republish iOS group `586f1ad9-7715-450a-8e12-9720d9b789e3`; never change the runtime URL or channel in-app.
+
+## iOS production OTA release
+
+- Source commit: `e799e8aef756e0246afa81b8ed16dd103d8b85d9`.
+- EAS Update group: `6bf13a9e-24c0-46ae-a7b0-e34cc752fe91`; channel `production`; runtime `1.3.0`.
+- EAS environment: `production`; published at `2026-09-21T18:39:07.804Z`.
+- Immutable iOS launch bundle: update `01a0c543-c41c-70f6-a1d7-5205374a6c48`; 10912684 bytes; SHA-256 `87E03667A766EB98883BE991E1B5ABC52A06C8E530DF3AA38AE957906B090995`.
+- Message: Fix trip map zero-height layout and fullscreen retry (PR 425)
+- Target binary: last confirmed TestFlight `1.1.2 (32)`, build `6ae60b3a-b0a6-4659-a054-68a044004a35`; no new binary/submission.
+- Device application and visible native streets/markers: pending.
+- Verified staging candidate: `3e6d504d-70e0-41f4-b4da-204261658fba`; identical local/staging/production bundle. Public-channel delivery verified at `2026-09-21T18:39:38.714Z`.
+- Validation/review: 940 related client tests, 21 helper/config checks, 42 guard tests, final 41 focused tests, Web layout/marker proof and passing PR checks. Expo Doctor patch recommendations remain unresolved; see current status.
+- Rollback: republish iOS group `24b4da73-475d-40cb-856b-e361b90bcb13`.

@@ -1,6 +1,19 @@
 # Trip map initialization investigation
 
-Status on 2026-09-20: the JavaScript correction was merged in
+Current delivery on 2026-09-21: [PR #425](https://github.com/doric2000/PlanLi/pull/425)
+is merged as `e799e8aef756e0246afa81b8ed16dd103d8b85d9`. Its layout correction
+is live in iOS production group `6bf13a9e-24c0-46ae-a7b0-e34cc752fe91`, update
+`01a0c543-c41c-70f6-a1d7-5205374a6c48`, runtime `1.3.0`, published at
+`2026-09-21T18:39:07.804Z`. Public-channel delivery matched at 18:39:38 UTC.
+Local, staging and production bundles have the same SHA-256
+`87E03667A766EB98883BE991E1B5ABC52A06C8E530DF3AA38AE957906B090995`.
+The user authorized promotion of the existing immutable candidate in parallel
+with unrelated Hosting edits; no Hosting files or permanent release guards were
+changed by this workflow. Native compatibility and source/bundle checks passed.
+Physical iPhone streets/markers and application of this OTA remain unverified.
+The previous group below is the immediate rollback target.
+
+Previous delivery on 2026-09-20: the JavaScript correction was merged in
 [PR #420](https://github.com/doric2000/PlanLi/pull/420), source
 `5edb740372b6e9c031aec39f22510bc9451e1b6c`, and published to iOS production group
 `24b4da73-475d-40cb-856b-e361b90bcb13` at `2026-09-20T12:16:54.855Z`.
@@ -101,7 +114,7 @@ event-replay patch does not change that contract. This source review does not
 substitute for the guard's fingerprint check or device evidence. Publishing an
 OTA does not remove a patch already compiled into a binary.
 
-The guarded staging/promotion workflow passed from synchronized, tracked-clean
+For PR #420, the guarded staging/promotion workflow passed from synchronized, tracked-clean
 `main`. Staging group `f5613811-b540-4fbf-9e87-17cb85891c6f` and the production
 group above contain the identical verified bundle. The prior production group
 `586f1ad9-7715-450a-8e12-9720d9b789e3`, source
