@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, Share, StatusBar, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StatusBar, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 
@@ -13,7 +13,7 @@ import { RecommendationHero } from '../../../components/RecommendationHero';
 import RtlHorizontalScrollView from '../../../components/RtlHorizontalScrollView';
 import UsefulFactItem from '../../../components/UsefulFactItem';
 import { auth } from '../../../config/firebase';
-import { shareUrl } from '../../../config/publicLinks.generated';
+import { useContentShare } from '../../../hooks/useContentShare';
 import { useAdminClaim } from '../../../hooks/useAdminClaim';
 import { useAuthUser } from '../../../hooks/useAuthUser';
 import { useUserData } from '../../../hooks/useUserData';
@@ -212,15 +212,7 @@ function RouteDetailLoaded({ routeData, navigation, initialCommentsOpen, initial
   }), [routeData]);
 
   const editRoute = () => navigation.navigate('AddRoutesScreen', { routeToEdit: routeData });
-  const shareRoute = async () => {
-    try {
-      if (routeData?.status !== 'active') throw new Error('Content is unavailable.');
-      const url = shareUrl('route', routeData.id || routeData.routeId);
-      await Share.share({ title: routeData.title, message: `${routeData.title}\n${url}` });
-    } catch {
-      Alert.alert('השיתוף לא זמין', 'לא הצלחנו לפתוח את אפשרויות השיתוף כרגע.');
-    }
-  };
+  const shareRoute = useContentShare({ kind: 'route', id: routeData.id || routeData.routeId, title: routeData.title, status: routeData.status });
 
   return (
     <SafeAreaView style={detailStyles.screen} edges={['left', 'right']}>

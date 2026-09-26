@@ -6,6 +6,9 @@ import AppText from './AppText';
 import { colors } from '../styles/colors';
 import { recommendationActionBarStyles as styles } from '../styles/recommendationActionBar';
 
+const compactCounter = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 0 });
+const counterText = (count) => count < 1000 ? String(count) : compactCounter.format(count);
+
 export const RecommendationActionBar = ({
   isLiked = false,
   likeCount = 0,
@@ -15,7 +18,7 @@ export const RecommendationActionBar = ({
   onLikesListPress,
   onSharePress,
   onAddToTrip,
-  onReadMore,
+  compact = false,
   contentLabel = 'ההמלצה',
   style,
 }) => {
@@ -29,7 +32,7 @@ export const RecommendationActionBar = ({
 
   return (
     <View {...(Platform.OS === 'web' ? { dir: 'ltr' } : {})} style={[styles.bar, style]} testID="recommendation-action-bar">
-      <View style={[styles.actions, onReadMore && styles.compactActions]} testID="recommendation-action-row">
+      <View style={[styles.actions, compact && styles.compactActions]} testID="recommendation-action-row">
         <View style={styles.group}>
           <TouchableOpacity
             style={styles.iconSlot}
@@ -50,22 +53,22 @@ export const RecommendationActionBar = ({
             accessibilityState={{ disabled: likesListDisabled }}
             testID="recommendation-action-likes"
           >
-            <AppText style={styles.count} numberOfLines={1} adjustsFontSizeToFit>{normalizedLikeCount}</AppText>
+            <AppText style={styles.count} numberOfLines={1} adjustsFontSizeToFit>{counterText(normalizedLikeCount)}</AppText>
           </TouchableOpacity>
         </View>
 
         <TouchableOpacity
-          style={styles.group}
+          style={styles.comments}
           onPress={press(onCommentPress)}
           accessibilityRole="button"
           accessibilityLabel={`${normalizedCommentsCount} תגובות`}
           testID="recommendation-action-comments"
         >
-          <View style={styles.iconSlot}>
+          <View style={styles.commentIcon}>
             <Ionicons name="chatbubble-outline" size={22} color={colors.primary} style={styles.icon} />
           </View>
-          <View style={styles.countSlot}>
-            <AppText style={styles.count} numberOfLines={1} adjustsFontSizeToFit>{normalizedCommentsCount}</AppText>
+          <View style={styles.commentCount}>
+            <AppText style={styles.count} numberOfLines={1} adjustsFontSizeToFit>{counterText(normalizedCommentsCount)}</AppText>
           </View>
         </TouchableOpacity>
 
@@ -78,7 +81,6 @@ export const RecommendationActionBar = ({
             testID="recommendation-action-share"
           >
             <Ionicons name="share-social-outline" size={22} color={colors.primary} style={styles.icon} />
-            <AppText style={styles.shareText}>שיתוף</AppText>
           </TouchableOpacity>
         ) : null}
         {onAddToTrip ? (
@@ -93,12 +95,8 @@ export const RecommendationActionBar = ({
             <AppText style={styles.addToTripText}>לטיול</AppText>
           </TouchableOpacity>
         ) : null}
-        {onReadMore && <TouchableOpacity style={styles.readMore} onPress={press(onReadMore)} accessibilityRole="button"
-          accessibilityLabel={`קריאת ${contentLabel} במלואה`} testID="community-card-read-more">
-          <AppText style={styles.readMoreText}>קרא עוד ←</AppText>
-        </TouchableOpacity>}
       </View>
-      {!onReadMore && <View style={styles.divider} pointerEvents="none" testID="recommendation-action-divider" />}
+      {!compact && <View style={styles.divider} pointerEvents="none" testID="recommendation-action-divider" />}
     </View>
   );
 };

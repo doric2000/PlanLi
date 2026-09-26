@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, Share, StatusBar, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StatusBar, TouchableOpacity, View } from 'react-native';
 import AppText from "../../../components/AppText";
 import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -10,7 +10,7 @@ import MediaGalleryModal from '../../../components/MediaGalleryModal';
 import { RecommendationActionBar } from '../../../components/RecommendationActionBar';
 import { RecommendationHero } from '../../../components/RecommendationHero';
 import { auth } from '../../../config/firebase';
-import { shareUrl } from '../../../config/publicLinks.generated';
+import { useContentShare } from '../../../hooks/useContentShare';
 import { useAdminClaim } from '../../../hooks/useAdminClaim';
 import { useAuthUser } from '../../../hooks/useAuthUser';
 import { useRecommendationById } from '../../../hooks/useRecommendationById';
@@ -128,15 +128,7 @@ function RecommendationDetailLoaded({ item, postId, navigation, initialCommentsO
     });
   };
 
-  const handleShare = async () => {
-    try {
-      if (item.status !== 'active') throw new Error('Content is unavailable.');
-      const url = shareUrl('recommendation', postId);
-      await Share.share({ title: item.title, message: `${item.title}\n${url}` });
-    } catch {
-      Alert.alert('השיתוף לא זמין', 'לא הצלחנו לפתוח את אפשרויות השיתוף כרגע.');
-    }
-  };
+  const handleShare = useContentShare({ kind: 'recommendation', id: postId, title: item.title, status: item.status });
   const handleAddToTrip = async () => {
     if (await ensureCapability(CAPABILITIES.ACTIVE, { name: 'TripPlanner' })) setAddToTripVisible(true);
   };

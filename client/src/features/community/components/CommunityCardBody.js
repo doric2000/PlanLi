@@ -3,7 +3,7 @@ import { Pressable } from 'react-native';
 import AppText from '../../../components/AppText';
 import { communityDiscoveryStyles as s } from '../../../styles/communityDiscovery';
 
-export default function CommunityCardBody({ title, destination, metadata, description, onPress, onDestinationPress, testID }) {
+export default function CommunityCardBody({ title, destination, metadata, description, onPress, onDestinationPress, contentLabel = 'ההמלצה', testID }) {
   return <Pressable style={s.cardBody} onPress={onPress} accessibilityRole="button" accessibilityLabel={`קריאת ${title}`} testID={testID}>
     <AppText style={s.cardTitle} numberOfLines={2}>{title}</AppText>
     {!!destination && (onDestinationPress ? <Pressable style={s.destinationLink} accessibilityRole="button" accessibilityLabel={`פתיחת ${destination}`}
@@ -12,5 +12,9 @@ export default function CommunityCardBody({ title, destination, metadata, descri
     </Pressable> : <AppText style={s.cardDestination} numberOfLines={1}>{destination}</AppText>)}
     {!!metadata && <AppText style={s.cardMetadata} numberOfLines={1}>{metadata}</AppText>}
     {!!description && <AppText style={s.cardExcerpt} numberOfLines={2}>{description}</AppText>}
+    <Pressable style={s.cardReadMore} onPress={(event) => { event?.stopPropagation?.(); onPress?.(); }}
+      accessibilityRole="button" accessibilityLabel={`קריאת ${contentLabel} במלואה`} testID="community-card-read-more">
+      <AppText style={s.cardReadMoreText}>קרא עוד ←</AppText>
+    </Pressable>
   </Pressable>;
 }
