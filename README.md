@@ -177,6 +177,45 @@ Device download/application and post-update cold-link behavior remain unverified
 No new native build, store submission, Android update, Hosting or backend release
 accompanied this correction. The release record below contains immutable IDs/hash.
 
+#### Shared destination after authentication (2026-09-26; current iOS OTA)
+
+The current iOS production OTA is group
+`f1a97566-0195-4955-87b9-eb6b6a728757`, source
+`859f313571761d740fed85b7070d0f64ebd25fda`, runtime **1.4.0**, published at
+`2026-09-26T13:35:44.730Z` for owner-confirmed TestFlight **1.1.3 (34)** / EAS
+build `1ff27c70-6a66-4daf-b58d-bb8a3d092091`. It supersedes the preceding OTA
+while retaining its first-open retry and safe-area corrections. No new binary or
+store submission was needed; Android, Hosting and backend were not released.
+
+PR #434 centralizes successful authentication navigation in AuthProvider. A
+server-confirmed profile can no longer restore a shared destination before a
+slower sign-in callback resets Home. Shared trip, route and recommendation
+destinations survive required account steps and optional onboarding, and are
+consumed once at completion. Cancellation/sign-out clear pending navigation.
+Normal and admin sign-in retain their respective default destinations.
+
+Release readiness passed **49 related client suites / 460 tests**. An isolated
+browser using the actual LoginScreen, AuthProvider and React Navigation verified
+slow bootstrap, restoration of the shared trip, token refresh without leaving it,
+and explicit Back to Main. Auth/profile services in that proof were synthetic.
+Final code review and applicable PR checks passed. These results were retained
+after merging because client source, configuration and dependency locks matched.
+
+PR #435 adds guarded `--source-record` reuse and updates release guidance.
+All **46 release guard tests** passed, as did commit review and applicable CI.
+This release prepared the archive once (357 seconds) and successfully reused it
+for production promotion, avoiding a second dependency copy or bundle export.
+The first candidate `bdccabb0-4896-4264-b029-81a3a0e54dac` matched the installed
+native fingerprint `976661b4a04d2165ecd571430564b16b5f86fc13` before and after
+upload. The production launch bundle is byte-identical to that candidate.
+
+The public production endpoint independently served update
+`01a0dded-ce5a-788c-8bda-d2a54d8a78cb` with the expected group/runtime/launch hash
+at `2026-09-26T13:36:40.200Z`. Device download/application and the signed-out
+link → sign-in → retained destination flow on the physical iPhone are **pending
+owner confirmation**. Public store review state is unchanged. See the latest
+immutable release record below for bundle size/hash and rollback group.
+
 ### Public store links on the landing page (2026-09-21)
 
 The landing page now links to the public PlanLi Travels listings on
@@ -5958,3 +5997,17 @@ part of this follow-up.
 - Public production endpoint verified at `2026-09-26T12:27:40.177Z`.
 - Device application and post-update security smoke tests: pending.
 - Rollback: no previous ios OTA; an authorized rollback must target the embedded build for runtime 1.4.0.
+
+## iOS production OTA release
+
+- Source commit: `859f313571761d740fed85b7070d0f64ebd25fda`.
+- EAS Update group: `f1a97566-0195-4955-87b9-eb6b6a728757`; channel `production`; runtime `1.4.0`.
+- EAS environment: `production`; published at `2026-09-26T13:35:44.730Z`.
+- Immutable iOS launch bundle: update `01a0dded-ce5a-788c-8bda-d2a54d8a78cb`; 10925052 bytes; SHA-256 `223051368DEE28391D8A9F0B1E97F87385BFAECFBF7F7A842EA6A247DDE34319`.
+- Message: Preserve shared trips after sign-in
+- Target binary: owner-confirmed TestFlight `1.1.3 (34)`, EAS build `1ff27c70-6a66-4daf-b58d-bb8a3d092091`; no new binary/submission.
+- Verified staging candidate: `bdccabb0-4896-4264-b029-81a3a0e54dac`; identical production bundle and exact installed native fingerprint.
+- Public production endpoint verified at `2026-09-26T13:36:40.200Z`.
+- Validation: 49 related client suites / 460 tests, 46 release guard tests, isolated auth/navigation browser proof, final reviews and applicable PR checks passed.
+- Device application and post-update security smoke tests: pending.
+- Rollback: republish verified iOS group `f54aca26-f3fa-4015-afc6-b733f179cff3`; never change the runtime URL or channel in-app.
