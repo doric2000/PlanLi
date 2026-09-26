@@ -202,5 +202,11 @@ impact; do not substitute an unrelated full suite for the device matrix above.
   Focused follow-up passed all 5 suites / 55 tests after updating stale version
   expectations and using the existing Assistant bold font in operation styles.
   All four timed-out recommendation tests passed on the focused run unchanged.
-  Audit reports three pre-existing moderate findings in the unchanged React
-  Navigation/query-string decoder chain; no high/critical findings.
+  The initial audit reported three findings in the React Navigation decoder chain.
+- PR #429's locked audit detected that a supported upstream fix is now available.
+  Targeted core 7.22.1 / routers 7.6.4 update removes all five decoder-chain
+  packages; live npm audit now has zero findings. The previous exception was
+  removed and policy tests confirm that every advisory, including the former
+  exception, is rejected. All 34 focused Auth/navigation/share tests passed.
+  Upstream source reviewed: https://github.com/react-navigation/react-navigation/releases/tag/@react-navigation%2Fcore@7.22.1
+- Play privacy URL is saved as https://planli.cc/privacy/, pending Play review.

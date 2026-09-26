@@ -70,6 +70,15 @@ the three failures were then resolved/verified by a focused 5-suite / 55-test pa
 bold family. No SDK major upgrade or Doctor exclusion was introduced.
 See the [rollout and acceptance checklist](docs/custom-domain-rollout.md).
 
+PR [#429](https://github.com/doric2000/PlanLi/pull/429) contains the migration.
+Its first validation run passed client/Functions/Rules, CodeQL, Semgrep and secret
+checks, but the locked audit correctly stopped on the newly fixable navigation
+advisory. A targeted transitive update to `@react-navigation/core@7.22.1` and
+`@react-navigation/routers@7.6.4` removes query-string/decode-uri-component.
+The old audit exception was removed: all workspaces now require zero advisories.
+The live client audit is clean and all 34 focused Auth/navigation/share tests pass.
+Play privacy URL was saved as `https://planli.cc/privacy/`, pending Play review.
+
 ### Public store links on the landing page (2026-09-21)
 
 The landing page now links to the public PlanLi Travels listings on
