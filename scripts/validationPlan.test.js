@@ -200,6 +200,16 @@ test('only the named IAM dry-run proof covers its dynamic operator CLI load', (t
   assert.match(missing.coverageGaps.join('\n'), /configureFunctionServiceAccounts.js.*direct\/transitive/);
 });
 
+test('public-link and Hosting changes schedule credential-free contract and Auth-plan tests', () => {
+  for (const file of ['functions/publicLinks.js', 'hosting/.well-known/assetlinks.json',
+    'hosting/trip/app.js', 'client/src/config/publicLinks.generated.js', 'scripts/configurePublicAuthDomain.js']) {
+    const plan = classifyChanges([file]);
+    assert.equal(plan.tooling, true, file);
+    assert.equal(plan.publicLinks, true, file);
+  }
+  assert.equal(classifyChanges(['README.md']).publicLinks, false);
+});
+
 test('client script tests run with Node and cover their changed dependencies', (t) => {
   const root = fixtureRepo({
     'client/app.config.js': 'module.exports = {};',

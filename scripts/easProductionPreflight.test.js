@@ -19,12 +19,23 @@ test('first Android OTA uses a reviewed embedded source only for an empty invent
   });
   assert.throws(() => resolvePlatformLineage(undefined, () => [], 'android', baseline), /inventory/);
   assert.throws(() => resolvePlatformLineage([], () => [], 'android'), /reviewed embedded/);
-  assert.throws(() => resolvePlatformLineage([], () => [], 'ios', baseline), /No production update/);
+  assert.throws(() => resolvePlatformLineage([], () => [], 'ios', baseline), /reviewed embedded/);
   assert.deepEqual(resolvePlatformLineage([{ group: 'ota' }], () => [
     { platform: 'ios', gitCommitHash: 'b'.repeat(40) },
     { platform: 'android', gitCommitHash: 'c'.repeat(40) },
   ], 'android', baseline), { deployedCommit: 'c'.repeat(40), groupId: 'ota' });
   assert.throws(() => resolvePlatformLineage([{ group: 'bad' }], () => [], 'android', baseline), /No production update/);
+});
+
+test('first iOS OTA on a new runtime requires a verified matching embedded baseline', () => {
+  const baseline = { platform: 'ios', sourceCommit: 'd'.repeat(40), buildId: 'new-ios-build' };
+  assert.deepEqual(resolvePlatformLineage([], () => [], 'ios', baseline), {
+    deployedCommit: baseline.sourceCommit, groupId: 'embedded-build:new-ios-build',
+  });
+  for (const invalid of [undefined, { ...baseline, sourceCommit: '' }, { ...baseline, buildId: '' }, { ...baseline, platform: 'android' }]) {
+    assert.throws(() => resolvePlatformLineage([], () => [], 'ios', invalid), /reviewed embedded/);
+  }
+  assert.throws(() => resolvePlatformLineage([{ group: 'bad' }], () => [], 'ios', baseline), /No production update/);
 });
 const fs = require('node:fs');
 const os = require('node:os');

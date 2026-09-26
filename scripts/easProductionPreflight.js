@@ -87,7 +87,7 @@ function resolveProductionLineage(entries, readGroup) {
 function currentProductionCommit(clientRoot, platform = 'ios', baseline) {
   releasePlatform(platform);
   const branch = JSON.parse(runEas(clientRoot, [
-    'update:list', '--branch', 'production', '--runtime-version', '1.3.0',
+    'update:list', '--branch', 'production', '--runtime-version', '1.4.0',
     '--platform', platform, '--limit', '10', '--json', '--non-interactive',
   ]));
   return resolvePlatformLineage(branch?.currentPage, (groupId) =>
@@ -97,8 +97,10 @@ function currentProductionCommit(clientRoot, platform = 'ios', baseline) {
 function resolvePlatformLineage(entries, readGroup, platform = 'ios', baseline) {
   releasePlatform(platform);
   if (!Array.isArray(entries)) fail('EAS production list is missing its update inventory.');
-  if (platform === 'android' && entries.length === 0) {
-    if (baseline?.platform !== 'android' || !/^[a-f0-9]{40}$/.test(baseline.sourceCommit || '')) fail('First Android OTA requires the reviewed embedded build source.');
+  if (entries.length === 0) {
+    if (baseline?.platform !== platform || !/^[a-f0-9]{40}$/.test(baseline.sourceCommit || '') || !baseline.buildId) {
+      fail(`First ${platform} OTA requires the reviewed embedded build source.`);
+    }
     return { deployedCommit: baseline.sourceCommit, groupId: 'embedded-build:' + baseline.buildId };
   }
   return resolveProductionLineage(entries, (groupId) => readGroup(groupId).filter(update => update.platform === platform));

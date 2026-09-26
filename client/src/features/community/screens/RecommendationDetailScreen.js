@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, Share, StatusBar, View } from 'react-native';
+import { ActivityIndicator, Alert, ScrollView, Share, StatusBar, TouchableOpacity, View } from 'react-native';
 import AppText from "../../../components/AppText";
 import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -10,6 +10,7 @@ import MediaGalleryModal from '../../../components/MediaGalleryModal';
 import { RecommendationActionBar } from '../../../components/RecommendationActionBar';
 import { RecommendationHero } from '../../../components/RecommendationHero';
 import { auth } from '../../../config/firebase';
+import { shareUrl } from '../../../config/publicLinks.generated';
 import { useAdminClaim } from '../../../hooks/useAdminClaim';
 import { useAuthUser } from '../../../hooks/useAuthUser';
 import { useRecommendationById } from '../../../hooks/useRecommendationById';
@@ -32,8 +33,8 @@ export default function RecommendationDetailScreen({ route, navigation }) {
   const postId = route?.params?.postId || initialItem?.postId || initialItem?.id || '';
   const initialCommentsOpen = route?.params?.openComments === true;
   const initialCommentId = route?.params?.commentId || null;
-  const { data: canonicalItem, loading, refresh } = useRecommendationById(postId);
-  const item = useMemo(() => canonicalItem || initialItem, [canonicalItem, initialItem]);
+  const { data: canonicalItem, loading, error, resolved, refresh } = useRecommendationById(postId);
+  const item = useMemo(() => canonicalItem || (loading && !resolved ? initialItem : null), [canonicalItem, initialItem, loading, resolved]);
   const hasFocusedOnce = useRef(false);
 
   useFocusEffect(useCallback(() => {
@@ -48,8 +49,9 @@ export default function RecommendationDetailScreen({ route, navigation }) {
         <View style={styles.loading}>
           {loading ? <ActivityIndicator size="large" color={colors.primary} /> : null}
           <AppText style={styles.loadingText}>
-            {loading ? 'טוענים את ההמלצה…' : 'לא הצלחנו לטעון את ההמלצה.'}
+            {loading ? 'טוענים את ההמלצה…' : error ? 'לא הצלחנו לטעון את ההמלצה.' : 'ההמלצה הוסרה או שאינה זמינה כרגע.'}
           </AppText>
+          {!loading && <TouchableOpacity onPress={refresh} accessibilityRole="button" accessibilityLabel="ניסיון נוסף" style={styles.retryButton}><AppText>ניסיון נוסף</AppText></TouchableOpacity>}
         </View>
       </SafeAreaView>
     );
@@ -127,10 +129,10 @@ function RecommendationDetailLoaded({ item, postId, navigation, initialCommentsO
   };
 
   const handleShare = async () => {
-    const placeLink = item?.place?.url || '';
-    const message = [item.title, item.description, placeLink].filter(Boolean).join('\n\n');
     try {
-      await Share.share({ title: item.title, message });
+      if (item.status !== 'active') throw new Error('Content is unavailable.');
+      const url = shareUrl('recommendation', postId);
+      await Share.share({ title: item.title, message: `${item.title}\n${url}` });
     } catch {
       Alert.alert('השיתוף לא זמין', 'לא הצלחנו לפתוח את אפשרויות השיתוף כרגע.');
     }

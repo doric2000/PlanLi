@@ -176,6 +176,11 @@ function configureApp({ config }) {
     return name !== 'react-native-maps';
   });
 
+  const publicLinks = require('./src/config/publicLinks.generated');
+  const productionLinks = !demo && !localE2e
+    && ['production', 'release-candidate'].includes(process.env.PLANLI_ENV)
+    && process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID === PRODUCTION_PROJECT_ID;
+
   return {
     ...config,
     ...(demo ? { name: 'PlanLi Demo', scheme: demo.packageName,
@@ -198,10 +203,17 @@ function configureApp({ config }) {
     },
     ios: {
       ...config.ios,
+      associatedDomains: productionLinks ? ['applinks:planli.cc'] : [],
       ...(protectedNativeFiles ? { googleServicesFile: protectedNativeFiles.iosPath } : {}),
     },
     android: {
       ...config.android,
+      intentFilters: productionLinks ? [{
+        action: 'VIEW', autoVerify: true, category: ['BROWSABLE', 'DEFAULT'],
+        data: Object.values(publicLinks.paths).map((prefix) => ({
+          scheme: 'https', host: 'planli.cc', pathPrefix: `/${prefix}/`,
+        })),
+      }] : [],
       ...(demo ? { package: demo.packageName, googleServicesFile: demo.nativePath } : {}),
       ...(localE2e ? { package: 'com.planli.planlitravels.e2e',
         googleServicesFile: require('node:path').resolve(__dirname, '../.codex_tmp/android/google-services.json') } : {}),

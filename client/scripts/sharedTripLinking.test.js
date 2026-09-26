@@ -7,7 +7,7 @@ test('server-issued shared-trip paths preserve the token and target', () => {
     const token = `aZ_-${'x'.repeat(length - 4)}`;
     for (const prefix of ['', '/']) {
       assert.deepEqual(sharedTripLinking.getStateFromPath(`${prefix}shared-trip/${token}`), {
-        routes: [{ name: 'SharedTrip', params: { token } }],
+        index: 1, routes: [{ name: 'Main' }, { name: 'SharedTrip', params: { token } }],
       });
     }
   }
@@ -20,5 +20,20 @@ test('untrusted paths cannot select other screens or invoke query decoding', () 
     `shared-trip/${token}#fragment`, `shared-trip/${token}\n`, `shared-trip/${token}%2f`,
     `//shared-trip/${token}`, `shared-trip/${'x'.repeat(100000)}`]) {
     assert.equal(sharedTripLinking.getStateFromPath(path), undefined);
+  }
+});
+
+test('public HTTPS links select the canonical detail screens using identifiers only', () => {
+  for (const [path, name, params] of [
+    ['trip/' + 'x'.repeat(43), 'SharedTrip', { token: 'x'.repeat(43) }],
+    ['route/route-1', 'RouteDetail', { routeId: 'route-1' }],
+    ['recommendation/rec-1', 'RecommendationDetail', { postId: 'rec-1' }],
+  ]) {
+    assert.equal(sharedTripLinking.filter('https://planli.cc/' + path), true);
+    assert.deepEqual(sharedTripLinking.getStateFromPath(path), { index: 1, routes: [{ name: 'Main' }, { name, params }] });
+  }
+  for (const url of ['https://planli.cc.evil.test/route/a', 'https://planli.cc/__/auth/action',
+    'https://planli.cc/admin', 'https://planli.cc/route/a?screen=AdminPanel']) {
+    assert.equal(sharedTripLinking.filter(url), false);
   }
 });

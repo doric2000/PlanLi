@@ -4,6 +4,10 @@ import { StyleSheet } from 'react-native';
 import { colors } from '../../../styles';
 
 export const recommendationDetailStyles = StyleSheet.create({
+  retryButton: {
+    minHeight: 44,
+    padding: 12,
+  },
   screen: {
     flex: 1,
     backgroundColor: colors.appSurface,

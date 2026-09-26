@@ -13,6 +13,7 @@ import { RecommendationHero } from '../../../components/RecommendationHero';
 import RtlHorizontalScrollView from '../../../components/RtlHorizontalScrollView';
 import UsefulFactItem from '../../../components/UsefulFactItem';
 import { auth } from '../../../config/firebase';
+import { shareUrl } from '../../../config/publicLinks.generated';
 import { useAdminClaim } from '../../../hooks/useAdminClaim';
 import { useAuthUser } from '../../../hooks/useAuthUser';
 import { useUserData } from '../../../hooks/useUserData';
@@ -212,9 +213,10 @@ function RouteDetailLoaded({ routeData, navigation, initialCommentsOpen, initial
 
   const editRoute = () => navigation.navigate('AddRoutesScreen', { routeToEdit: routeData });
   const shareRoute = async () => {
-    const message = [routeData?.title, routeData?.description, destinationLabel].filter(Boolean).join('\n\n');
     try {
-      await Share.share({ title: routeData?.title, message });
+      if (routeData?.status !== 'active') throw new Error('Content is unavailable.');
+      const url = shareUrl('route', routeData.id || routeData.routeId);
+      await Share.share({ title: routeData.title, message: `${routeData.title}\n${url}` });
     } catch {
       Alert.alert('השיתוף לא זמין', 'לא הצלחנו לפתוח את אפשרויות השיתוף כרגע.');
     }

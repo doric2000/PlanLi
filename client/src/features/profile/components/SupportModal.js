@@ -5,11 +5,12 @@ import AppText from "../../../components/AppText";
 import { Ionicons } from '@expo/vector-icons';
 
 import { colors, typography, buttons, common } from '../../../styles';
+import { supportEmail } from '../../../config/publicLinks.generated';
 
 const SUPPORT_ITEMS = [
-  { icon: 'mail-outline', text: 'planli.travel.il@gmail.com' },
+  { icon: 'mail-outline', text: supportEmail },
   { icon: 'help-circle-outline', text: 'מענה לשאלות, ערעורים ודיווחי בטיחות' },
-  { icon: 'bug-outline', text: 'דיווח על תקלה: planli.travel.il@gmail.com' },
+  { icon: 'bug-outline', text: `דיווח על תקלה: ${supportEmail}` },
   { icon: 'call-outline', text: '+972 52-535-2725' },
 ];
 

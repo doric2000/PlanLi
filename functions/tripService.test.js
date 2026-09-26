@@ -238,6 +238,8 @@ test('rotating and revoking a private share makes old tokens expiring runtime da
     admin, auth, idempotencyKey: 'test-key', data: { title: 'Share me' },
   });
   const first = await createTripShare({ admin, auth, data: { tripId: created.tripId } });
+  assert.match(first.shareUrl, /^https:\/\/planli\.cc\/trip\/[A-Za-z0-9_-]+$/);
+  assert.equal(first.deepLink, `com.planli.planlitravels://shared-trip/${first.shareUrl.split('/').at(-1)}`);
   const firstToken = first.deepLink.split('/').at(-1);
   const firstHash = shareTokenHash(firstToken);
   await createTripShare({ admin, auth, data: { tripId: created.tripId } });

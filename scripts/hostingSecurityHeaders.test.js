@@ -37,6 +37,7 @@ test('admin Hosting CSP permits only the reCAPTCHA resources required by App Che
     'https://www.gstatic.com/recaptcha/',
   ]);
   assert.deepEqual(directives.get('frame-src'), [
+    "'self'",
     'https://*.firebaseapp.com',
     'https://accounts.google.com',
     'https://www.google.com/recaptcha/',

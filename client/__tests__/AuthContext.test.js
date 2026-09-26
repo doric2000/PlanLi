@@ -50,7 +50,7 @@ const activeDocument = {
   smartProfile: { setupRequired: false, completedAt: { seconds: 1 } },
 };
 
-function Harness() {
+function Harness({ destination = { name: 'LandingPage', params: { cityId: 'tlv' } } }) {
   const {
     status,
     gate,
@@ -70,9 +70,7 @@ function Harness() {
       <Text testID="profile-name">{userDocument?.displayName || ''}</Text>
       <TouchableOpacity
         testID="require-active"
-        onPress={() => requireCapability(CAPABILITIES.ACTIVE, {
-          name: 'LandingPage', params: { cityId: 'tlv' },
-        })}
+        onPress={() => requireCapability(CAPABILITIES.ACTIVE, destination)}
       />
       <TouchableOpacity
         testID="handle-server-auth-error"
@@ -152,6 +150,20 @@ describe('AuthProvider capability gate', () => {
     });
   });
 
+  it.each(['SharedTrip', 'RouteDetail', 'RecommendationDetail'])('keeps a home destination after signing in from %s', async name => {
+    const navigationRef = { isReady: jest.fn(() => true), resetRoot: jest.fn() };
+    const destination = { name, params: { token: 'shared-token' } };
+    const screen = render(<AuthProvider navigationRef={navigationRef}><Harness destination={destination} /></AuthProvider>);
+    fireEvent.press(screen.getByTestId('require-active'));
+    await act(async () => {
+      authListener({ uid: 'user-1', emailVerified: true, providerData: [{ providerId: 'password' }] });
+      profileListener({ exists: () => true, data: () => activeDocument });
+    });
+    await waitFor(() => expect(navigationRef.resetRoot).toHaveBeenCalledWith({
+      index: 1, routes: [{ name: 'Main' }, destination],
+    }));
+  });
+
   it('opens the same central gate for structured server authorization errors', async () => {
     const navigationRef = {
       isReady: jest.fn(() => true),
@@ -165,6 +177,24 @@ describe('AuthProvider capability gate', () => {
     fireEvent.press(screen.getByTestId('handle-server-auth-error'));
     expect(screen.getByTestId('gate-status').props.children)
       .toBe(AUTH_STATES.LEGAL_CONSENT_REQUIRED);
+  });
+
+  it('resumes the pending destination once navigation becomes ready after auth', async () => {
+    const navigationRef = { isReady: jest.fn(() => false), resetRoot: jest.fn(), navigate: jest.fn() };
+    const screen = render(<AuthProvider navigationRef={navigationRef} navigationReady={false}><Harness /></AuthProvider>);
+    fireEvent.press(screen.getByTestId('require-active'));
+    await act(async () => {
+      authListener({ uid: 'user-1', emailVerified: true, providerData: [{ providerId: 'password' }] });
+      profileListener({ exists: () => true, data: () => activeDocument });
+    });
+    await waitFor(() => expect(screen.getByTestId('auth-status').props.children).toBe(AUTH_STATES.READY));
+    expect(navigationRef.resetRoot).not.toHaveBeenCalled();
+    navigationRef.isReady.mockReturnValue(true);
+    screen.rerender(<AuthProvider navigationRef={navigationRef} navigationReady><Harness /></AuthProvider>);
+    await waitFor(() => expect(navigationRef.resetRoot).toHaveBeenCalledWith({
+      index: 0, routes: [{ name: 'LandingPage', params: { cityId: 'tlv' } }],
+    }));
+    expect(navigationRef.resetRoot).toHaveBeenCalledTimes(1);
   });
 
   it('opens registration with the originating public tab as its safe back destination', () => {

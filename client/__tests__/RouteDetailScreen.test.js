@@ -1,4 +1,5 @@
 import React from 'react';
+import { Share } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
 import RouteDetailScreen from '../src/features/roadtrip/screens/RouteDetailScreen';
@@ -38,7 +39,12 @@ jest.mock('../src/components/CommentsModal', () => {
 });
 jest.mock('../src/components/LikesModal', () => () => null);
 jest.mock('../src/components/RecommendationHero', () => ({ RecommendationHero: () => null }));
-jest.mock('../src/components/RecommendationActionBar', () => ({ RecommendationActionBar: () => null }));
+jest.mock('../src/components/RecommendationActionBar', () => {
+  const ReactModule = require('react');
+  const { Pressable, Text } = require('react-native');
+  return { RecommendationActionBar: ({ onSharePress }) => ReactModule.createElement(
+    Pressable, { onPress: onSharePress, accessibilityLabel: 'Share' }, ReactModule.createElement(Text, null, 'Share')) };
+});
 jest.mock('../src/features/moderation/components/ReportButton', () => () => null);
 jest.mock('../src/components/MediaGalleryModal', () => () => null);
 jest.mock('react-native-safe-area-context', () => {
@@ -58,6 +64,7 @@ jest.mock('@expo/vector-icons', () => {
 
 const routeData = {
   id: 'route-1',
+  status: 'active',
   ownerId: 'owner-1',
   title: 'מסלול בצפון',
   description: 'תיאור מסלול',
@@ -90,6 +97,7 @@ const routeData = {
 };
 
 describe('RouteDetailScreen', () => {
+  afterEach(() => jest.restoreAllMocks());
   beforeEach(() => {
     jest.clearAllMocks();
     mockRoutePublishVersion = 0;
@@ -119,6 +127,13 @@ describe('RouteDetailScreen', () => {
     expect(screen.getByTestId('route-day-stops-1')).toBeTruthy();
     expect(screen.getByText('אזור כללי')).toBeTruthy();
     expect(screen.getByText('ללא טיסות')).toBeTruthy();
+  });
+
+  it('shares the public route URL on the custom domain', async () => {
+    const share = jest.spyOn(Share, 'share').mockResolvedValue({ action: Share.sharedAction });
+    const screen = render(<RouteDetailScreen route={{ params: { routeData } }} navigation={{ setOptions: jest.fn() }} />);
+    fireEvent.press(screen.getByLabelText('Share'));
+    await waitFor(() => expect(share).toHaveBeenCalledWith({ title: routeData.title, message: `${routeData.title}\nhttps://planli.cc/route/route-1` }));
   });
 
   it('loads the canonical route and opens the exact comment from an alert', async () => {

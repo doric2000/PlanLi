@@ -28,7 +28,9 @@
     "validate:release": "node scripts/releaseReadiness.js",
     "setup:android": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setupAndroid.ps1",
     "test:android": "node scripts/e2e/run.js",
-    "test:e2e:backend": "node scripts/e2e/run.js --backend-only"
+    "test:e2e:backend": "node scripts/e2e/run.js --backend-only",
+    "sync:public-links": "node scripts/syncPublicLinks.js",
+    "test:public-links": "node --test scripts/publicLinks.test.js scripts/configurePublicAuthDomain.test.js client/scripts/sharedTripLinking.test.js"
   },
   "devDependencies": {
     "patch-package": "^8.0.1"
