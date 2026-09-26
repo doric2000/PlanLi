@@ -117,6 +117,9 @@ function createEasRunner(source, { entry = resolveEasEntry() } = {}) {
     const env = { ...process.env, EAS_NO_VCS: '1', EAS_PROJECT_ROOT: source.sourceRoot,
       PLANLI_EAS_SOURCE_RECORD: source.recordPath, PLANLI_EAS_CLI_ROOT: cliRoot,
       PLANLI_ENV: 'production', EXPO_NO_DOTENV: '1', CI: '1',
+      // CLI 22.6's update fingerprint path omits server env. Keep this public
+      // identity available when app.config.js scopes production app links.
+      EXPO_PUBLIC_FIREBASE_PROJECT_ID: 'planli-f0b12',
       NODE_OPTIONS: `--max-old-space-size=2048 --require ${JSON.stringify(path.join(__dirname, 'easArchiveHook.js').replace(/\\/g, '/'))}`,
       PATH: path.join(source.repoRoot, 'client/node_modules/.bin') + path.delimiter + process.env.PATH };
     // Argument array, without a shell: spaces and punctuation in messages are data.

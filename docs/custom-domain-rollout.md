@@ -251,6 +251,14 @@ link acceptance, successful end-to-end OAuth login and verification-email delive
 remain unverified. Play privacy and account-deletion URL changes are in review;
 App Store 1.1.3 remains a draft with canonical URLs.
 
+The shared-trip recovery/safe-area correction was published as iOS production OTA
+`f54aca26-f3fa-4015-afc6-b733f179cff3` at `2026-09-26T12:26:59.989Z`, source
+`2aab25fe0b685a2a13871f95f82bc66859372f7a`, runtime 1.4.0 for installed 1.1.3 (34).
+Exact native compatibility, immutable bundle equality and delivery from the public
+production endpoint passed. Device download/application and cold-link acceptance
+after this OTA remain unverified; the existing Firebase email-action limitation
+above is unchanged.
+
 ### Firebase support handoff (prepared; not sent)
 
 Project `planli-f0b12` (number `633543026638`) has a verified custom Auth mail

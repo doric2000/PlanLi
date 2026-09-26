@@ -24,6 +24,22 @@ hash-bound LF normalization for that plist. The older baseline's junction/CRLF
 behavior remains the default. No dependency upgrade or fingerprint exception is
 introduced; publication still requires the installed build's exact fingerprint.
 
+That archive then matched build 34 exactly. The first uploaded candidate
+`e48a6ecc-0f25-44d5-996c-794787b772c8` was withheld: CLI 22.6 passed `env: undefined`
+to its update fingerprint calculation. The only hashed difference was the Expo
+configuration losing the production Associated Domains/intent filters because
+`EXPO_PUBLIC_FIREBASE_PROJECT_ID` was absent in the parent environment. The
+guarded runner now pins that public production identity before CLI startup;
+server production variables still supply the exported bundle. No SDK, native
+configuration or fingerprint allowlist was changed.
+
+Reusing the same blob-verified archive through the tracked candidate/release
+functions, with every account, lineage, native and artifact check enabled,
+produced candidate `2a90c1c7-69f4-4677-b587-80bd85732579`. Its fingerprint matches
+the installed build exactly both before and after upload. Production group
+`f54aca26-f3fa-4015-afc6-b733f179cff3` has the identical launch bundle and was
+independently served by the public production endpoint on September 26.
+
 ## Android demo metadata review for the iOS map OTA (2026-09-20)
 
 Merged PR #423 added only the `android-demo` build profile to `client/eas.json`.
