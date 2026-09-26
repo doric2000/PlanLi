@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { execFileSync } = require('node:child_process');
-const { nativeMetadataBytes, prepareSource, verifySource } = require('./easReleaseSource');
+const { nativeMetadataBytes, prepareSource, verifySource, createEasRunner } = require('./easReleaseSource');
 const { fixture } = require('./testFixtures/easRelease');
 const sha1 = b => crypto.createHash('sha1').update(b).digest('hex');
 
@@ -39,6 +39,14 @@ test('a tracked Git archive excludes unrelated root config and detects source ta
   assert.equal(fs.readFileSync(path.join(source.sourceRoot, 'client/.gitignore'), 'utf8'), 'node_modules/\r\n');
   assert.equal(fs.readFileSync(path.join(source.sourceRoot, 'client/example.txt'), 'utf8'), 'unchanged\r\n');
   assert.equal(verifySource(source).trackedFiles, 6);
+  // Exercise the real subprocess environment without contacting EAS. The fake
+  // CLI reads only these public values; it is outside the tracked archive.
+  const fakeCli = path.join(f.root, 'fake-cli');
+  fs.mkdirSync(path.join(fakeCli, 'bin'), { recursive: true });
+  fs.writeFileSync(path.join(fakeCli, 'package.json'), JSON.stringify({ version: '22.6.0' }));
+  const entry = path.join(fakeCli, 'bin/read-env.js');
+  fs.writeFileSync(entry, 'console.log(JSON.stringify({ project: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID, environment: process.env.PLANLI_ENV }));');
+  assert.deepEqual(JSON.parse(createEasRunner(source, { entry })([])), { project: 'planli-f0b12', environment: 'production' });
   const lfEas = Buffer.from(fs.readFileSync(path.join(f.root, 'client/eas.json'), 'utf8').replace(/\r\n/g, '\n'));
   const localBaseline = { ...baseline, dependencyLayout: 'local-copy', metadataLfSha1: { 'client/eas.json': sha1(lfEas) } };
   const local = prepareSource({ repoRoot: f.root, baseline: localBaseline });

@@ -145,7 +145,7 @@ Play privacy (`https://planli.cc/privacy/`) and Data Safety account-deletion
   No public App Review submission was made. Both original builds also used source
   `1eae24c`. Older baseline/release sections below are historical.
 
-#### Shared-trip first-open correction (2026-09-26; pending release)
+#### Shared-trip first-open correction (2026-09-26; iOS OTA published)
 
 The shared-trip error screen omitted safe-area insets and reported every unknown
 read failure as an unavailable link. The owner reproduced this in build 34.
@@ -161,8 +161,21 @@ insets, not physical iOS. Corrected behavior on the installed iPhone is unverifi
 PR #431 merged as `b763f9e2a7318110b7476bf409e053f0e0eccb9c`; release readiness
 passed 91 client test suites / 672 tests, baseline tests and the focused runtime
 proof. CI and final review passed. The initial OTA preflight stopped before upload
-on an archive/build fingerprint mismatch. Dependency layout and plist line-ending
-normalization are being aligned to build 34; no corrected OTA is live yet.
+on an archive/build fingerprint mismatch; PR #432 aligned dependency layout and
+plist line endings. A later candidate was also withheld because EAS CLI 22.6 did
+not forward the production Firebase project to its update fingerprint calculation.
+Supplying that public project identity before CLI startup restored exact parity.
+
+The correction is now published for installed TestFlight **1.1.3 (34)**:
+source `2aab25fe0b685a2a13871f95f82bc66859372f7a`, iOS production/runtime **1.4.0**,
+OTA group `f54aca26-f3fa-4015-afc6-b733f179cff3`, published at
+`2026-09-26T12:26:59.989Z`. The candidate and production bundles are byte-identical,
+and native fingerprint `976661b4a04d2165ecd571430564b16b5f86fc13` exactly matches
+build 34 before and after publication. The public production update endpoint
+independently served the expected update at `2026-09-26T12:27:40.177Z`.
+Device download/application and post-update cold-link behavior remain unverified.
+No new native build, store submission, Android update, Hosting or backend release
+accompanied this correction. The release record below contains immutable IDs/hash.
 
 ### Public store links on the landing page (2026-09-21)
 
@@ -5932,3 +5945,16 @@ part of this follow-up.
 - Verified staging candidate: `3e6d504d-70e0-41f4-b4da-204261658fba`; identical local/staging/production bundle. Public-channel delivery verified at `2026-09-21T18:39:38.714Z`.
 - Validation/review: 940 related client tests, 21 helper/config checks, 42 guard tests, final 41 focused tests, Web layout/marker proof and passing PR checks. Expo Doctor patch recommendations remain unresolved; see current status.
 - Rollback: republish iOS group `24b4da73-475d-40cb-856b-e361b90bcb13`.
+
+## iOS production OTA release
+
+- Source commit: `2aab25fe0b685a2a13871f95f82bc66859372f7a`.
+- EAS Update group: `f54aca26-f3fa-4015-afc6-b733f179cff3`; channel `production`; runtime `1.4.0`.
+- EAS environment: `production`; published at `2026-09-26T12:26:59.989Z`.
+- Immutable iOS launch bundle: update `01a0ddae-de15-73dc-ad57-85554e7713ad`; 10983256 bytes; SHA-256 `0ACA2AB7EDDE0E4F760E1C06CA9BBF01E723D290AC7F984A58B69D5F48F48CCF`.
+- Message: Fix shared trip first-open recovery and iPhone safe areas
+- Target binary: owner-confirmed TestFlight `1.1.3 (34)`, EAS build `1ff27c70-6a66-4daf-b58d-bb8a3d092091`; no new binary/submission.
+- Verified staging candidate: `2a90c1c7-69f4-4677-b587-80bd85732579`; identical production bundle and exact installed native fingerprint.
+- Public production endpoint verified at `2026-09-26T12:27:40.177Z`.
+- Device application and post-update security smoke tests: pending.
+- Rollback: no previous ios OTA; an authorized rollback must target the embedded build for runtime 1.4.0.
