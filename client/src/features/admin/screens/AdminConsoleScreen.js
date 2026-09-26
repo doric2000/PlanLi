@@ -49,6 +49,11 @@ export default function AdminConsoleScreen({ navigation, route }) {
   const [section, setSection] = useState(initialSection);
   const [queueView, setQueueView] = useState(routeParams.tab === 'content' ? 'held' : 'needs_action');
   const [focusCaseId, setFocusCaseId] = useState(typeof routeParams.caseId === 'string' ? routeParams.caseId : '');
+  const [focusHeldTarget, setFocusHeldTarget] = useState(
+    typeof routeParams.contentType === 'string' && typeof routeParams.targetId === 'string'
+      ? { type: routeParams.contentType, id: routeParams.targetId }
+      : null
+  );
   const [focusDestination, setFocusDestination] = useState({
     countryId: typeof routeParams.countryId === 'string' ? routeParams.countryId : '',
     cityId: typeof routeParams.cityId === 'string' ? routeParams.cityId : '',
@@ -82,13 +87,16 @@ export default function AdminConsoleScreen({ navigation, route }) {
     loadCompatibility();
   }, [adminLoading, isAdmin, loadCompatibility]);
   useEffect(() => {
-    if (!routeParams.tab && !routeParams.caseId && !(routeParams.countryId && routeParams.cityId)) return;
+    if (!routeParams.tab && !routeParams.caseId && !routeParams.targetId && !(routeParams.countryId && routeParams.cityId)) return;
     const nextSection = requestedSection(routeParams);
     setSection(nextSection);
     if (routeParams.tab === 'content') setQueueView('held');
     if (typeof routeParams.caseId === 'string') setFocusCaseId(routeParams.caseId);
+    if (typeof routeParams.contentType === 'string' && typeof routeParams.targetId === 'string') {
+      setFocusHeldTarget({ type: routeParams.contentType, id: routeParams.targetId });
+    }
     if (routeParams.countryId && routeParams.cityId) setFocusDestination({ countryId: routeParams.countryId, cityId: routeParams.cityId });
-  }, [routeParams.caseId, routeParams.cityId, routeParams.countryId, routeParams.tab]);
+  }, [routeParams.caseId, routeParams.cityId, routeParams.contentType, routeParams.countryId, routeParams.tab, routeParams.targetId]);
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof window === 'undefined' || !isAdmin) return undefined;
     let timer;
@@ -105,7 +113,8 @@ export default function AdminConsoleScreen({ navigation, route }) {
     setFocusUserUid('');
     setFocusDestination({ countryId: '', cityId: '' });
     setReturnCaseId('');
-    navigation.setParams?.({ tab: undefined, caseId: undefined, countryId: undefined, cityId: undefined });
+    setFocusHeldTarget(null);
+    navigation.setParams?.({ tab: undefined, caseId: undefined, contentType: undefined, targetId: undefined, countryId: undefined, cityId: undefined });
   };
   const navigate = (nextSection, params = {}) => {
     clearLinkedContext();
@@ -148,7 +157,7 @@ export default function AdminConsoleScreen({ navigation, route }) {
   const body = section === 'overview'
     ? <AdminOverviewSection onNavigate={navigate} />
     : section === 'queue'
-      ? <ModerationQueueSection policy={compatibility.policy} initialView={queueView} focusCaseId={focusCaseId} onFocusHandled={() => { setFocusCaseId(''); navigation.setParams?.({ caseId: undefined }); }} onOpenUser={(uid, caseId) => { setFocusDestination({ countryId: '', cityId: '' }); setFocusUserUid(uid); setReturnCaseId(caseId || ''); setSection('users'); }} onOpenDestination={(destination, caseId) => { setFocusUserUid(''); setFocusDestination({ countryId: destination.countryId, cityId: destination.cityId }); setReturnCaseId(caseId || ''); setSection('destinations'); }} />
+      ? <ModerationQueueSection policy={compatibility.policy} initialView={queueView} focusCaseId={focusCaseId} focusHeldTarget={focusHeldTarget} onFocusHandled={() => { setFocusCaseId(''); navigation.setParams?.({ caseId: undefined }); }} onHeldFocusHandled={() => { setFocusHeldTarget(null); navigation.setParams?.({ contentType: undefined, targetId: undefined }); }} onOpenUser={(uid, caseId) => { setFocusDestination({ countryId: '', cityId: '' }); setFocusUserUid(uid); setReturnCaseId(caseId || ''); setSection('users'); }} onOpenDestination={(destination, caseId) => { setFocusUserUid(''); setFocusDestination({ countryId: destination.countryId, cityId: destination.cityId }); setReturnCaseId(caseId || ''); setSection('destinations'); }} />
       : section === 'search'
         ? <AdminSearchSection policy={compatibility.policy} onOpenCase={(caseId) => { clearLinkedContext(); setFocusCaseId(caseId); setSection('queue'); }} />
         : section === 'destinations'

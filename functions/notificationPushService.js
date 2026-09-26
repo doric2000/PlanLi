@@ -424,15 +424,21 @@ function buildExpoMessage({
   const config = CHANNEL_CONFIG[pushCategory];
   const reply = pushCategory === PUSH_CATEGORIES.COMMENTS && subtype === 'new_reply';
   const likeMilestone = pushCategory === PUSH_CATEGORIES.LIKES && subtype === 'like_milestone';
+  const contentReview = pushCategory === PUSH_CATEGORIES.ADMIN_REPORTS
+    && subtype === 'content_review_required';
   const safeMilestone = Math.max(1, Math.trunc(Number(milestone) || 1));
   return {
     to: token,
     title: likeMilestone
       ? 'אבן דרך חדשה ב-PlanLi'
-      : (reply ? 'תשובה חדשה ב-PlanLi' : config.title),
+      : (reply
+        ? 'תשובה חדשה ב-PlanLi'
+        : contentReview ? 'המלצה חדשה לבדיקה' : config.title),
     body: likeMilestone
       ? `התוכן שלך הגיע ל-${safeMilestone} לייקים.`
-      : (reply ? 'מישהו השיב לתגובה שלך.' : config.body),
+      : (reply
+        ? 'מישהו השיב לתגובה שלך.'
+        : contentReview ? 'המלצה חדשה ממתינה בקונסולת הניהול.' : config.body),
     sound: 'default',
     priority: 'high',
     channelId: config.androidChannelId,

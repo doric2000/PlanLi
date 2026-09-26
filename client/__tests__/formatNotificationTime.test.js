@@ -12,7 +12,10 @@ describe('formatNotificationTime', () => {
     expect(formatNotificationTime(value, now)).toBe(expected);
   });
 
-  it('returns an empty value for an invalid timestamp', () => {
-    expect(formatNotificationTime('not-a-date', now)).toBe('');
+  it('shows an explicit fallback for missing or invalid timestamps', () => {
+    expect(formatNotificationTime('not-a-date', now)).toBe('זמן לא זמין');
+    expect(formatNotificationTime(null, now)).toBe('זמן לא זמין');
+    expect(formatNotificationTime({ toDate: () => { throw new Error('malformed'); } }, now))
+      .toBe('זמן לא זמין');
   });
 });

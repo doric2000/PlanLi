@@ -4,6 +4,7 @@ const { assertRecentTotpAdminAuthentication } = require('./adminAuthorization');
 
 const NOTIFICATION_SCHEMA_VERSION = 2;
 const OWNER_NOTIFICATION_OUTBOX_SCHEMA_VERSION = 1;
+const CONTENT_REVIEW_OUTBOX_SCHEMA_VERSION = 1;
 const NOTIFICATION_CLEANUP_JOB_SCHEMA_VERSION = 1;
 const NOTIFICATION_CHANNELS = Object.freeze(['personal', 'admin']);
 const NOTIFICATION_TYPES = Object.freeze(['like', 'comment', 'system', 'moderation']);
@@ -27,6 +28,7 @@ const NOTIFICATION_SUBTYPES = Object.freeze({
     'report_received',
     'urgent_escalation',
     'destination_review_discovered',
+    'content_review_required',
   ]),
 });
 const TARGET_TYPES = new Set([
@@ -121,6 +123,28 @@ function ownerNotificationOutboxId(subtype, targetPath) {
     fail('invalid-argument', 'Notification target path is invalid.', 'invalid_notification_target');
   }
   return hashId('owner_notice', subtype, path);
+}
+
+function contentReviewOutboxId(targetPath) {
+  const path = typeof targetPath === 'string' ? targetPath.trim() : '';
+  if (!path || path.length > 500) {
+    fail('invalid-argument', 'Notification target path is invalid.', 'invalid_notification_target');
+  }
+  return hashId('content_review_outbox', path);
+}
+
+function contentReviewAdminNotificationId(targetPath) {
+  return hashId('content_review_admin', String(targetPath || '').trim());
+}
+
+function contentReviewOwnerNotificationId(targetPath) {
+  return hashId('content_review_owner', String(targetPath || '').trim());
+}
+
+function contentReviewOutboxRef(db, targetPath) {
+  return db.doc(
+    `system/moderation/contentReviewNotifications/${contentReviewOutboxId(targetPath)}`
+  );
 }
 
 function moderationNotificationId(caseId) {
@@ -259,6 +283,18 @@ function moderationNavigation(caseId) {
   return { action: 'open_moderation_case', caseId: cleanId(caseId, 'caseId') };
 }
 
+function heldContentNavigation(target) {
+  const normalized = canonicalTarget(target);
+  if (!CONTENT_TYPES.has(normalized.type)) {
+    fail('invalid-argument', 'Held-content navigation is invalid.', 'invalid_notification_navigation');
+  }
+  return {
+    action: 'open_held_content',
+    targetType: normalized.type,
+    targetId: normalized.id,
+  };
+}
+
 function sanitizeNavigation(input = {}) {
   const action = String(input.action || '');
   if (action === 'open_operation') return { action, operationId: cleanId(input.operationId, 'operationId') };
@@ -276,6 +312,17 @@ function sanitizeNavigation(input = {}) {
   }
   if (action === 'open_moderation_case') {
     return { action, caseId: cleanId(input.caseId, 'caseId') };
+  }
+  if (action === 'open_held_content') {
+    const targetType = String(input.targetType || '').trim().toLowerCase();
+    if (!CONTENT_TYPES.has(targetType)) {
+      fail('invalid-argument', 'Notification navigation is invalid.', 'invalid_notification_navigation');
+    }
+    return {
+      action,
+      targetType,
+      targetId: cleanId(input.targetId, 'targetId'),
+    };
   }
   if (action === 'open_destination_review') {
     return {
@@ -891,6 +938,114 @@ async function fanoutAdminNotification({
   return deliveries;
 }
 
+function stageContentReviewOutbox({
+  transaction,
+  admin,
+  outboxRef,
+  existingSnapshot,
+  ownerUid,
+  target,
+  data = {},
+  operationId = null,
+  occurredAt = null,
+  version: requestedVersion = null,
+}) {
+  const sanitizedTarget = buildNotificationTarget({ target, data });
+  const previous = existingSnapshot?.exists ? existingSnapshot.data() || {} : {};
+  const previousVersion = Math.max(0, Math.trunc(Number(previous.version) || 0));
+  const version = requestedVersion == null
+    ? previousVersion + 1
+    : cleanActivityVersion(requestedVersion);
+  transaction.set(outboxRef, compactObject({
+    schemaVersion: CONTENT_REVIEW_OUTBOX_SCHEMA_VERSION,
+    type: 'content_review_notification',
+    state: 'ready',
+    version,
+    ownerUid: cleanId(ownerUid, 'ownerUid'),
+    target: sanitizedTarget,
+    operationId: operationId ? cleanId(operationId, 'operationId') : undefined,
+    occurredAt: occurredAt || admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  }));
+  return { outboxId: outboxRef.id, version };
+}
+
+function validContentReviewOutbox(value) {
+  return value?.schemaVersion === CONTENT_REVIEW_OUTBOX_SCHEMA_VERSION
+    && value?.type === 'content_review_notification'
+    && value?.state === 'ready'
+    && Number.isSafeInteger(value?.version)
+    && value.version >= 1
+    && value.version <= 1_000_000_000
+    && typeof value?.ownerUid === 'string'
+    && value.ownerUid.length > 0
+    && value?.target?.type === 'recommendation'
+    && typeof value?.target?.id === 'string'
+    && value.target.path === `recommendations/${value.target.id}`
+    && (!value.operationId || typeof value.operationId === 'string');
+}
+
+async function handleContentReviewOutboxWrite({
+  admin,
+  event,
+  fanoutAdminNotificationImpl = fanoutAdminNotification,
+  upsertNotificationImpl = upsertNotification,
+}) {
+  const before = event?.data?.before?.exists ? event.data.before.data() || {} : null;
+  const after = event?.data?.after?.exists ? event.data.after.data() || {} : null;
+  if (!validContentReviewOutbox(after)) {
+    return { status: 'ignored', reason: 'content_review_outbox_not_ready' };
+  }
+  if (validContentReviewOutbox(before) && before.version >= after.version) {
+    return { status: 'ignored', reason: 'content_review_outbox_unchanged' };
+  }
+
+  const createdAt = after.occurredAt || after.updatedAt;
+  const adminDeliveries = await fanoutAdminNotificationImpl({
+    admin,
+    notificationId: contentReviewAdminNotificationId(after.target.path),
+    activityVersion: after.version,
+    notification: {
+      channel: 'admin',
+      type: 'moderation',
+      subtype: 'content_review_required',
+      priority: 'normal',
+      count: 1,
+      target: after.target,
+      navigation: heldContentNavigation(after.target),
+      createdAt,
+    },
+  });
+
+  let ownerDelivery = null;
+  if (!after.operationId) {
+    ownerDelivery = await upsertNotificationImpl({
+      admin,
+      uid: after.ownerUid,
+      notificationId: contentReviewOwnerNotificationId(after.target.path),
+      activityVersion: after.version,
+      requireExistingUser: true,
+      notification: {
+        channel: 'personal',
+        type: 'system',
+        subtype: 'content_held',
+        priority: 'normal',
+        count: 1,
+        target: after.target,
+        navigation: navigationForTarget(after.target),
+        createdAt,
+      },
+    });
+  }
+
+  return {
+    status: 'delivered',
+    version: after.version,
+    adminDeliveries: Array.isArray(adminDeliveries) ? adminDeliveries.length : 0,
+    ownerDelivery: Boolean(ownerDelivery),
+  };
+}
+
 function validOwnerNotificationOutbox(value) {
   return value?.schemaVersion === OWNER_NOTIFICATION_OUTBOX_SCHEMA_VERSION
     && value?.state === 'ready'
@@ -1303,6 +1458,7 @@ function notificationDeliveryDescriptor({ userId, notificationId, before, after 
 module.exports = {
   BULK_DELETE_LIMIT,
   BULK_READ_LIMIT,
+  CONTENT_REVIEW_OUTBOX_SCHEMA_VERSION,
   LIKE_MILESTONE_STEPS,
   MAX_ACTOR_PREVIEWS,
   MAX_COMMENT_EXCERPT,
@@ -1321,6 +1477,10 @@ module.exports = {
   clearNotifications,
   commentNotificationId,
   completeOwnerNotificationOutbox,
+  contentReviewAdminNotificationId,
+  contentReviewOutboxId,
+  contentReviewOutboxRef,
+  contentReviewOwnerNotificationId,
   createNotificationGeneration,
   deleteNotification,
   destinationNotificationId,
@@ -1328,6 +1488,7 @@ module.exports = {
   detachBlockedActorLikeContributions,
   fanoutAdminNotification,
   groupedLikeNotificationId,
+  handleContentReviewOutboxWrite,
   likeMilestoneAtOrBelow,
   likeMilestoneNotificationId,
   handleOwnerNotificationOutboxWrite,
@@ -1356,8 +1517,10 @@ module.exports = {
   sanitizeNavigation,
   setNotificationRead,
   stageNotificationActivity,
+  stageContentReviewOutbox,
   stageNotificationCleanupJob,
   stageNotificationDelete,
   systemNotificationId,
   upsertNotification,
+  validContentReviewOutbox,
 };

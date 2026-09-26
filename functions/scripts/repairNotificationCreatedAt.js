@@ -7,6 +7,7 @@ const { initializeAdmin } = require('./localCredentials');
 const PROJECT_ID = 'planli-f0b12';
 const DEFAULT_LIMIT = 500;
 const MAX_LIMIT = 1000;
+const SCAN_PAGE_SIZE = 500;
 
 function fail(message) {
   throw new Error(message);
@@ -20,7 +21,7 @@ function optionValue(argv, flag) {
 }
 
 function parseOptions(argv = process.argv.slice(2)) {
-  const known = new Set(['--apply', '--limit', '--fingerprint', '--confirm-project']);
+  const known = new Set(['--apply', '--limit', '--after', '--fingerprint', '--confirm-project']);
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
     const flag = argument.split('=')[0];
@@ -38,6 +39,7 @@ function parseOptions(argv = process.argv.slice(2)) {
   return {
     apply: argv.includes('--apply'),
     limit,
+    after: String(optionValue(argv, '--after') || '').trim(),
     fingerprint: String(optionValue(argv, '--fingerprint') || '').trim(),
     confirmProject: String(optionValue(argv, '--confirm-project') || '').trim(),
   };
@@ -58,11 +60,13 @@ function timestampMillis(value) {
   return Number.isFinite(Number(value)) ? Number(value) : 0;
 }
 
-function repairManifest(records, limit) {
+function repairManifest(records, { limit, after, nextAfter }) {
   return {
     version: 1,
     projectId: PROJECT_ID,
     limit,
+    after,
+    nextAfter,
     records: records.map((snapshot) => ({
       path: snapshot.ref.path,
       createTime: timestampMillis(snapshot.createTime),
@@ -75,44 +79,38 @@ function manifestFingerprint(manifest) {
   return crypto.createHash('sha256').update(JSON.stringify(manifest)).digest('hex');
 }
 
-function assertApplyAllowed({ options, fingerprint, truncated }) {
+function assertApplyAllowed({ options, fingerprint }) {
   if (options.confirmProject !== PROJECT_ID) {
     fail(`Apply refused. Pass --confirm-project=${PROJECT_ID}.`);
   }
   if (!/^[0-9a-f]{64}$/.test(options.fingerprint) || options.fingerprint !== fingerprint) {
     fail('Apply refused. The dry-run fingerprint is missing or no longer matches.');
   }
-  if (truncated) fail('Apply refused because more malformed notifications exist than the selected limit.');
 }
 
-async function loadMalformedNotifications(db, limit) {
-  const adminSnapshot = await db.collection('system/moderation/admins')
-    .where('active', '==', true)
-    .get();
-  const inspected = [];
-  let truncated = false;
-  for (const adminEntry of adminSnapshot.docs) {
-    const remaining = limit + 1 - inspected.length;
-    if (remaining <= 0) {
-      truncated = true;
-      break;
+async function loadMalformedNotifications(db, limit, after = '') {
+  const records = [];
+  let scanned = 0;
+  let cursor = after || null;
+  while (records.length <= limit) {
+    let query = db.collectionGroup('notifications')
+      .orderBy(admin.firestore.FieldPath.documentId())
+      .limit(SCAN_PAGE_SIZE);
+    if (cursor) query = query.startAfter(cursor);
+    const page = await query.get();
+    scanned += page.size;
+    for (const entry of page.docs) {
+      if (hasMalformedCreatedAt(entry.data() || {})) records.push(entry);
+      if (records.length > limit) break;
     }
-    const notifications = await db.collection(`users/${adminEntry.id}/notifications`)
-      .where('channel', '==', 'admin')
-      .limit(remaining)
-      .get();
-    inspected.push(...notifications.docs);
-    if (inspected.length > limit) {
-      truncated = true;
-      break;
-    }
+    if (records.length > limit || page.size < SCAN_PAGE_SIZE) break;
+    cursor = page.docs[page.docs.length - 1];
   }
-  const bounded = inspected.slice(0, limit);
   return {
-    records: bounded.filter((entry) => hasMalformedCreatedAt(entry.data() || {})),
-    truncated,
-    scanned: bounded.length,
-    activeAdmins: adminSnapshot.size,
+    records: records.slice(0, limit),
+    truncated: records.length > limit,
+    scanned,
+    nextAfter: records.length > limit ? records[limit - 1].ref.path : '',
   };
 }
 
@@ -136,21 +134,27 @@ async function repairChunk(db, records) {
 }
 
 async function runNotificationCreatedAtRepair({ db, options }) {
-  const loaded = await loadMalformedNotifications(db, options.limit);
-  const manifest = repairManifest(loaded.records, options.limit);
+  const after = options.after || '';
+  const loaded = await loadMalformedNotifications(db, options.limit, after);
+  const manifest = repairManifest(loaded.records, {
+    limit: options.limit,
+    after,
+    nextAfter: loaded.nextAfter,
+  });
   const fingerprint = manifestFingerprint(manifest);
   const report = {
     mode: options.apply ? 'apply' : 'dry-run',
     projectId: PROJECT_ID,
     scanned: loaded.scanned,
-    activeAdmins: loaded.activeAdmins,
     malformed: loaded.records.length,
     truncated: loaded.truncated,
+    after,
+    nextAfter: loaded.nextAfter,
     fingerprint,
   };
   if (!options.apply) return report;
 
-  assertApplyAllowed({ options, fingerprint, truncated: loaded.truncated });
+  assertApplyAllowed({ options, fingerprint });
   for (let offset = 0; offset < loaded.records.length; offset += 100) {
     await repairChunk(db, loaded.records.slice(offset, offset + 100));
   }
@@ -167,7 +171,9 @@ async function main() {
   const result = await runNotificationCreatedAtRepair({ db: admin.firestore(), options });
   console.log(JSON.stringify(result, null, 2));
   if (!options.apply) {
-    console.log(`DRY RUN ONLY. Apply requires --apply --confirm-project=${PROJECT_ID} --fingerprint=${result.fingerprint}`);
+    const afterArgument = result.after ? ` --after=${result.after}` : '';
+    console.log(`DRY RUN ONLY. Apply requires --apply --confirm-project=${PROJECT_ID}${afterArgument} --fingerprint=${result.fingerprint}`);
+    if (result.nextAfter) console.log(`After applying this page, continue with --after=${result.nextAfter}`);
   }
 }
 
@@ -182,6 +188,7 @@ module.exports = {
   assertApplyAllowed,
   hasMalformedCreatedAt,
   isEmptyPlainObject,
+  loadMalformedNotifications,
   manifestFingerprint,
   parseOptions,
   repairManifest,

@@ -393,7 +393,7 @@ function CaseDetails({ details, loading, error, policy, supportState, actionStat
   );
 }
 
-export default function ModerationQueueSection({ policy, initialView = 'needs_action', focusCaseId = '', onFocusHandled, onOpenUser, onOpenDestination }) {
+export default function ModerationQueueSection({ policy, initialView = 'needs_action', focusCaseId = '', focusHeldTarget = null, onFocusHandled, onHeldFocusHandled, onOpenUser, onOpenDestination }) {
   const { width } = useWindowDimensions();
   const split = width >= 900;
   const [view, setView] = useState(initialView);
@@ -413,6 +413,7 @@ export default function ModerationQueueSection({ policy, initialView = 'needs_ac
   const [actionState, setActionState] = useState({ busy: '', error: '', decisionError: '', success: '', note: '' });
   const [heldDecisionState, setHeldDecisionState] = useState({ busy: false, error: '', success: '' });
   const requestId = useRef(0);
+  const heldFocusRequest = useRef('');
   const heldView = view === 'held';
 
   useEffect(() => { setView(initialView); }, [initialView]);
@@ -517,6 +518,19 @@ export default function ModerationQueueSection({ policy, initialView = 'needs_ac
     if (!focusCaseId) return;
     openCase(focusCaseId).finally(() => onFocusHandled?.());
   }, [focusCaseId, onFocusHandled, openCase]);
+  useEffect(() => {
+    const focusKey = focusHeldTarget?.type && focusHeldTarget?.id
+      ? `${focusHeldTarget.type}:${focusHeldTarget.id}`
+      : '';
+    if (!focusKey) {
+      heldFocusRequest.current = '';
+      return;
+    }
+    if (!heldView || heldFocusRequest.current === focusKey) return;
+    heldFocusRequest.current = focusKey;
+    openHeldContent({ target: focusHeldTarget })
+      .finally(() => onHeldFocusHandled?.());
+  }, [focusHeldTarget, heldView, onHeldFocusHandled, openHeldContent]);
 
   const patchDetails = (value) => {
     setDetails(value);

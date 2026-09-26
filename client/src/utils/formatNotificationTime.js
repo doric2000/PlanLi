@@ -13,20 +13,26 @@
  * @returns {string} Formatted time string
  */
 export function formatNotificationTime(timestamp, now = new Date()) {
-  if (!timestamp) return '';
+  if (!timestamp) return 'זמן לא זמין';
 
   let date;
-  if (timestamp.toDate) {
-    date = timestamp.toDate();
-  } else if (typeof timestamp === 'number') {
-    date = new Date(timestamp);
-  } else if (timestamp instanceof Date) {
-    date = timestamp;
-  } else {
-    date = new Date(timestamp);
+  try {
+    if (timestamp.toDate) {
+      date = timestamp.toDate();
+    } else if (typeof timestamp === 'number') {
+      date = new Date(timestamp);
+    } else if (timestamp instanceof Date) {
+      date = timestamp;
+    } else {
+      date = new Date(timestamp);
+    }
+  } catch (_error) {
+    return 'זמן לא זמין';
   }
 
-  if (Number.isNaN(date.getTime()) || Number.isNaN(now.getTime())) return '';
+  if (!(date instanceof Date) || Number.isNaN(date.getTime()) || Number.isNaN(now.getTime())) {
+    return 'זמן לא זמין';
+  }
 
   const hours = date.getHours().toString().padStart(2, '0');
   const minutes = date.getMinutes().toString().padStart(2, '0');
