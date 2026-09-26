@@ -7,6 +7,22 @@ const { fixture } = require('./testFixtures/easRelease');
 test('candidate command is read-only by default and rejects a skip-native argument', () => {
   assert.deepEqual(parseArgs([]), { apply: false, message: '' });
   assert.throws(() => parseArgs(['--skip-native']), /Unknown candidate argument/);
+  assert.equal(parseArgs(['--source-record', 'source.json']).sourceRecord, 'source.json');
+  assert.throws(() => parseArgs(['--source-record']), /requires a path/);
+  assert.throws(() => parseArgs(['--source-record', '--apply']), /requires a path/);
+});
+
+test('reusing a source still runs native and published-artifact checks', async t => {
+  const f = fixture(t);
+  const originalPrepare = f.dependencies.prepareSource;
+  f.dependencies.prepareSource = ({ sourceRecord }) => {
+    assert.equal(sourceRecord, 'existing-source.json');
+    return { ...originalPrepare(), recordPath: sourceRecord };
+  };
+  const result = await runCandidate({ repoRoot: f.root, args: { apply: true, message: 'Reuse source', sourceRecord: 'existing-source.json' } }, f.dependencies);
+  for (const suffix of ['-native-preflight.json', '-publish.log', '-candidate.json']) t.after(() => fs.rmSync(f.root + suffix, { force: true }));
+  assert.equal(result.sourceRecord, 'existing-source.json');
+  assert.deepEqual(f.calls.filter(c => ['native-local', 'native-preview', 'artifact'].includes(c[0])).map(c => c[0]), ['native-local', 'native-preview', 'artifact']);
 });
 test('dry run computes compatibility without publishing or exporting', async t => {
   const f = fixture(t);

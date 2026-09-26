@@ -68,6 +68,21 @@ test('production dry run checks native compatibility without republishing', asyn
   assert.ok(!f.calls.some(c => c[0] === 'update:republish'));
 });
 
+test('promotion accepts a prepared source without skipping native or artifact verification', async t => {
+  const f = fixture(t);
+  assert.throws(() => parseArgs(['--source-record']), /requires a path/);
+  assert.throws(() => parseArgs(['--source-record', '--apply']), /requires a path/);
+  const args = parseArgs(['--source-record', 'existing-source.json', '--preview-group', f.group, '--message', 'Reuse source']);
+  const originalPrepare = f.dependencies.prepareSource;
+  f.dependencies.prepareSource = ({ sourceRecord }) => {
+    assert.equal(sourceRecord, 'existing-source.json');
+    return { ...originalPrepare(), recordPath: sourceRecord };
+  };
+  const result = await runRelease({ repoRoot: f.root, args }, f.dependencies);
+  assert.equal(result.sourceRecord, 'existing-source.json');
+  assert.deepEqual(f.calls.filter(c => ['native-preview', 'artifact'].includes(c[0])).map(c => c[0]), ['native-preview', 'artifact']);
+});
+
 function configuration() {
   return {
     app: {

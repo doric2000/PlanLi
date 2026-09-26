@@ -15,6 +15,10 @@ function parseArgs(argv) {
     if (argv[i] === '--apply') args.apply = true;
     else if (argv[i] === '--platform') args.platform = releasePlatform(argv[++i] || '');
     else if (argv[i] === '--message') args.message = String(argv[++i] || '');
+    else if (argv[i] === '--source-record') {
+      args.sourceRecord = argv[++i];
+      if (!args.sourceRecord || args.sourceRecord.startsWith('--')) throw new Error('--source-record requires a path.');
+    }
     else throw new Error(`Unknown candidate argument: ${argv[i]}`);
   }
   return args;
@@ -33,7 +37,7 @@ async function runCandidate({ repoRoot, args }, dependencies = {}) {
     validateMessage(args.message);
     preflight({ repoRoot, archive: true, platform, baseline });
   }
-  const source = prepare({ repoRoot, baseline });
+  const source = prepare({ repoRoot, baseline, sourceRecord: args.sourceRecord });
   const app = JSON.parse(fs.readFileSync(path.join(source.sourceRoot, 'client/app.json'), 'utf8')).expo;
   const eas = JSON.parse(fs.readFileSync(path.join(source.sourceRoot, 'client/eas.json'), 'utf8'));
   validateReleaseConfiguration({ app, eas }, platform);
@@ -43,7 +47,7 @@ async function runCandidate({ repoRoot, args }, dependencies = {}) {
   const native = localCheck({ runEas, baseline, sourceRoot: source.sourceRoot });
   const proofPath = source.sourceRoot + '-native-preflight.json';
   fs.writeFileSync(proofPath, JSON.stringify({ ...native, sourceCommit: source.commit, verifiedAt: new Date().toISOString() }, null, 2));
-  if (!args.apply) return { apply: false, sourceCommit: source.commit, native, proofPath };
+  if (!args.apply) return { apply: false, sourceCommit: source.commit, sourceRecord: source.recordPath, native, proofPath };
   // Recheck main/lineage after the potentially slow fingerprint computation.
   preflight({ repoRoot, archive: true, platform, baseline });
   (dependencies.verifySource || verifySource)(source);
@@ -56,7 +60,7 @@ async function runCandidate({ repoRoot, args }, dependencies = {}) {
   const publishedNative = (dependencies.verifyPreviewNative || verifyPreviewNative)({ runEas, baseline, sourceRoot: source.sourceRoot, update: updates[0] });
   if (publishedNative.fingerprint !== native.fingerprint) throw new Error('Fingerprint changed between preflight and candidate publication; do not promote.');
   const artifact = await (dependencies.verifyArtifact || verifyProductionUpdateArtifact)(updates, groupId, undefined, platform);
-  const result = { apply: true, sourceCommit: source.commit, groupId, native, artifact, proofPath };
+  const result = { apply: true, sourceCommit: source.commit, sourceRecord: source.recordPath, groupId, native, artifact, proofPath };
   fs.writeFileSync(source.sourceRoot + '-candidate.json', JSON.stringify(result, null, 2));
   return result;
 }

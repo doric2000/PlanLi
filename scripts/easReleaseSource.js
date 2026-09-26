@@ -10,6 +10,37 @@ function git(repoRoot, args) {
   return execFileSync('git', args, { cwd: repoRoot, encoding: 'utf8', windowsHide: true, maxBuffer: 16 * 1024 * 1024 }).trim();
 }
 
+const digest = value => crypto.createHash('sha256').update(value).digest('hex');
+
+function dependencyLockDigest(root) {
+  return digest(JSON.stringify(['client/package-lock.json', 'client/node_modules/.package-lock.json'].map(file => {
+    const target = path.join(root, file);
+    return [file, fs.existsSync(target) ? fs.readFileSync(target, 'utf8').replace(/\r\n/g, '\n') : null];
+  })));
+}
+
+function reuseSource({ repoRoot, baseline, recordPath }) {
+  const releases = path.join(fs.realpathSync(repoRoot), '.codex_tmp/releases');
+  const absolute = path.resolve(repoRoot, recordPath);
+  if (path.dirname(absolute) !== releases || path.extname(absolute) !== '.json'
+    || fs.realpathSync(absolute) !== absolute) throw new Error('Source record must be a regular file in this repository\'s release directory.');
+  const record = JSON.parse(fs.readFileSync(absolute, 'utf8'));
+  if (record.version !== 1 || record.repoRoot !== fs.realpathSync(repoRoot)
+    || record.sourceRoot + '.json' !== absolute
+    || fs.realpathSync(record.sourceRoot) !== record.sourceRoot) throw new Error('Source record does not belong to this repository/archive.');
+  if (record.baselineDigest !== digest(JSON.stringify(baseline))) throw new Error('Installed native baseline changed; prepare a new source archive.');
+  const dependencies = path.join(record.sourceRoot, 'client/node_modules');
+  if ((baseline.dependencyLayout || 'junction') === 'local-copy' && fs.lstatSync(dependencies).isSymbolicLink()) {
+    throw new Error('Archived dependencies must retain the installed build\'s local-copy layout.');
+  }
+  // Metadata rules come from the reviewed baseline, never from the reusable receipt.
+  const source = { ...record, metadataCrlfSha1: baseline.metadataCrlfSha1,
+    metadataLfSha1: baseline.metadataLfSha1 || {}, recordPath: absolute };
+  verifySource(source);
+  console.error('[EAS source] Reusing verified archive; dependency copy skipped.');
+  return source;
+}
+
 function nativeMetadataBytes(bytes, expectedSha1, file, lineEnding = 'crlf') {
   if (!['lf', 'crlf'].includes(lineEnding)) throw new Error('Unsupported metadata line ending.');
   const text = bytes.toString('utf8');
@@ -26,6 +57,11 @@ function verifySource(record) {
   if (git(repoRoot, ['rev-parse', 'HEAD']) !== commit
     || git(repoRoot, ['status', '--porcelain=v1', '--untracked-files=no'])) {
     throw new Error('Tracked source changed during release preparation.');
+  }
+  if (record.version === 1 && (!record.dependencyLockDigest
+    || dependencyLockDigest(repoRoot) !== record.dependencyLockDigest
+    || dependencyLockDigest(sourceRoot) !== record.dependencyLockDigest)) {
+    throw new Error('Dependency locks changed since source preparation.');
   }
   validateRootConfigFiles(sourceRoot);
   const rows = git(repoRoot, ['ls-tree', '-rz', '--full-tree', commit]).split('\0').filter(Boolean);
@@ -60,7 +96,10 @@ function verifySource(record) {
   return { commit, trackedFiles: rows.length };
 }
 
-function prepareSource({ repoRoot, baseline }) {
+function prepareSource({ repoRoot, baseline, sourceRecord }) {
+  repoRoot = fs.realpathSync(repoRoot);
+  if (sourceRecord) return reuseSource({ repoRoot, baseline, recordPath: sourceRecord });
+  const started = Date.now();
   const dependencyLayout = baseline.dependencyLayout || 'junction';
   if (!['junction', 'local-copy'].includes(dependencyLayout)) throw new Error('Unsupported release dependency layout.');
   const metadataLfSha1 = baseline.metadataLfSha1 || {};
@@ -71,7 +110,7 @@ function prepareSource({ repoRoot, baseline }) {
   // build's fingerprint. This is a Git archive, never another checkout/worktree.
   const releases = path.join(repoRoot, '.codex_tmp/releases');
   fs.mkdirSync(releases, { recursive: true });
-  const sourceRoot = fs.mkdtempSync(path.join(releases, `ios-${commit.slice(0, 12)}-`));
+  const sourceRoot = fs.mkdtempSync(path.join(releases, `${baseline.platform || 'ios'}-${commit.slice(0, 12)}-`));
   const tarPath = sourceRoot + '.tar';
   // Match this installed Windows-source baseline independently of machine-local
   // Git settings. Do not change global/local Git config or the user's checkout.
@@ -89,12 +128,18 @@ function prepareSource({ repoRoot, baseline }) {
   const archivedDependencies = path.join(sourceRoot, 'client/node_modules');
   // Build 34 resolved packages within client/. A junction changes their real paths,
   // autolinking metadata and fingerprint even when dependency bytes are identical.
-  if (dependencyLayout === 'local-copy') fs.cpSync(dependencies, archivedDependencies, { recursive: true, dereference: true, errorOnExist: true, force: false });
+  if (dependencyLayout === 'local-copy') {
+    console.error('[EAS source] Preparing dependency copy once for this release.');
+    fs.cpSync(dependencies, archivedDependencies, { recursive: true, dereference: true, errorOnExist: true, force: false });
+  }
   else fs.symlinkSync(dependencies, archivedDependencies, process.platform === 'win32' ? 'junction' : 'dir');
-  const record = { repoRoot, sourceRoot, commit, metadataCrlfSha1: baseline.metadataCrlfSha1, metadataLfSha1 };
+  const record = { version: 1, repoRoot, sourceRoot, commit,
+    baselineDigest: digest(JSON.stringify(baseline)), dependencyLockDigest: dependencyLockDigest(repoRoot),
+    metadataCrlfSha1: baseline.metadataCrlfSha1, metadataLfSha1 };
   const recordPath = sourceRoot + '.json';
   fs.writeFileSync(recordPath, JSON.stringify(record, null, 2));
   verifySource(record);
+  console.error(`[EAS source] Prepared and verified in ${Math.round((Date.now() - started) / 1000)}s.`);
   return { ...record, recordPath };
 }
 
@@ -123,9 +168,14 @@ function createEasRunner(source, { entry = resolveEasEntry() } = {}) {
       NODE_OPTIONS: `--max-old-space-size=2048 --require ${JSON.stringify(path.join(__dirname, 'easArchiveHook.js').replace(/\\/g, '/'))}`,
       PATH: path.join(source.repoRoot, 'client/node_modules/.bin') + path.delimiter + process.env.PATH };
     // Argument array, without a shell: spaces and punctuation in messages are data.
-    return execFileSync(process.execPath, [entry, ...args], { cwd: path.join(source.sourceRoot, 'client'),
-      windowsHide: true, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024,
-      stdio: ['ignore', 'pipe', 'inherit'], env });
+    const started = Date.now();
+    const label = args[0] || 'command'; // Never print environment, credentials or argument values.
+    console.error(`[EAS] ${label} started.`);
+    try {
+      return execFileSync(process.execPath, [entry, ...args], { cwd: path.join(source.sourceRoot, 'client'),
+        windowsHide: true, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024,
+        stdio: ['ignore', 'pipe', 'inherit'], env });
+    } finally { console.error(`[EAS] ${label} finished in ${Math.round((Date.now() - started) / 1000)}s.`); }
   };
 }
 
