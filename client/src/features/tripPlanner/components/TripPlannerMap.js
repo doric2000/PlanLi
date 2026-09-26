@@ -9,6 +9,7 @@ import { coordinatesForStop, regionForStops, routeCoordinates } from '../utils/t
 import { tripMapCamera } from '../utils/tripMapCamera';
 import RouteStopMarker, { ROUTE_STOP_MARKER_ANCHOR, COMPACT_ROUTE_STOP_MARKER_ANCHOR } from '../../roadtrip/components/RouteStopMarker';
 import { getRecommendationImageUrls } from '../../../utils/mediaAssets';
+import { getMapDashPolicy } from '../../../utils/mapPolyline';
 
 export default function TripPlannerMap({
   stops = [], route, selectedStopId, onSelectStop, onRegionChange, onMapPress, onReady, style,
@@ -28,6 +29,10 @@ export default function TripPlannerMap({
   const points = useMemo(() => stops.map(coordinatesForStop).filter(Boolean), [stops]);
   const viewportRegion = useMemo(() => regionForStops(stops), [stops]);
   const line = useMemo(() => routeCoordinates(route, stops), [route, stops]);
+  const hasComputedRoute = !!route?.segments?.length;
+  const dashPolicy = useMemo(() => getMapDashPolicy(
+    [line], hasComputedRoute ? undefined : [7, 7], Platform.OS
+  ), [line, hasComputedRoute]);
   const camera = layout ? tripMapCamera(viewportRegion, layout) : null;
   const cameraKey = JSON.stringify(camera);
   const cameraRef = useRef(null);
@@ -130,10 +135,11 @@ export default function TripPlannerMap({
     >
       {(!deferOverlaysUntilLoaded || overlaysReady) && line.length > 1 ? (
         <Polyline
+          key={`${hasComputedRoute ? 'computed' : 'fallback'}:${dashPolicy.key}`}
           coordinates={line}
           strokeColor={colors.primary}
           strokeWidth={4}
-          lineDashPattern={route?.segments?.length ? undefined : [7, 7]}
+          lineDashPattern={dashPolicy.lineDashPattern}
         />
       ) : null}
       {(!deferOverlaysUntilLoaded || overlaysReady) && stops.map((stop, index) => {

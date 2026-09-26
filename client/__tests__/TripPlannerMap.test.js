@@ -1,9 +1,11 @@
 import React from 'react';
 import { fireEvent, render } from '@testing-library/react-native';
-import { StyleSheet } from 'react-native';
+import { Platform, StyleSheet } from 'react-native';
 
 const mockSetCamera = jest.fn();
 const mockBreadcrumb = jest.fn();
+const mockMapMount = jest.fn();
+const mockLineMount = jest.fn();
 jest.mock('../src/components/CachedImage', () => {
   const { View } = require('react-native');
   return (props) => <View {...props} testID="marker-thumbnail" />;
@@ -19,11 +21,15 @@ jest.mock('react-native-maps', () => {
   return {
     __esModule: true,
     default: ReactModule.forwardRef(({ children, ...props }, ref) => {
+      ReactModule.useEffect(() => { mockMapMount(); }, []);
       ReactModule.useImperativeHandle(ref, () => ({ setCamera: mockSetCamera }));
       return ReactModule.createElement(View, { ...props, testID: 'trip-map' }, children);
     }),
     Marker: (props) => ReactModule.createElement(View, { ...props, testID: props.testID }),
-    Polyline: (props) => ReactModule.createElement(View, { ...props, testID: 'trip-route-line' }),
+    Polyline: (props) => {
+      ReactModule.useEffect(() => { mockLineMount(); }, []);
+      return ReactModule.createElement(View, { ...props, testID: 'trip-route-line' });
+    },
     PROVIDER_GOOGLE: 'google',
   };
 });
@@ -41,6 +47,8 @@ const nativeReady = (screen) => fireEvent(screen.getByTestId('trip-map'), 'mapRe
 const load = (screen) => fireEvent(screen.getByTestId('trip-map'), 'mapLoaded');
 
 beforeEach(() => jest.clearAllMocks());
+const originalPlatform = Platform.OS;
+afterEach(() => { Platform.OS = originalPlatform; jest.useRealTimers(); });
 
 test('mounts Google in a measured non-collapsible host with a finite camera', () => {
   const screen = render(<TripPlannerMap stops={stops} interactive={false} />);
@@ -220,4 +228,61 @@ test('inline previews use the same compact numbered pins as Roadtrip previews', 
   measureHost(screen);
   expect(screen.getByTestId('trip-map-marker-one').props.anchor).toEqual({ x: 0.5, y: 39 / 50 });
   expect(StyleSheet.flatten(screen.getByTestId('route-stop-marker-1').props.style)).toMatchObject({ width: 44, height: 50 });
+});
+
+const longStops = [0, 4, 8].map((latitude, index) => ({
+  id: `long-${index}`, title: `Stop ${index + 1}`, coordinates: { lat: latitude, lng: 0 },
+}));
+
+test.each([false, true])('keeps a long fallback safe while route data is unavailable (interactive=%s)', (interactive) => {
+  Platform.OS = 'ios';
+  jest.useFakeTimers();
+  const select = jest.fn();
+  const screen = render(<TripPlannerMap stops={longStops} interactive={interactive} onSelectStop={select} deferOverlaysUntilLoaded />);
+  measureHost(screen); measureNative(screen); nativeReady(screen);
+  expect(screen.queryByTestId('trip-route-line')).toBeNull();
+  load(screen);
+  const line = screen.getByTestId('trip-route-line');
+  expect(line.props.lineDashPattern[0]).toBeGreaterThan(1700);
+  expect(line.props.coordinates).toHaveLength(3);
+  jest.advanceTimersByTime(60000);
+  fireEvent.press(screen.getByTestId('trip-map-marker-long-2'));
+  expect(select).toHaveBeenCalledWith('long-2');
+  expect(mockLineMount).toHaveBeenCalledTimes(1);
+  expect(mockMapMount).toHaveBeenCalledTimes(1);
+});
+
+test('replaces only the line for short-to-long, computed, and fallback transitions', () => {
+  Platform.OS = 'ios';
+  const ready = jest.fn();
+  const screen = render(<TripPlannerMap stops={stops} onReady={ready} deferOverlaysUntilLoaded />);
+  measureHost(screen); measureNative(screen); nativeReady(screen); load(screen);
+  expect(screen.getByTestId('trip-route-line').props.lineDashPattern).toEqual([7, 7]);
+  expect(mockLineMount).toHaveBeenCalledTimes(1);
+
+  screen.rerender(<TripPlannerMap stops={longStops} onReady={ready} deferOverlaysUntilLoaded />);
+  expect(mockLineMount).toHaveBeenCalledTimes(2);
+  const longPattern = screen.getByTestId('trip-route-line').props.lineDashPattern;
+  expect(longPattern[0]).toBeGreaterThan(1700);
+
+  // A delayed driving route arrives after tiles have loaded.
+  const computed = { segments: [{ encodedPolyline: '_p~iF~ps|U_ulLnnqC_mqNvxq`@' }] };
+  screen.rerender(<TripPlannerMap stops={longStops} route={computed} onReady={ready} deferOverlaysUntilLoaded />);
+  expect(screen.getByTestId('trip-route-line').props.lineDashPattern).toBeUndefined();
+  expect(mockLineMount).toHaveBeenCalledTimes(3);
+  screen.rerender(<TripPlannerMap stops={longStops} onReady={ready} deferOverlaysUntilLoaded />);
+  expect(screen.getByTestId('trip-route-line').props.lineDashPattern).toEqual(longPattern);
+  expect(mockLineMount).toHaveBeenCalledTimes(4);
+  expect(mockMapMount).toHaveBeenCalledTimes(1);
+  expect(ready).toHaveBeenCalledTimes(1);
+
+  screen.rerender(<TripPlannerMap stops={longStops} selectedStopId="long-1" onReady={ready} deferOverlaysUntilLoaded />);
+  expect(mockLineMount).toHaveBeenCalledTimes(4);
+});
+
+test('retains Android dash spacing even for long fallback routes', () => {
+  Platform.OS = 'android';
+  const screen = render(<TripPlannerMap stops={longStops} />);
+  measureHost(screen);
+  expect(screen.getByTestId('trip-route-line').props.lineDashPattern).toEqual([7, 7]);
 });
