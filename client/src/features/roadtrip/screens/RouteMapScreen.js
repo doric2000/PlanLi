@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Modal, Pressable, ScrollView, TouchableOpacity, View } from 'react-native';
+import { Alert, Modal, Platform, Pressable, ScrollView, TouchableOpacity, View } from 'react-native';
 import AppText from '../../../components/AppText';
 import MapView, { Circle, Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -11,6 +11,7 @@ import RouteStopMarker, { ROUTE_STOP_MARKER_ANCHOR } from '../components/RouteSt
 import { USER_MAP_ZOOM } from '../../../config/mapConfig';
 import { useLiveUserLocation } from '../../../hooks/useLiveUserLocation';
 import { getMediaVariantUrl } from '../../../utils/mediaAssets';
+import { getMapDashPolicy } from '../../../utils/mapPolyline';
 import {
   buildGoogleMapsDaySegments,
   buildRouteMapSegments,
@@ -50,6 +51,13 @@ export default function RouteMapScreen({ route, navigation }) {
     routeData,
     selectedDay === ALL_DAYS ? null : selectedDay
   ), [routeData, selectedDay]);
+  const mapLines = useMemo(() => mapSegments.filter((segment) => segment.coordinates.length > 1).map((segment) => ({
+    id: segment.id,
+    coordinates: segment.coordinates.map(({ lat, lng }) => ({ latitude: lat, longitude: lng })),
+  })), [mapSegments]);
+  const dashPolicy = useMemo(() => getMapDashPolicy(
+    mapLines.map((line) => line.coordinates), [8, 7], Platform.OS
+  ), [mapLines]);
   const dayDirections = useMemo(() => selectedDay === ALL_DAYS
     ? []
     : buildGoogleMapsDaySegments(routeData, selectedDay), [routeData, selectedDay]);
@@ -216,13 +224,13 @@ export default function RouteMapScreen({ route, navigation }) {
               />
             )}
 
-            {mapSegments.filter((segment) => segment.coordinates.length > 1).map((segment) => (
+            {mapLines.map((segment) => (
               <Polyline
-                key={segment.id}
-                coordinates={segment.coordinates.map((coordinates) => ({ latitude: coordinates.lat, longitude: coordinates.lng }))}
+                key={`${segment.id}:${dashPolicy.key}`}
+                coordinates={segment.coordinates}
                 strokeColor={colors.primary}
                 strokeWidth={3}
-                lineDashPattern={[8, 7]}
+                lineDashPattern={dashPolicy.lineDashPattern}
                 testID={`map-route-line-${segment.id}`}
               />
             ))}

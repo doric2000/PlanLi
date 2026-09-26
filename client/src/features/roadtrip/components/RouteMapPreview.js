@@ -1,10 +1,11 @@
 import React, { useMemo } from 'react';
-import { TouchableOpacity, View } from 'react-native';
+import { Platform, TouchableOpacity, View } from 'react-native';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
 
 import AppText from '../../../components/AppText';
 import NavigationChevron from '../../../components/NavigationChevron';
+import { getMapDashPolicy } from '../../../utils/mapPolyline';
 import { colors, routeMapPreviewStyles as styles } from '../../../styles';
 import {
   getRouteInitialRegion,
@@ -19,6 +20,13 @@ export default function RouteMapPreview({ stops, onPress, hiddenStopCount = 0 })
   const routeStops = useMemo(() => allStops.filter(hasValidStopLocation), [allStops]);
   const visibleStops = routeStops.slice(0, 12);
   const segments = useMemo(() => splitContiguousMappableStops(allStops), [allStops]);
+  const lines = useMemo(() => segments.filter((segment) => segment.length > 1).map((segment) => (
+    segment.map((stop) => {
+      const coordinates = getStopCoordinates(stop);
+      return { latitude: coordinates.lat, longitude: coordinates.lng };
+    })
+  )), [segments]);
+  const dashPolicy = useMemo(() => getMapDashPolicy(lines, [7, 7], Platform.OS), [lines]);
   const region = useMemo(() => getRouteInitialRegion(routeStops), [routeStops]);
   const extraMarkerCount = Math.max(0, routeStops.length - visibleStops.length);
   const preciseLabel = routeStops.length === 1 ? 'נקודה מדויקת אחת' : `${routeStops.length} נקודות מדויקות`;
@@ -38,16 +46,13 @@ export default function RouteMapPreview({ stops, onPress, hiddenStopCount = 0 })
           pitchEnabled={false}
           toolbarEnabled={false}
         >
-          {segments.filter((segment) => segment.length > 1).map((segment, index) => (
+          {lines.map((coordinates, index) => (
             <Polyline
-              key={`preview-segment-${index}`}
-              coordinates={segment.map((stop) => {
-                const coordinates = getStopCoordinates(stop);
-                return { latitude: coordinates.lat, longitude: coordinates.lng };
-              })}
+              key={`preview-segment-${index}:${dashPolicy.key}`}
+              coordinates={coordinates}
               strokeColor={colors.primary}
               strokeWidth={3}
-              lineDashPattern={[7, 7]}
+              lineDashPattern={dashPolicy.lineDashPattern}
             />
           ))}
           {visibleStops.map((stop) => {

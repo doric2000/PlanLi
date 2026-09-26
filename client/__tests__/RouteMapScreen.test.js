@@ -1,10 +1,12 @@
 import React from 'react';
-import { StyleSheet } from 'react-native';
+import { Platform, StyleSheet } from 'react-native';
 import { act, fireEvent, render } from '@testing-library/react-native';
 
 import RouteMapScreen from '../src/features/roadtrip/screens/RouteMapScreen';
 
 const mockStartTracking = jest.fn(() => Promise.resolve(null));
+const originalPlatform = Platform.OS;
+afterEach(() => { Platform.OS = originalPlatform; });
 
 jest.mock('react-native-maps');
 
@@ -131,5 +133,33 @@ describe('RouteMapScreen', () => {
     expect(screen.getByTestId('route-map-unavailable')).toBeTruthy();
     fireEvent.press(screen.getByLabelText('חזרה למסלול'));
     expect(navigation.goBack).toHaveBeenCalled();
+  });
+
+  it.each(['ios', 'android'])('budgets all visible days together on %s', async (platform) => {
+    Platform.OS = platform;
+    const longRoute = {
+      title: 'Synthetic long route',
+      days: [0, 1].map((day) => ({ stops: [0, 4, 8].map((lat, index) => ({
+        id: `${day}-${index}`, title: `Stop ${index + 1}`, coordinates: { lat, lng: day },
+      })) })),
+    };
+    const screen = render(<RouteMapScreen route={{ params: { routeData: longRoute } }} navigation={{ goBack: jest.fn() }} />);
+    await act(async () => {});
+    const singleDayPattern = screen.getByTestId('map-route-line').props.lineDashPattern;
+    fireEvent.press(screen.getByTestId('route-map-all-days'));
+    const lines = screen.getAllByTestId('map-route-line');
+    expect(lines).toHaveLength(2);
+    expect(lines.map((line) => line.props.coordinates.length)).toEqual([3, 3]);
+    if (platform === 'ios') {
+      const pattern = lines[0].props.lineDashPattern;
+      expect(pattern[1]).toBeGreaterThan(singleDayPattern[1]);
+      expect(lines[1].props.lineDashPattern).toEqual(pattern);
+      expect(2 * Math.ceil(891000 / Math.min(...pattern))).toBeLessThanOrEqual(512);
+    } else {
+      lines.forEach((line) => expect(line.props.lineDashPattern).toEqual([8, 7]));
+    }
+    expect(screen.getByTestId('route-map-marker-2-3')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('route-map-day-0'));
+    expect(screen.getByTestId('map-route-line').props.lineDashPattern).toEqual(singleDayPattern);
   });
 });
