@@ -25,6 +25,38 @@ The existing Text Search quota remains zero. See
 
 ## Current environment status
 
+### Notification timestamp and held-review rollout (2026-09-27, deployed)
+
+Under explicit production authorization, the notification backend from merged PR
+[#439](https://github.com/doric2000/PlanLi/pull/439) was deployed from clean
+`main` source `51c8fe8a33c80c6d092d0ae4d97c6c1e733e2ca0` to project
+`planli-f0b12`. Between `2026-09-26T22:00:00Z` and
+`2026-09-26T22:00:28.749Z`, 18 exact Node.js 22 Functions in
+`europe-west1` became `ACTIVE`: `saveRecommendation`,
+`publishRecommendationDraft`, `onBackgroundOperationWritten`,
+`maintainBackgroundOperationsScheduled`, `setReaction`, `saveComment`,
+`submitReport`, `resolveModerationCase`, `bulkUpdateModerationCases`,
+`setUserSuspension`, `expireModerationSuspensionsScheduled`,
+`approveDestination`, `deactivateDestination`,
+`reconcileDestinationApprovalReleasesScheduled`,
+`onModerationCaseNotificationWritten`, `onOwnerNotificationOutboxWritten`,
+`onContentReviewNotificationWritten`, and `onNotificationPushWritten`. The last
+target is the new retry-enabled, idempotent held-recommendation review trigger.
+
+The post-deploy production dry-run scanned 194 notification documents and found
+99 schema-v2 personal/admin rows whose `createdAt` was the legacy malformed empty
+map. Manifest fingerprint
+`64fdbddcd31a9b81b66435557e204ac426eb2170774d972bfd601c257e9a0a5d` was
+applied with project confirmation; the tool updated and transactionally verified
+all 99 rows. An independent collection-group read found 178 in-scope schema-v2
+notifications, all 178 with valid Firestore Timestamps and zero malformed values.
+A second dry-run found zero repair candidates, and the production error-log query
+from `2026-09-26T21:55:00Z` returned no errors. No Rules, indexes, Hosting,
+Storage, OTA, native build, store submission, IAM, or unrelated production data
+changed in this rollout. Firebase CLI reported the existing `firebase-functions`
+dependency as outdated; it was intentionally not upgraded during the incident
+rollout.
+
 ### Community sharing OTA (2026-09-26, published)
 
 PR [#440](https://github.com/doric2000/PlanLi/pull/440) merged as
