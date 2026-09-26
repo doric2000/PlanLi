@@ -69,6 +69,18 @@ Use the smallest relevant capability; more tools are not automatically better.
   post-deploy errors through MCP or CLI.
 - Expo/EAS work: inspect installed versions, use Expo MCP for project/build state,
   and use official Expo documentation when no applicable Expo skill is installed.
+- Shared client fixes target Android and iOS by default; a screenshot does not
+  establish platform exclusivity. Use `npm run release:ota -- --platform all
+  --message "..."` to inspect the plan and add `--apply` only for an authorized
+  release. A single platform must be selected explicitly. The runner reuses
+  validation, prepares matching configurations once, verifies candidate assets,
+  then promotes those exact assets automatically. Resume its journal after a
+  failure; never repeat a publication whose provider result is uncertain.
+- Before store submission verify app version, build number, Google Play track,
+  EAS channel and runtime separately. A profile/channel name is not a store track.
+  Promote an existing Play artifact without uploading or incrementing its code.
+  Submission-only `eas.json` changes require one native-source comparison and an
+  exact fingerprint review; any unexplained native delta remains blocked.
 - Hosted admin/Web behavior: use the browser skill to exercise the rendered UI.
 - GitHub PRs/checks: use the GitHub plugin when available.
 - Codex configuration: use official OpenAI documentation or the OpenAI Docs skill.

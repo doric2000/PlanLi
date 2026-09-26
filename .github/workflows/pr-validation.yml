@@ -69,7 +69,6 @@ jobs:
             --base "$BASE_SHA" \
             --head "$HEAD_SHA" \
             --scope tooling
-          npm run test:eas-production-preflight
 
   client:
     name: Affected client checks

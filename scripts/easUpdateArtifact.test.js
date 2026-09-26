@@ -8,10 +8,30 @@ const {
   validateCandidateUpdates,
   validateProductionBundle,
   verifyProductionUpdateArtifact,
+  verifyPublicUpdate,
 } = require('./easUpdateArtifact');
 
 const groupId = '11111111-2222-4333-8444-555555555555';
 const updateId = '01a05f00-0000-7000-8000-000000000000';
+
+test('promotion verifies the served immutable hash without downloading the bundle again', async () => {
+  const artifact = { sha256: 'ab'.repeat(32) };
+  const manifest = { id: updateId, runtimeVersion: '1.4.0', metadata: { updateGroup: groupId },
+    launchAsset: { hash: Buffer.from(artifact.sha256, 'hex').toString('base64url') } };
+  const args = { projectId: 'project', platform: 'android', runtime: '1.4.0', update: { id: updateId, group: groupId }, artifact };
+  let calls = 0;
+  const fetchManifest = value => async (url, options) => {
+    calls++;
+    assert.equal(url, 'https://u.expo.dev/project');
+    assert.equal(options.headers['expo-platform'], 'android');
+    return { ok: true, text: async () => multipart(value, {}) };
+  };
+  await verifyPublicUpdate(args, fetchManifest(manifest));
+  assert.equal(calls, 1);
+  for (const delta of [{ id: 'wrong' }, { runtimeVersion: 'old' }, { metadata: {} }, { launchAsset: { hash: 'wrong' } }]) {
+    await assert.rejects(verifyPublicUpdate(args, fetchManifest({ ...manifest, ...delta })), /does not match/);
+  }
+});
 
 test('Android artifact verification rejects an iOS artifact before any download', async () => {
   let fetched = false;

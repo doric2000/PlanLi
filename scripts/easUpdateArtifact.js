@@ -62,7 +62,7 @@ function validateProductionBundle(bundle) {
   };
 }
 
-function validateCandidateUpdates(value, groupId, platform = 'ios') {
+function validateCandidateUpdates(value, groupId, platform = 'ios', runtime = EXPECTED_RUNTIME) {
   releasePlatform(platform);
   const updates = Array.isArray(value) ? value : value?.updates;
   if (!Array.isArray(updates) || updates.length !== 1) {
@@ -72,8 +72,8 @@ function validateCandidateUpdates(value, groupId, platform = 'ios') {
   if (update.platform !== platform || update.group !== groupId) {
     fail(`Candidate group ${groupId} does not identify one matching ${platform} artifact.`);
   }
-  if (update.runtimeVersion !== EXPECTED_RUNTIME || update.isRollBackToEmbedded === true) {
-    fail(`Candidate group ${groupId} must be a normal runtime ${EXPECTED_RUNTIME} update.`);
+  if ((update.runtimeVersion || update.runtime?.version) !== runtime || update.isRollBackToEmbedded === true) {
+    fail(`Candidate group ${groupId} must be a normal runtime ${runtime} update.`);
   }
   if (!update.manifestPermalink || !update.id) {
     fail(`Candidate group ${groupId} is missing immutable update metadata.`);
@@ -81,14 +81,14 @@ function validateCandidateUpdates(value, groupId, platform = 'ios') {
   return update;
 }
 
-async function verifyProductionUpdateArtifact(value, groupId, fetchImpl = globalThis.fetch, platform = 'ios') {
-  const update = validateCandidateUpdates(value, groupId, platform);
+async function verifyProductionUpdateArtifact(value, groupId, fetchImpl = globalThis.fetch, platform = 'ios', runtime = EXPECTED_RUNTIME) {
+  const update = validateCandidateUpdates(value, groupId, platform, runtime);
   const manifestResponse = await fetchImpl(update.manifestPermalink, {
     headers: {
       accept: 'multipart/mixed',
       'expo-platform': platform,
       'expo-protocol-version': '1',
-      'expo-runtime-version': EXPECTED_RUNTIME,
+      'expo-runtime-version': runtime,
     },
   });
   if (!manifestResponse.ok) fail(`EAS manifest returned HTTP ${manifestResponse.status}.`);
@@ -97,7 +97,7 @@ async function verifyProductionUpdateArtifact(value, groupId, fetchImpl = global
   const extensions = parseMultipartJsonPart(multipart, 'extensions');
   if (
     manifest.id !== update.id
-    || manifest.runtimeVersion !== EXPECTED_RUNTIME
+    || manifest.runtimeVersion !== runtime
     || manifest.metadata?.updateGroup !== groupId
   ) {
     fail('Immutable EAS manifest does not match the selected candidate update.');
@@ -116,7 +116,26 @@ async function verifyProductionUpdateArtifact(value, groupId, fetchImpl = global
     ...validateProductionBundle(bundle),
     groupId,
     updateId: update.id,
+    launchAssetHash: actualHash,
   };
+}
+
+// Promotion reuses immutable assets. Verify what devices are served rather than
+// downloading and inspecting the same bytes for a second time.
+async function verifyPublicUpdate({ projectId, platform, runtime, update, artifact }, fetchImpl = globalThis.fetch) {
+  const response = await fetchImpl(`https://u.expo.dev/${projectId}`, { headers: {
+    accept: 'multipart/mixed', 'expo-platform': platform, 'expo-protocol-version': '1',
+    'expo-runtime-version': runtime, 'expo-channel-name': 'production',
+  } });
+  if (!response.ok) fail(`Public update endpoint returned HTTP ${response.status}.`);
+  const manifest = parseMultipartJsonPart(await response.text(), 'manifest');
+  const expectedHash = Buffer.from(artifact.sha256, 'hex').toString('base64url');
+  if (manifest.id !== update.id || manifest.runtimeVersion !== runtime
+    || manifest.metadata?.updateGroup !== update.group || manifest.launchAsset?.hash !== expectedHash) {
+    fail(`Public ${platform} update does not match the verified candidate.`);
+  }
+  return { platform, runtime, groupId: update.group, updateId: update.id,
+    launchAssetHash: expectedHash, verifiedAt: new Date().toISOString() };
 }
 
 module.exports = {
@@ -126,4 +145,5 @@ module.exports = {
   validateCandidateUpdates,
   validateProductionBundle,
   verifyProductionUpdateArtifact,
+  verifyPublicUpdate,
 };

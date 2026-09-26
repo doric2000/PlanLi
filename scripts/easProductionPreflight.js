@@ -84,14 +84,14 @@ function resolveProductionLineage(entries, readGroup) {
   fail('No production update group with one Git commit was found behind the current rollback.');
 }
 
-function currentProductionCommit(clientRoot, platform = 'ios', baseline) {
+function currentProductionCommit(clientRoot, platform = 'ios', baseline, runner = args => runEas(clientRoot, args)) {
   releasePlatform(platform);
-  const branch = JSON.parse(runEas(clientRoot, [
-    'update:list', '--branch', 'production', '--runtime-version', '1.4.0',
+  const branch = JSON.parse(runner([
+    'update:list', '--branch', 'production', '--runtime-version', baseline?.runtime || '1.4.0',
     '--platform', platform, '--limit', '10', '--json', '--non-interactive',
   ]));
   return resolvePlatformLineage(branch?.currentPage, (groupId) =>
-    JSON.parse(runEas(clientRoot, ['update:view', groupId, '--json'])), platform, baseline);
+    JSON.parse(runner(['update:view', groupId, '--json'])), platform, baseline);
 }
 
 function resolvePlatformLineage(entries, readGroup, platform = 'ios', baseline) {

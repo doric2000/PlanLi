@@ -1,0 +1,36 @@
+appId: com.planli.planlitravels.e2e
+---
+- extendedWaitUntil:
+    visible: "נדרשת התחברות"
+    timeout: 30000
+- tapOn: "התחברות"
+- tapOn:
+    id: login-email
+- inputText: traveler@example.test
+- tapOn:
+    id: login-password
+- inputText: Local-E2E-only-2468!
+- hideKeyboard
+- tapOn:
+    id: email-login-button
+- extendedWaitUntil:
+    visible:
+      id: shared-trip-screen
+    timeout: 60000
+- assertVisible: Local Shared Auth Trip
+# Observe the destination across delayed profile/Auth work, not just its first frame.
+- repeat:
+    times: 8
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 1000
+      - assertVisible:
+          id: shared-trip-screen
+- pressKey: Home
+- launchApp:
+    stopApp: false
+- assertVisible:
+    id: shared-trip-screen
+- back
+- assertVisible:
+    id: home-tab-header

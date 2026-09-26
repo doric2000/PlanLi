@@ -2,6 +2,31 @@
 
 ## Repeatable release preparation
 
+The default entry point is `npm run release:ota -- --platform all --message "..."`.
+It prints a read-only plan; `--apply` performs an authorized release. Both mobile
+platforms are selected unless one is explicitly requested. The application-input
+digest skips an already-current platform, excluding tests, documentation and store
+submission metadata. Store track, EAS channel and runtime are checked separately.
+
+The runner unions the affected checks since each platform's actual deployed source,
+prepares each dependency/metadata layout once, then verifies native compatibility.
+It exports/publishes a candidate once per preparation group, inspects each immutable
+bundle once and automatically republishes the exact group to production. Promotion
+checks the public manifest's asset hash without downloading/exporting it again.
+There is no merge-triggered release and no additional paid service.
+
+Each apply prints an ignored release journal path. Resume with the same platform,
+message, `--apply --resume <journal>` and unchanged source/environment. Pending
+provider writes are recovered by their unique message before any retry; an unknown
+result blocks a duplicate write. Journal inputs and production lineage are checked
+again. Project/account production-variable metadata and relevant local environment
+inputs are hashed without saving their values; changes invalidate resumable native
+proofs and stop promotion. Stage durations, EAS read counts and export counts are retained beside it.
+Historical single-platform wrappers remain available for investigation.
+The exclusive OTA lock is never automatically deleted as stale: after a process
+crash, verify its recorded PID has ended before removing that exact lock file.
+Ordinary reported failures release the lock and retain the resumable journal.
+
 Use the tracked wrappers and the repository-pinned EAS CLI. They set the public
 production Firebase project before CLI startup and use `--environment production`
 for fingerprinting/export. The parent environment matters in CLI 22.6 even when
@@ -33,7 +58,40 @@ change requires its own reviewed build; unknown fingerprints remain blocked.
 References: [Expo environment variables](https://docs.expo.dev/eas/environment-variables/)
 and [update deployment](https://docs.expo.dev/eas-update/deployment/).
 
-## Installed iOS runtime 1.4.0 baseline (2026-09-26)
+## Installed runtime 1.4.0 baselines (2026-09-26)
+
+### Production submission metadata review
+
+Source `58a259bf502b` changes only `submit` in `client/eas.json`; the build and
+CLI configuration are identical to native source `1eae24ccf94072490d766202f2ad4f9478d2ce22`.
+One prepared source/dependency tree generated both platform fingerprints under
+the production environment. Provider build sources were downloaded once per
+platform and compared with `@expo/fingerprint` from the installed lockfile.
+
+| Platform | Installed build fingerprint | Reviewed submission fingerprint |
+| --- | --- | --- |
+| Android 12 | `64d77fc362e400f5754e05a9886052a2e88eeb45` | `a288be2d72f7efe12ed7ecd2e82040eb464ac3a0` |
+| iOS 34 | `976661b4a04d2165ecd571430564b16b5f86fc13` | `766de533788a9b3cca6a0c632845ba913b5391c2` |
+
+Every hashed source except `eas.json` matched, including generated Expo config,
+autolinking, native modules and dependencies. Its CRLF SHA-1 changed from
+`a2f077ce45880541cc6d5d16440dc18c54977b57` to
+`413a9149c95916c51f6fd0146417137c1980345b`. Provider sources also contained
+unhashed directory entries (`android`, `patches` on Android; `patches` on iOS).
+Expo's installed `hash/Hash.js` excludes sources with a null/missing hash from the
+aggregate. Replacing only the `eas.json` source hash in each new fingerprint
+reconstructed its installed build hash exactly. This proves those empty entries
+do not account for any native change.
+
+The baseline review binds each exact fingerprint pair and the normalized SHA-256
+of the submission config. Unknown fingerprints or changed config remain blocked.
+Generated Gradle/CMake directories are excluded from dependency copying; all
+hashed dependencies still matched the installed binaries in this comparison.
+The review required two fingerprint generations and one source comparison per
+platform, no native build, bundle export or upload. Ignored evidence is saved as
+`submission-{android,ios}-{fingerprint,build-source,review}.json` in validation logs.
+
+### iOS build 34
 
 The owner confirmed TestFlight 1.1.3 (34) is installed and opened a shared trip
 from WhatsApp (initial read failed; manual retry succeeded). The baseline now
@@ -106,10 +164,12 @@ upgrade recommendations remain unresolved and are not a passing build-readiness
 receipt. This OTA retains the installed dependency set; no package-check override
 or dependency upgrade was introduced.
 
-## Android OTA compatibility
+## Historical Android build 10 compatibility
 
-Android releases use the same guarded commands with explicit `--platform android`;
-the default remains iOS. The Android baseline is Google Play internal-test build
+This review is retained as history, not the current release target. The current
+Android target is build 12 / runtime 1.4.0, reviewed above, and `release:ota`
+defaults to both platforms. Build 10 users need the store update; the new fixes
+are not backported to runtime 1.3.0. The former Android baseline was Play build
 `b0648036-61d6-4af6-b659-442a22b603dc`, version `1.1.0 (10)`, runtime `1.3.0`,
 channel `production`, native fingerprint `ffa38603c423e70296ac74e695750ff8d59701db`.
 EAS build metadata and its message bind the archived source to

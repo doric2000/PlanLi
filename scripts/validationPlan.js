@@ -139,11 +139,23 @@ function extractLiteralSpecifiers(source) {
 
 function listFiles(directory) {
   if (!fs.existsSync(directory)) return [];
+  // Respect Git's ignored build/export outputs instead of traversing generated
+  // bundles (which can contain thousands of modules unrelated to source tests).
+  try {
+    const files = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '-z', '--', '.'],
+      { cwd: directory, encoding: 'utf8', windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 16 * 1024 * 1024 });
+    return [...new Set(files.split('\0').filter(Boolean))].map(file => path.join(directory, file))
+      .filter(file => fs.existsSync(file) && fs.statSync(file).isFile());
+  } catch (error) {
+    // Small standalone test fixtures are intentionally not Git repositories.
+    if (error.status !== 128) throw error;
+  }
   const result = [];
   for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
     if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue;
     if (path.basename(directory) === 'client' && ['android', 'ios', 'dist', 'coverage'].includes(entry.name)) continue;
     const absolute = path.join(directory, entry.name);
+    if (!require('./easReleaseSource').dependencyCopyInput(absolute)) continue;
     if (entry.isDirectory()) result.push(...listFiles(absolute));
     else result.push(absolute);
   }
@@ -230,11 +242,12 @@ function sameNameTest(file, repoRoot = REPO_ROOT) {
   return fs.existsSync(path.join(repoRoot, candidate)) ? candidate : null;
 }
 
-function classifyChanges(files) {
+function classifyChanges(files, { submissionOnlyEas = false } = {}) {
   const changedFiles = unique(files);
   const clientFiles = changedFiles.filter((file) => file.startsWith('client/'));
   const functionsFiles = changedFiles.filter((file) => file.startsWith('functions/'));
-  const clientRuntimeFiles = clientFiles.filter((file) => !/\.md$/i.test(file));
+  const clientRuntimeFiles = clientFiles.filter((file) => !/\.md$/i.test(file)
+    && !file.startsWith('client/.maestro/') && !(submissionOnlyEas && file === 'client/eas.json'));
   const functionsRuntimeFiles = functionsFiles.filter((file) =>
     !/\.md$/i.test(file) && file !== 'functions/rules.test.js'
   );
@@ -246,7 +259,8 @@ function classifyChanges(files) {
   const clientLockfile = clientFiles.includes('client/package-lock.json');
   const functionsLockfile = functionsFiles.includes('functions/package-lock.json');
   const validationTooling = changedFiles.some((file) => VALIDATION_TOOLING_PATHS.has(file)
-    || /^scripts\/(?:eas|nativeReleaseInputs)/.test(file) || file === 'config/eas-ios-native-baseline.json'
+    || /^scripts\/(?:eas|nativeReleaseInputs)/.test(file) || /^config\/eas-(?:ios|android)-native-baseline\.json$/.test(file)
+    || file === 'client/eas.json'
     || file.startsWith('scripts/e2e/') || file.startsWith('client/.maestro/android/'));
   const securityTooling = changedFiles.some((file) => (
     SECURITY_TOOLING_PATHS.has(file) || file.startsWith('.semgrep/')
@@ -266,8 +280,8 @@ function classifyChanges(files) {
     rules,
     indexes,
     taxonomy,
-    adminExport: clientFiles.some((file) => matchesAny(file, ADMIN_INPUTS)),
-    nativeExport: clientFiles.some((file) => matchesAny(file, NATIVE_INPUTS) || isNativeReleaseInput(file)),
+    adminExport: clientRuntimeFiles.some((file) => matchesAny(file, ADMIN_INPUTS)),
+    nativeExport: clientRuntimeFiles.some((file) => matchesAny(file, NATIVE_INPUTS) || isNativeReleaseInput(file)),
     clientAudit: clientDependency,
     functionsAudit: functionsDependency,
     clientFull: clientLockfile,
@@ -275,9 +289,9 @@ function classifyChanges(files) {
   };
 }
 
-function createPlan(files, repoRoot = REPO_ROOT) {
+function createPlan(files, repoRoot = REPO_ROOT, options = {}) {
   const plan = {
-    ...classifyChanges(files),
+    ...classifyChanges(files, options),
     clientTests: [],
     clientNodeTests: [],
     clientSources: [],
@@ -702,7 +716,8 @@ function runTooling(plan, repoRoot = REPO_ROOT) {
         'scripts/securityCiPlan.test.js', 'scripts/releaseReadiness.test.js', 'scripts/e2e/environment.test.js',
         'scripts/e2e/flowPlan.test.js', 'scripts/e2e/native.test.js', 'scripts/easNativeCompatibility.test.js',
         'scripts/easReleaseSource.test.js', 'scripts/easCandidate.test.js', 'scripts/easProductionPreflight.test.js',
-        'scripts/easProductionUpdate.test.js'], repoRoot, repoRoot);
+        'scripts/easProductionUpdate.test.js', 'scripts/easOta.test.js', 'scripts/easReleasePlan.test.js',
+        'scripts/easUpdateArtifact.test.js'], repoRoot, repoRoot);
   }
   if (plan.securityTooling) {
     runCommand('security-local-scanner-tests', process.execPath,
@@ -737,7 +752,9 @@ function main() {
     return;
   }
   const files = changedFilesFromGit(options, REPO_ROOT);
-  const plan = createPlan(files, REPO_ROOT);
+  const plan = createPlan(files, REPO_ROOT, {
+    submissionOnlyEas: require('./easReleasePlan').submissionOnlySince(REPO_ROOT, options.base, options.includeWorktree ? null : options.head),
+  });
   if (options.githubOutput) writeGithubOutput(plan, options.githubOutput);
   if ((options.command === 'plan' || options.planOnly) && !options.githubOutput) {
     console.log(JSON.stringify(printablePlan(plan), null, 2));

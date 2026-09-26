@@ -58,6 +58,15 @@ function validateBuild(build, baseline) {
 function validateFingerprint({ hash, baseline, sourceRoot, readFile = fs.readFileSync }) {
   if (!/^[a-f0-9]{40}$/.test(hash || '')) throw new Error('Missing or invalid native fingerprint; refusing publication.');
   if (hash === baseline.fingerprint) return { status: 'exact', fingerprint: hash, buildFingerprint: baseline.fingerprint };
+  const submission = baseline.reviewedSubmissionDelta;
+  if (submission && hash === submission.fingerprint && submission.buildFingerprint === baseline.fingerprint
+    && /^[a-f0-9]{64}$/.test(submission.easConfigSha256 || '') && submission.review) {
+    if (normalizedHash(readFile(path.join(sourceRoot, 'client/eas.json'))) !== submission.easConfigSha256) {
+      throw new Error('Store-submission metadata review is stale.');
+    }
+    return { status: 'reviewed-submission-metadata', fingerprint: hash,
+      buildFingerprint: baseline.fingerprint, review: submission.review };
+  }
   const reviewed = baseline.reviewedOptionalDelta;
   if (!reviewed || hash !== reviewed.fingerprint || !Object.keys(reviewed.requiredSources || {}).length) {
     throw new Error(`Unreviewed native fingerprint ${hash}; expected build ${baseline.fingerprint}. Compare fingerprint hashes and review the native change before any upload.`);
@@ -97,6 +106,9 @@ function verifyLocalNative({ runEas, baseline, sourceRoot }) {
   // CLI 22.6.0 incorrectly treats mixed --build-id/--update-id comparisons as
   // update-vs-local. Generate explicitly; never use that ambiguous command.
   const generated = parseEasJson(runEas(['fingerprint:generate', '--platform', releasePlatform(baseline.platform), '--environment', 'production', '--json', '--non-interactive']));
+  // Retain the actual provider sources when a comparison fails, so diagnosis
+  // never needs another expensive fingerprint computation.
+  if (fs.existsSync(sourceRoot)) fs.writeFileSync(sourceRoot + `-${baseline.platform || 'ios'}-fingerprint.json`, JSON.stringify(generated));
   return validateFingerprint({ hash: generated.hash, baseline, sourceRoot });
 }
 

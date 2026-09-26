@@ -95,7 +95,10 @@ npm.cmd test -- --runInBand --silent --runTestsByPath __tests__/RelevantScreen.t
   checks. For release readiness select ota/build/full and ios/android explicitly;
   do not pre-export a bundle that EAS Update or EAS Build will package itself.
   Use an iOS export when validating a separate iOS packaging change.
-- Shared navigation/auth/runtime changes require their related test groups.
+- Shared navigation/auth/runtime changes require their related test groups and
+  include both Android and iOS unless the code or explicit scope is platform-specific.
+  Use the root `release:ota` command for authorized OTA releases; it skips a
+  platform only when its deployed application inputs already match.
 - Request an EAS build only for native/release need; never for JS-only work.
 
 Use the existing local Android/Maestro harness described in `docs/local-android-e2e.md`.

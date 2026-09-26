@@ -7,9 +7,8 @@ appId: com.planli.planlitravels.e2e
       visible: "System UI isn't responding"
     commands:
       - tapOn: "Wait"
-- extendedWaitUntil:
-    visible: "New development server"
-    timeout: 120000
+# Open the explicit local URL directly; LAN discovery and the development
+# launcher's labels are not prerequisites for exercising the application.
 - openLink: "com.planli.planlitravels.e2e://expo-development-client/?url=http%3A%2F%2F10.0.2.2%3A8081"
 - extendedWaitUntil:
     visible: "Continue"

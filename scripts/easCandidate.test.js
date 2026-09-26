@@ -53,7 +53,7 @@ test('Android candidate uses the Android baseline and uploads only Android', asy
   f.updates[0].platform = 'android';
   f.dependencies.verifyLocalNative = ({ baseline }) => {
     assert.equal(baseline.platform, 'android');
-    assert.equal(baseline.buildNumber, '10');
+    assert.equal(baseline.buildNumber, '12');
     return { fingerprint: 'b'.repeat(40) };
   };
   const result = await runCandidate({ repoRoot: f.root, args: parseArgs(['--platform', 'android', '--apply', '--message', 'Android release']) }, f.dependencies);

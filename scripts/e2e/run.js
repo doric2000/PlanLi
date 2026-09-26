@@ -83,7 +83,7 @@ async function waitFor(label, predicate, job, timeout = 180000) {
   throw new Error(`${label} did not become ready; inspect ${job?.log || LOGS}`);
 }
 async function main(args = process.argv.slice(2)) {
-  if (args.some((arg) => !['--backend-only', '--build', '--keep-running', '--negative', '--services-only'].includes(arg) && !arg.startsWith('--flows='))) throw new Error('Unknown E2E option');
+  if (args.some((arg) => !['--backend-only', '--build', '--existing-binary', '--keep-running', '--negative', '--services-only'].includes(arg) && !arg.startsWith('--flows='))) throw new Error('Unknown E2E option');
   let runtimeFlows;
   if (!args.includes('--backend-only') && !args.includes('--services-only')) {
     const files = require('../validationPlan').changedFilesFromGit({ base: 'main', head: 'HEAD', includeWorktree: true }, ROOT);
@@ -91,6 +91,8 @@ async function main(args = process.argv.slice(2)) {
     const flows = require('./flowPlan').parseFlows(requested?.slice(8), files);
     if (!flows.length) { console.log('No Android flow is affected; no emulator or build is needed.'); return; }
     runtimeFlows = flows;
+    if (args.includes('--existing-binary') && (args.includes('--build') || flows.length !== 1 || flows[0] !== 'shared-auth')) throw new Error('Existing-binary mode is limited to the shared-auth JavaScript scenario.');
+    if (args.includes('--existing-binary') && !fs.existsSync(path.join(ROOT, 'client/android/app/build/outputs/apk/debug/app-debug.apk'))) throw new Error('No existing Android development APK is available.');
     args = [...args.filter((arg) => !arg.startsWith('--flows=')), '--flows=' + flows.join(',')];
   }
   for (const port of [4400, 4500, 9099, 8080, 9199, 5001, 9230]) {
@@ -115,7 +117,7 @@ async function main(args = process.argv.slice(2)) {
     console.log('Demo services ready for local debugging; no test result is claimed. Stop this process to clean them up.');
     await new Promise(() => {});
   }
-  await run('seed', process.execPath, ['scripts/e2e/seed.js']);
+  await run('seed', process.execPath, ['scripts/e2e/seed.js', ...(runtimeFlows?.includes('shared-auth') ? ['--shared-auth'] : [])]);
   await run('backend-smoke', process.execPath, ['scripts/e2e/backendSmoke.js']);
   if (!args.includes('--backend-only')) {
     const { nativeSmoke } = require('./native');

@@ -47,17 +47,21 @@ async function nativeSmoke({ args, env, start, run, waitFor, LOGS, inputSignatur
   const digest = binarySignature();
   let built;
   try { built = JSON.parse(fs.readFileSync(receipt)); } catch { /* No successful build yet. */ }
-  if (args.includes('--build') || !fs.existsSync(apk) || built?.signature !== digest) {
+  const existingBinary = args.includes('--existing-binary');
+  if (existingBinary && !fs.existsSync(apk)) throw new Error('No existing Android development APK is available.');
+  if (!existingBinary && (args.includes('--build') || !fs.existsSync(apk) || built?.signature !== digest)) {
     console.log('Building the local Android development app; the binary will be reused for JavaScript changes.');
     const packagePath = path.join(client, 'package.json');
-    const originalScripts = JSON.parse(fs.readFileSync(packagePath)).scripts;
+    const originalPackage = fs.readFileSync(packagePath);
+    const originalScripts = JSON.parse(originalPackage).scripts;
     try { await run('android-prebuild', process.execPath, [expo, 'prebuild', '--platform', 'android', '--no-install'], client); }
     finally {
       const manifest = JSON.parse(fs.readFileSync(packagePath));
       for (const platform of ['android', 'ios']) {
         if (manifest.scripts[platform] === `expo run:${platform}`) manifest.scripts[platform] = originalScripts[platform];
       }
-      fs.writeFileSync(packagePath, `${JSON.stringify(manifest, null, 2)}\n`);
+      if (JSON.stringify(manifest) !== JSON.stringify(JSON.parse(originalPackage))) throw new Error('Prebuild changed dependencies; review before running the local app.');
+      fs.writeFileSync(packagePath, originalPackage);
     }
     fs.writeFileSync(path.join(client, 'android/local.properties'), `sdk.dir=${env.ANDROID_HOME.replace(/\\/g, '/')}`);
     // Gradle's worker cap does not constrain Ninja. Keep C++ compilation within
@@ -76,7 +80,9 @@ async function nativeSmoke({ args, env, start, run, waitFor, LOGS, inputSignatur
     await run('android-build', 'cmd.exe', ['/d', '/s', '/c', 'gradlew.bat app:assembleDebug --init-script ../../.codex_tmp/android/limit-native-compilers.gradle -PreactNativeArchitectures=x86_64 --no-daemon --console=plain --max-workers=2 --no-parallel'], path.join(client, 'android'));
     if (binarySignature() !== digest) throw new Error('Native inputs changed during compilation; run the incremental build again.');
     fs.writeFileSync(receipt, JSON.stringify({ signature: digest, completedAt: new Date().toISOString() }));
-  } else console.log('REUSE Android development binary (native inputs unchanged)');
+  } else console.log(existingBinary ? 'REUSE existing development APK for shared-auth JavaScript smoke; current native configuration is not validated by this flow.' : 'REUSE Android development binary (native inputs unchanged)');
+  const binary = { sha256: crypto.createHash('sha256').update(fs.readFileSync(apk)).digest('hex'),
+    nativeInputsMatch: !existingBinary || built?.signature === digest };
   if (args.includes('--build-only')) return;
   const output = (params) => spawnSync(adb, ['-s', SERIAL, ...params], { env, encoding: 'utf8', windowsHide: true, timeout: 15000 });
   const device = output(['shell', 'getprop', 'ro.boot.qemu.avd_name']);
@@ -104,9 +110,9 @@ async function nativeSmoke({ args, env, start, run, waitFor, LOGS, inputSignatur
   const files = changedFilesFromGit({ base: 'main', head: 'HEAD', includeWorktree: true }, ROOT);
   const flows = parseFlows(args.find((arg) => arg.startsWith('--flows='))?.slice(8), files);
   if (!flows.length) { console.log('No Android flow is affected.'); return; }
-  return runDeviceFlows({ flows, args, env, run, LOGS, adbRun, output, deviceNetworkReady, waitFor, emulator, inputSignature });
+  return runDeviceFlows({ flows, args, env, run, LOGS, adbRun, output, deviceNetworkReady, waitFor, emulator, inputSignature, binary });
 }
-async function runDeviceFlows({ flows, args = [], env, run, LOGS, adbRun, output, deviceNetworkReady, waitFor, emulator, inputSignature }) {
+async function runDeviceFlows({ flows, args = [], env, run, LOGS, adbRun, output, deviceNetworkReady, waitFor, emulator, inputSignature, binary }) {
   const client = path.join(ROOT, 'client');
   require('./environment').assertLocalEnvironment(env);
   if (output(['shell', 'getprop', 'ro.boot.qemu.avd_name']).stdout?.trim() !== 'PlanLi_E2E_API34') throw new Error('Device flow requires the dedicated Android 14 AVD.');
@@ -126,6 +132,14 @@ async function runDeviceFlows({ flows, args = [], env, run, LOGS, adbRun, output
         await runFlow('network-start');
         await withOfflineDevice({ adbRun, output, deviceNetworkReady, waitFor, emulator }, () => runFlow('network-error'));
         await runFlow('network-recovery');
+      } else if (flow === 'shared-auth') {
+        await runFlow('shared-auth-start');
+        const fixture = JSON.parse(fs.readFileSync(path.join(DIRECTORY, 'fixture.json'), 'utf8'));
+        if (!/^https:\/\/planli\.cc\/trip\/[A-Za-z0-9_-]{43}$/.test(fixture.sharedTripUrl || '')) throw new Error('Missing local shared-trip fixture.');
+        // Explicitly target the isolated development app; never open the production app/site.
+        await adbRun('shared-auth-link', ['shell', 'am', 'start', '-W', '-n', 'com.planli.planlitravels.e2e/.MainActivity',
+          '-a', 'android.intent.action.VIEW', '-d', fixture.sharedTripUrl]);
+        await runFlow('shared-auth');
       } else await runFlow(flow);
       results.push({ flow, durationMs: Date.now() - time });
     }
@@ -142,7 +156,7 @@ async function runDeviceFlows({ flows, args = [], env, run, LOGS, adbRun, output
     verifyRuntimeInputs(inputSignature, flows, env);
     writeReceipt(path.join(DIRECTORY, 'runtime.receipt.json'), { status: 'passed', signature: inputSignature,
       logPath: path.join(LOGS, `maestro-${flows.at(-1) === 'network' ? 'network-recovery' : flows.at(-1)}.log`),
-      flows, results, durationMs: Date.now() - started, completedAt: new Date().toISOString() });
+      flows, binary, results, durationMs: Date.now() - started, completedAt: new Date().toISOString() });
   } catch (error) {
     writeReceipt(path.join(DIRECTORY, 'runtime.receipt.json'), { status: 'failed', signature: inputSignature, results, reason: error.message });
     throw error;

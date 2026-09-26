@@ -4,15 +4,16 @@ const path = require('node:path');
 const fs = require('node:fs');
 const { createPlan, changedFilesFromGit, runPlan, runCommand } = require('./validationPlan');
 const { isNativeReleaseInput } = require('./nativeReleaseInputs');
+const { submissionOnlySince } = require('./easReleasePlan');
 
-function releasePlan(files, { kind = 'ota', platform = 'ios', root = path.resolve(__dirname, '..') } = {}) {
+function releasePlan(files, { kind = 'ota', platform = 'ios', root = path.resolve(__dirname, '..'), submissionOnlyEas = false } = {}) {
   if (!['ota', 'build', 'full'].includes(kind)) throw new Error('kind must be ota, build or full');
-  if (!['ios', 'android'].includes(platform)) throw new Error('platform must be ios or android');
-  const nativeChanges = files.filter(isNativeReleaseInput);
+  if (!['ios', 'android', 'all'].includes(platform)) throw new Error('platform must be ios, android or all');
+  const nativeChanges = files.filter(file => isNativeReleaseInput(file) && !(file === 'client/eas.json' && submissionOnlyEas));
   if (kind === 'ota' && nativeChanges.length) {
     throw new Error(`Native inputs changed: ${nativeChanges.join(', ')}. Review compatibility against the installed binary before publishing an OTA; build validation alone is not proof of compatibility.`);
   }
-  const plan = createPlan(files, root);
+  const plan = createPlan(files, root, { submissionOnlyEas });
   plan.client = true;
   plan.adminExport = false;
   // EAS Update exports the candidate once; EAS Build compiles its own bundle.
@@ -39,7 +40,7 @@ function main() {
   if (!['plan', 'client', 'backend', 'all'].includes(scope)) throw new Error('Invalid release validation scope');
   const root = path.resolve(__dirname, '..');
   const files = changedFilesFromGit({ base: options.base, head: 'HEAD', includeWorktree: !process.env.CI }, root);
-  const release = releasePlan(files, { ...options, root });
+  const release = releasePlan(files, { ...options, root, submissionOnlyEas: submissionOnlySince(root, options.base, process.env.CI ? 'HEAD' : null) });
   if (scope === 'plan') {
     if (process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT,
       `backend=${Boolean(release.backend)}\nrules=${Boolean(release.plan.rules)}\n`);
@@ -53,9 +54,10 @@ function main() {
   }
   const client = path.join(root, 'client');
   if (release.checkNative && scope !== 'backend') {
-    if (release.platform === 'ios') {
+    if (release.platform === 'ios' || release.platform === 'all') {
       runCommand('ios-build-readiness', process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', 'verify:ios-build-readiness'], client, root);
-    } else {
+    }
+    if (release.platform === 'android' || release.platform === 'all') {
       const cli = require.resolve('expo/bin/cli', { paths: [client] });
       runCommand('android-config-verify', process.execPath, [cli, 'config', '--type', 'public'], client, root);
       runCommand('android-package-verify', process.execPath, [cli, 'install', '--check'], client, root);
@@ -65,4 +67,15 @@ function main() {
 }
 
 if (require.main === module) main();
-module.exports = { releasePlan };
+function validateTargets(root, targets) {
+  const files = [...new Set(targets.flatMap(target => changedFilesFromGit({ base: target.deployedCommit,
+    head: 'HEAD', includeWorktree: false }, root)))];
+  const release = releasePlan(files, { root, platform: 'all',
+    submissionOnlyEas: targets.every(target => submissionOnlySince(root, target.deployedCommit)) });
+  runPlan(release.plan, 'client', root);
+  runPlan(release.plan, 'functions', root);
+  runPlan(release.plan, 'rules', root);
+  return { files, kind: release.kind, platform: release.platform };
+}
+
+module.exports = { releasePlan, validateTargets };
