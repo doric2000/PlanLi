@@ -52,6 +52,20 @@ test('like milestone pushes use milestone copy without expanding routing data', 
   assert.deepEqual(message.data, { notificationId: 'milestone-1', channel: 'personal' });
 });
 
+test('held recommendation pushes use review copy on the admin reports channel', () => {
+  const message = buildExpoMessage({
+    token: TOKEN,
+    notificationId: 'held-review-1',
+    channel: 'admin',
+    category: 'adminReports',
+    subtype: 'content_review_required',
+    version: 1,
+  });
+  assert.equal(message.channelId, 'planli-admin-reports');
+  assert.equal(message.title, 'המלצה חדשה לבדיקה');
+  assert.match(message.body, /ממתינה/u);
+});
+
 function clone(value) {
   return value === undefined ? undefined : structuredClone(value);
 }

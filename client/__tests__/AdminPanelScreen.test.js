@@ -348,6 +348,38 @@ describe('Admin console end-to-end surface', () => {
     expect(await screen.findByText('IL/new-city')).toBeTruthy();
   }, 60000);
 
+  it('opens an exact held recommendation directly from notification route params', async () => {
+    const target = {
+      type: 'recommendation',
+      id: 'rec-notification-hold',
+      path: 'recommendations/rec-notification-hold',
+    };
+    AdminService.getAdminResource.mockResolvedValue({
+      target,
+      preview: {
+        available: true,
+        title: 'המלצה שהגיעה מהתראה',
+        status: 'moderation_hold',
+        author: { displayName: 'מטיילת' },
+      },
+      holdContext: { kind: 'system', holdReason: 'unsafe_text' },
+      case: null,
+    });
+
+    const screen = render(<AdminPanelScreen navigation={navigation} route={{ params: {
+      tab: 'content',
+      contentType: 'recommendation',
+      targetId: 'rec-notification-hold',
+    } }} />);
+
+    await waitFor(() => expect(AdminService.getAdminResource).toHaveBeenCalledWith({
+      type: 'recommendation', id: 'rec-notification-hold',
+    }), { timeout: 20000 });
+    expect(AdminService.getAdminResource).toHaveBeenCalledTimes(1);
+    expect(screen.getAllByText('המלצה שהגיעה מהתראה').length).toBeGreaterThan(0);
+    expect(navigation.setParams).toHaveBeenCalledWith({ contentType: undefined, targetId: undefined });
+  }, 60000);
+
   it('opens the recorded moderation case from the held-content view', async () => {
     const target = { type: 'recommendation', id: 'rec-reported-hold', path: 'recommendations/rec-reported-hold' };
     const preview = {

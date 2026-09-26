@@ -34,6 +34,8 @@ test('moderation projections use retry-enabled written triggers for admin and ow
   assert.match(source, /onModerationCaseNotificationWritten[\s\S]*?serviceAccount: MEDIA_SERVICE_ACCOUNT/u);
   assert.match(source, /'system\/moderation\/ownerNotifications\/\{outboxId\}'/u);
   assert.match(source, /handleOwnerNotificationOutboxWrite\(\{ admin, event \}\)/u);
+  assert.match(source, /system\/moderation\/contentReviewNotifications\/\{outboxId\}/u);
+  assert.match(source, /handleContentReviewOutboxWrite\(\{ admin, event \}\)/u);
 });
 
 test('notification cleanup jobs have a retry-enabled written trigger', () => {

@@ -88,6 +88,7 @@ const {
 const {
   clearNotifications,
   deleteNotification,
+  handleContentReviewOutboxWrite,
   handleNotificationCleanupJobWrite,
   handleOwnerNotificationOutboxWrite,
   markAllNotificationsRead,
@@ -1438,6 +1439,10 @@ exports.onModerationCaseNotificationWritten = firestoreWritten(
 exports.onOwnerNotificationOutboxWritten = firestoreWritten(
   'system/moderation/ownerNotifications/{outboxId}',
   (event) => handleOwnerNotificationOutboxWrite({ admin, event })
+);
+exports.onContentReviewNotificationWritten = firestoreWritten(
+  'system/moderation/contentReviewNotifications/{outboxId}',
+  (event) => handleContentReviewOutboxWrite({ admin, event })
 );
 exports.onNotificationCleanupJobWritten = firestoreWritten(
   'system/runtime/notificationCleanupJobs/{jobId}',

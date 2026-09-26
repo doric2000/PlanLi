@@ -14,6 +14,7 @@
     "deploy": "firebase deploy --only functions",
     "bootstrap-admin": "node scripts/bootstrapAdmin.js",
     "backfill-account-moderation": "node scripts/backfillAccountModeration.js",
+    "backfill-held-recommendation-notifications": "node scripts/backfillHeldRecommendationNotifications.js",
     "backfill-media-availability": "node scripts/backfillMediaAvailability.js",
     "quarantine-legacy-media": "node scripts/quarantineLegacyMedia.js",
     "delete-all-recommendations": "node scripts/deleteAllRecommendations.js",

@@ -2623,6 +2623,62 @@ test('a safe labeled Other publishes immediately while genuinely unsafe text is 
   assert.equal(unsafe.publicationStatus, 'moderation_hold');
   assert.equal(unsafe.publiclyVisible, false);
   assert.equal(unsafeAdmin.documents.get(`recommendations/${unsafe.recommendationId}`).status, 'moderation_hold');
+  const reviewOutboxes = [...unsafeAdmin.documents.entries()]
+    .filter(([path]) => path.startsWith('system/moderation/contentReviewNotifications/'));
+  assert.equal(reviewOutboxes.length, 1);
+  assert.equal(reviewOutboxes[0][1].version, 1);
+  assert.equal(reviewOutboxes[0][1].ownerUid, 'owner');
+  assert.equal(reviewOutboxes[0][1].target.path, `recommendations/${unsafe.recommendationId}`);
+  await saveRecommendation({
+    admin: unsafeAdmin,
+    auth: verifiedAuth,
+    mapsKey: 'unused',
+    data: {
+      recommendationId: unsafe.recommendationId,
+      destinationRef: { countryId: 'IL', cityId: 'TLV' },
+      locationMode: 'destination',
+      recommendation: { ...validContent, title: 'child porn' },
+    },
+  });
+  assert.equal(reviewOutboxes[0][1].version, 1);
+});
+
+test('background recommendation holds record the operation once and replay its committed result', async () => {
+  const operationPath = 'system/operations/jobs/review-operation';
+  const admin = createFakeAdmin({
+    'countries/IL': { name: 'ישראל', code: 'IL', status: 'active' },
+    'countries/IL/destinations/TLV': {
+      name: 'תל אביב', names: { he: 'תל אביב', en: 'Tel Aviv' },
+      status: 'active', stats: { recommendationCount: 0 },
+    },
+    'users/owner': { status: 'active' },
+    [operationPath]: { ownerUid: 'owner', leaseId: 'lease-1', status: 'processing' },
+  });
+  const operation = {
+    ref: admin.firestore().doc(operationPath),
+    leaseId: 'lease-1',
+  };
+  const input = {
+    destinationRef: { countryId: 'IL', cityId: 'TLV' },
+    locationMode: 'destination',
+    recommendation: { ...validContent, title: 'child porn' },
+  };
+
+  const first = await saveRecommendation({ admin, auth: verifiedAuth, operation, data: input });
+  const outboxes = [...admin.documents.entries()]
+    .filter(([path]) => path.startsWith('system/moderation/contentReviewNotifications/'));
+  assert.equal(first.publicationStatus, 'moderation_hold');
+  assert.equal(outboxes.length, 1);
+  assert.equal(outboxes[0][1].operationId, 'review-operation');
+  assert.equal(outboxes[0][1].version, 1);
+
+  const replay = await saveRecommendation({ admin, auth: verifiedAuth, operation, data: input });
+  assert.equal(replay.recommendationId, first.recommendationId);
+  assert.equal(replay.publicationStatus, 'moderation_hold');
+  assert.equal(replay.publiclyVisible, false);
+  assert.equal([...admin.documents.keys()]
+    .filter((path) => path.startsWith('system/moderation/contentReviewNotifications/')).length, 1);
+  assert.equal(outboxes[0][1].version, 1);
 });
 
 test('editing a legacy taxonomy_other hold releases it after the safe label is revalidated', async () => {

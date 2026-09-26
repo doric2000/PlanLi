@@ -6,8 +6,11 @@ const {
   buildNotificationTarget,
   clearNotifications,
   completeOwnerNotificationOutbox,
+  contentReviewAdminNotificationId,
+  contentReviewOwnerNotificationId,
   deleteNotification,
   fanoutAdminNotification,
+  handleContentReviewOutboxWrite,
   handleOwnerNotificationOutboxWrite,
   LIKE_MILESTONE_STEPS,
   likeMilestoneAtOrBelow,
@@ -22,6 +25,7 @@ const {
   purgeAdminNotificationsForUser,
   purgeNotificationsForActor,
   setNotificationRead,
+  stageContentReviewOutbox,
   systemNotificationId,
   upsertNotification,
 } = require('./notificationService');
@@ -187,6 +191,128 @@ test('canonical documents bound previews, excerpts, targets, and navigation', ()
     type: 'moderation',
     subtype: 'report_received',
   }), (error) => error.details?.reason === 'invalid_notification_input');
+});
+
+test('content-review outbox versions advance only when a transition is staged', () => {
+  const writes = [];
+  const outboxRef = { id: 'outbox-1', path: 'system/moderation/contentReviewNotifications/outbox-1' };
+  const result = stageContentReviewOutbox({
+    transaction: { set: (ref, value) => writes.push({ ref, value }) },
+    admin: fakeAdmin().admin,
+    outboxRef,
+    existingSnapshot: snapshot(outboxRef, { version: 4 }),
+    ownerUid: 'owner-1',
+    target: { type: 'recommendation', id: 'rec-1' },
+    data: { title: 'המלצה לבדיקה' },
+    occurredAt: 'held-time',
+  });
+
+  assert.deepEqual(result, { outboxId: 'outbox-1', version: 5 });
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].value.version, 5);
+  assert.equal(writes[0].value.target.path, 'recommendations/rec-1');
+  assert.equal(writes[0].value.occurredAt, 'held-time');
+});
+
+test('content-review delivery gives an admin owner one admin and one direct-save personal alert', async () => {
+  const fixture = fakeAdmin({
+    'users/admin-owner': { status: 'active' },
+    'users/admin-other': { status: 'active' },
+    'system/moderation/admins/admin-owner': { active: true },
+    'system/moderation/admins/admin-other': { active: true },
+  });
+  const target = { type: 'recommendation', id: 'rec-held', path: 'recommendations/rec-held', title: 'טיול' };
+  const event = {
+    data: {
+      before: { exists: false },
+      after: { exists: true, data: () => ({
+        schemaVersion: 1,
+        type: 'content_review_notification',
+        state: 'ready',
+        version: 3,
+        ownerUid: 'admin-owner',
+        target,
+        occurredAt: 'held-time',
+      }) },
+    },
+  };
+  const result = await handleContentReviewOutboxWrite({
+    admin: fixture.admin,
+    event,
+    loadTargetSnapshot: async () => ({ exists: true, data: () => ({ status: 'moderation_hold', ownerId: 'admin-owner' }) }),
+  });
+
+  assert.deepEqual(result, {
+    status: 'delivered', version: 3, adminDeliveries: 2, ownerDelivery: true,
+  });
+  const adminId = contentReviewAdminNotificationId(target.path);
+  const ownerId = contentReviewOwnerNotificationId(target.path);
+  assert.equal(fixture.values.get(`users/admin-owner/notifications/${adminId}`).subtype, 'content_review_required');
+  assert.equal(fixture.values.get(`users/admin-other/notifications/${adminId}`).subtype, 'content_review_required');
+  assert.equal(fixture.values.get(`users/admin-owner/notifications/${ownerId}`).subtype, 'content_held');
+});
+
+test('background holds keep the existing operation alert as the only personal notification', async () => {
+  const calls = { admin: 0, owner: 0 };
+  const target = { type: 'recommendation', id: 'rec-background', path: 'recommendations/rec-background' };
+  const result = await handleContentReviewOutboxWrite({
+    admin: { firestore: () => ({}) },
+    event: {
+      data: {
+        before: { exists: false },
+        after: { exists: true, data: () => ({
+          schemaVersion: 1,
+          type: 'content_review_notification',
+          state: 'ready',
+          version: 1,
+          ownerUid: 'admin-owner',
+          operationId: 'operation-1',
+          target,
+          occurredAt: 'held-time',
+        }) },
+      },
+    },
+    loadTargetSnapshot: async () => ({ exists: true, data: () => ({ status: 'moderation_hold', ownerId: 'admin-owner' }) }),
+    fanoutAdminNotificationImpl: async () => { calls.admin += 1; return [{}]; },
+    upsertNotificationImpl: async () => { calls.owner += 1; return {}; },
+  });
+
+  assert.equal(result.adminDeliveries, 1);
+  assert.deepEqual(calls, { admin: 1, owner: 0 });
+});
+
+test('content-review trigger ignores unchanged versions, always fans out the event, and can retry partial delivery', async () => {
+  const after = {
+    schemaVersion: 1,
+    type: 'content_review_notification',
+    state: 'ready',
+    version: 2,
+    ownerUid: 'owner',
+    operationId: 'operation-1',
+    target: { type: 'recommendation', id: 'rec', path: 'recommendations/rec' },
+  };
+  const event = (before = null) => ({ data: {
+    before: before ? { exists: true, data: () => before } : { exists: false },
+    after: { exists: true, data: () => after },
+  } });
+  const minimalAdmin = { firestore: () => ({}) };
+  assert.equal((await handleContentReviewOutboxWrite({
+    admin: minimalAdmin,
+    event: event(after),
+  })).reason, 'content_review_outbox_unchanged');
+  let attempts = 0;
+  const retryArgs = {
+    admin: minimalAdmin,
+    event: event(),
+    fanoutAdminNotificationImpl: async () => {
+      attempts += 1;
+      if (attempts === 1) throw new Error('partial delivery');
+      return [{}];
+    },
+  };
+  await assert.rejects(handleContentReviewOutboxWrite(retryArgs), /partial delivery/u);
+  assert.equal((await handleContentReviewOutboxWrite(retryArgs)).status, 'delivered');
+  assert.equal(attempts, 2);
 });
 
 test('reply notifications are accepted as canonical comment activity', () => {

@@ -4,6 +4,10 @@ const { hasActiveAdminAccess } = require('./adminAuthorization');
 const { HttpsError } = require('firebase-functions/v2/https');
 const { evaluateTextSafety } = require('./moderationService');
 const { publicationOutcome } = require('./contentPublication');
+const {
+  contentReviewOutboxRef,
+  stageContentReviewOutbox,
+} = require('./notificationService');
 const { resolveCountryMetadata } = require('./countryMetadata');
 const { discoveryRegionForCountry } = require('./discoveryRegions');
 const {
@@ -3467,6 +3471,14 @@ async function saveRecommendation({
       : releasesSystemHold
         ? 'active'
         : existingStatus;
+    const enteredModerationHold = nextStatus === 'moderation_hold'
+      && existingStatus !== 'moderation_hold';
+    const reviewOutboxRef = enteredModerationHold
+      ? contentReviewOutboxRef(db, `recommendations/${recommendationRef.id}`)
+      : null;
+    const reviewOutboxSnapshot = reviewOutboxRef
+      ? await transaction.get(reviewOutboxRef)
+      : null;
     const previouslyContributesToDestinationStats = current.exists && existingStatus === 'active';
     const nextContributesToDestinationStats = nextStatus === 'active';
     const currentDestinationStatsDelta = destinationChanged
@@ -3632,8 +3644,12 @@ async function saveRecommendation({
       });
     }
 
+    const heldAt = enteredModerationHold
+      ? admin.firestore.FieldValue.serverTimestamp()
+      : currentData?.moderation?.heldAt || admin.firestore.FieldValue.serverTimestamp();
     const moderation = moderationHoldReason ? {
       holdReason: moderationHoldReason,
+      heldAt,
       ...(moderationHoldReason === 'destination_pending_approval' ? {
         systemGate: 'destination_pending_approval',
         destination: { countryId: destination.countryId, cityId: destination.cityId },
@@ -3659,6 +3675,19 @@ async function saveRecommendation({
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         stats: { likeCount: 0, commentCount: 0 },
+      });
+    }
+    if (enteredModerationHold) {
+      stageContentReviewOutbox({
+        transaction,
+        admin,
+        outboxRef: reviewOutboxRef,
+        existingSnapshot: reviewOutboxSnapshot,
+        ownerUid: currentData?.ownerId || uid,
+        target: { type: 'recommendation', id: recommendationRef.id },
+        data: transactionPayload,
+        operationId: operation?.ref?.id || null,
+        occurredAt: heldAt,
       });
     }
     if (operation) transaction.update(operation.ref, { committedResult: {

@@ -13,6 +13,40 @@ import {
 } from '../src/features/notifications/models/NotificationModel';
 
 describe('NotificationModel schema v2', () => {
+  it('falls back to a valid legacy timestamp when createdAt is malformed', () => {
+    const notification = normalizeNotification('legacy-time', {
+      schemaVersion: 2,
+      createdAt: {},
+      timestamp: { seconds: 1_700_000_000 },
+    });
+    expect(notification.createdAt).toEqual(new Date(1_700_000_000_000));
+    expect(normalizeNotification('throwing-time', {
+      createdAt: { toDate: () => { throw new Error('malformed'); } },
+      timestamp: { seconds: 1_700_000_001 },
+    }).createdAt).toEqual(new Date(1_700_000_001_000));
+  });
+
+  it('opens the exact held recommendation in the TOTP-gated admin console', () => {
+    const notification = normalizeNotification('held-review', {
+      schemaVersion: 2,
+      channel: 'admin',
+      type: 'moderation',
+      subtype: 'content_review_required',
+      target: { type: 'recommendation', id: 'rec-held', status: 'moderation_hold' },
+      navigation: {
+        action: 'open_held_content',
+        targetType: 'recommendation',
+        targetId: 'rec-held',
+      },
+    });
+    expect(getNotificationPresentation(notification).message).toBe('המלצה חדשה ממתינה לבדיקה');
+    expect(buildNotificationRouteAction(notification)).toEqual({
+      type: 'navigate',
+      routeName: 'AdminPanel',
+      params: { tab: 'content', contentType: 'recommendation', targetId: 'rec-held' },
+    });
+  });
+
   it('opens operation outcomes in Activity without requiring a public content target', () => {
     const notification = normalizeNotification('operation_notice', {
       type: 'system', subtype: 'operation_failed', channel: 'personal',

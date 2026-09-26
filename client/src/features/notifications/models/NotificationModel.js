@@ -26,6 +26,7 @@ export const NotificationNavigationAction = Object.freeze({
   PROFILE: 'open_profile',
   MODERATION_CASE: 'open_moderation_case',
   DESTINATION_REVIEW: 'open_destination_review',
+  HELD_CONTENT: 'open_held_content',
 });
 
 export const NotificationFilter = Object.freeze({
@@ -93,19 +94,26 @@ const cleanCount = (value) => Math.min(
 
 export function timestampToDate(value) {
   if (!value) return null;
-  if (typeof value.toDate === 'function') return value.toDate();
-  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
-  if (typeof value === 'number') {
+  try {
+    if (typeof value.toDate === 'function') {
+      const converted = value.toDate();
+      return converted instanceof Date && !Number.isNaN(converted.getTime()) ? converted : null;
+    }
+    if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+    if (typeof value === 'number') {
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? null : date;
+    }
+    const seconds = Number(value.seconds ?? value._seconds);
+    if (Number.isFinite(seconds)) {
+      const date = new Date(seconds * 1000);
+      return Number.isNaN(date.getTime()) ? null : date;
+    }
     const date = new Date(value);
     return Number.isNaN(date.getTime()) ? null : date;
+  } catch (_error) {
+    return null;
   }
-  const seconds = Number(value.seconds ?? value._seconds);
-  if (Number.isFinite(seconds)) {
-    const date = new Date(seconds * 1000);
-    return Number.isNaN(date.getTime()) ? null : date;
-  }
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 function normalizeActor(value) {
@@ -154,6 +162,8 @@ function normalizeNavigation(value = {}) {
   });
   const parentType = cleanText(value.parentType || value.postType, 40).toLowerCase();
   if (parentType) result.parentType = parentType;
+  const targetType = cleanText(value.targetType, 40).toLowerCase();
+  if (targetType) result.targetType = targetType;
   return result;
 }
 
@@ -185,7 +195,7 @@ export function normalizeNotification(id, value = {}) {
       : NotificationPriority.NORMAL,
     isRead: value.isRead === true,
     readAt: timestampToDate(value.readAt),
-    createdAt: timestampToDate(value.createdAt || value.timestamp),
+    createdAt: timestampToDate(value.createdAt) || timestampToDate(value.timestamp),
     count: cleanCount(value.count),
     milestone: value.subtype === 'like_milestone' ? cleanCount(value.milestone) : null,
     actorId: cleanId(value.actorId || directActor?.id),
@@ -319,6 +329,9 @@ export function formatNotificationMessage(notification) {
       : `תגובה חדשה על ${targetLabel(notification)}`;
   }
   if (notification.type === NotificationType.MODERATION) {
+    if (notification.subtype === 'content_review_required') {
+      return 'המלצה חדשה ממתינה לבדיקה';
+    }
     if (notification.navigation?.action === NotificationNavigationAction.DESTINATION_REVIEW
       || notification.target?.type === 'destination') {
       return 'יעד חדש ממתין לבקרת איכות';
@@ -453,15 +466,21 @@ export function buildNotificationRouteAction(notification) {
       return statusAction('account');
     }
   }
-  const targetStatus = cleanText(notification?.target?.status, 40).toLowerCase();
-  if (UNAVAILABLE_STATUSES.has(targetStatus)) {
-    return statusAction(HELD_STATUSES.has(targetStatus) ? 'held' : 'deleted');
-  }
-
   const navigation = notification?.navigation;
   const target = notification?.target || {};
   const action = navigation?.action;
   if (!ALLOWED_ACTIONS.has(action)) return statusAction('unsupported');
+  if (action === NotificationNavigationAction.HELD_CONTENT) {
+    const contentType = cleanText(navigation.targetType || target.type, 40).toLowerCase();
+    const targetId = firstId(navigation.targetId, target.id);
+    return ['recommendation', 'route', 'trip'].includes(contentType) && targetId
+      ? { type: 'navigate', routeName: 'AdminPanel', params: { tab: 'content', contentType, targetId } }
+      : statusAction('unsupported');
+  }
+  const targetStatus = cleanText(target.status, 40).toLowerCase();
+  if (UNAVAILABLE_STATUSES.has(targetStatus)) {
+    return statusAction(HELD_STATUSES.has(targetStatus) ? 'held' : 'deleted');
+  }
   if (action === NotificationNavigationAction.OPERATION) {
     const operationId = firstId(navigation.operationId);
     return operationId ? { type: 'navigate', routeName: 'Activity', params: { operationId } } : statusAction('unsupported');
