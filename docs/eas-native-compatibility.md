@@ -23,6 +23,9 @@ again. Project/account production-variable metadata and relevant local environme
 inputs are hashed without saving their values; changes invalidate resumable native
 proofs and stop promotion. Stage durations, EAS read counts and export counts are retained beside it.
 Historical single-platform wrappers remain available for investigation.
+The exclusive OTA lock is never automatically deleted as stale: after a process
+crash, verify its recorded PID has ended before removing that exact lock file.
+Ordinary reported failures release the lock and retain the resumable journal.
 
 Use the tracked wrappers and the repository-pinned EAS CLI. They set the public
 production Firebase project before CLI startup and use `--environment production`

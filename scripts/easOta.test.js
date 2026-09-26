@@ -2,6 +2,18 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { parseArgs, executeOta, assertUpdates, assertProductionChannel } = require('./easOta');
+test('a second release cannot remove or replace an existing lock', () => {
+  const fs = require('node:fs'), path = require('node:path'), os = require('node:os');
+  const { acquireReleaseLock } = require('./easOta');
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'planli-lock-'));
+  const file = path.join(directory, 'ota.lock');
+  const descriptor = acquireReleaseLock(file);
+  try {
+    fs.writeFileSync(descriptor, 'original owner');
+    assert.throws(() => acquireReleaseLock(file), /lock already exists/);
+    assert.equal(fs.readFileSync(file, 'utf8'), 'original owner');
+  } finally { fs.closeSync(descriptor); fs.unlinkSync(file); fs.rmdirSync(directory); }
+});
 test('resume environment binding detects masked variable edits and relevant local changes', () => {
   const { environmentDigest } = require('./easOta');
   const read = args => args.includes('project') ? 'ID a\nValue *****\nUpdated at 2026-09-26' : 'No variables';

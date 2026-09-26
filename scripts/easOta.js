@@ -27,6 +27,14 @@ const git = (root, args) => execFileSync('git', args, { cwd: root, encoding: 'ut
 const normalize = value => (Array.isArray(value) ? value : value.updates || []).map(update => ({ ...update,
   branch: update.branch?.name || update.branch, runtimeVersion: update.runtime?.version || update.runtimeVersion }));
 
+function acquireReleaseLock(lockPath) {
+  try { return fs.openSync(lockPath, 'wx'); }
+  catch (error) {
+    if (error.code !== 'EEXIST') throw error;
+    throw new Error(`OTA lock already exists: ${lockPath}. Do not start another release. If its process crashed, verify the recorded owner has ended and clear that exact lock before resuming.`);
+  }
+}
+
 function parseArgs(argv) {
   const args = { platform: 'all', apply: false, message: '', resume: '' };
   for (let i = 0; i < argv.length; i++) {
@@ -232,12 +240,7 @@ async function main(args, root = path.resolve(__dirname, '..')) {
   if (state.version !== 1 || state.binding !== binding || state.message !== args.message) throw new Error('Release journal inputs changed; do not reuse it.');
   const save = () => { fs.writeFileSync(statePath + '.tmp', JSON.stringify(state, null, 2)); fs.renameSync(statePath + '.tmp', statePath); };
   const lockPath = path.join(directory, 'ota.lock');
-  if (fs.existsSync(lockPath)) {
-    const previous = JSON.parse(fs.readFileSync(lockPath));
-    try { process.kill(previous.pid, 0); throw new Error('Another OTA release is active.'); }
-    catch (error) { if (error.code !== 'ESRCH') throw error; fs.unlinkSync(lockPath); }
-  }
-  const lock = fs.openSync(lockPath, 'wx');
+  const lock = acquireReleaseLock(lockPath);
   fs.writeFileSync(lock, JSON.stringify({ pid: process.pid, statePath }));
   console.log(`Release journal: ${statePath}`);
   save();
@@ -358,4 +361,4 @@ async function main(args, root = path.resolve(__dirname, '..')) {
 
 if (require.main === module) main(parseArgs(process.argv.slice(2)))
   .catch(error => { console.error(`OTA stopped: ${error.message}`); process.exitCode = 1; });
-module.exports = { parseArgs, assertUpdates, executeOta, mutation, assertProductionChannel, environmentDigest, main };
+module.exports = { parseArgs, assertUpdates, executeOta, mutation, assertProductionChannel, environmentDigest, acquireReleaseLock, main };

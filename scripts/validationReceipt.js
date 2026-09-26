@@ -22,6 +22,7 @@ function inputFiles(root, scope) {
   }
   const tracked = [...new Set(inventory)].filter((file) => {
     if (/\.md$|(?:^|\/)(?:\.codex_tmp|node_modules|\.expo|\.expo-validation)\//.test(file)) return false;
+    if (scope === 'client' && file.startsWith('client/.maestro/')) return false;
     if (file.startsWith('scripts/')) {
       // Release orchestration is not an input to client Jest. Keep the planner,
       // receipt implementation and shared generators, which can alter a check.

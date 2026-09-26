@@ -5,6 +5,22 @@ const os = require('node:os');
 const path = require('node:path');
 const { signature, reusableReceipt, writeReceipt } = require('./validationReceipt');
 
+test('device flows invalidate device evidence but do not invalidate client Jest receipts', (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'planli-receipt-scope-'));
+  t.after(() => { if (!root.startsWith(path.join(os.tmpdir(), 'planli-receipt-scope-'))) throw Error('Unexpected fixture'); fs.rmSync(root, { recursive: true, force: true }); });
+  require('node:child_process').execFileSync('git', ['init', '-q'], { cwd: root });
+  fs.mkdirSync(path.join(root, 'client/.maestro'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'client/app.js'), 'app');
+  const flow = path.join(root, 'client/.maestro/flow.yml');
+  fs.writeFileSync(flow, 'before');
+  const inputs = { root, command: 'test', args: [], env: {} };
+  const client = signature({ ...inputs, scope: 'client' });
+  const device = signature({ ...inputs, scope: 'all' });
+  fs.writeFileSync(flow, 'after');
+  assert.equal(signature({ ...inputs, scope: 'client' }), client);
+  assert.notEqual(signature({ ...inputs, scope: 'all' }), device);
+});
+
 test('receipts bind source bytes, command, dependencies and environment, not Git commit IDs', (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'planli-receipt-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));

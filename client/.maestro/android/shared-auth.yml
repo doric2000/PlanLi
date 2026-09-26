@@ -1,8 +1,7 @@
 appId: com.planli.planlitravels.e2e
 ---
 - extendedWaitUntil:
-    visible:
-      id: auth-entry-screen
+    visible: "נדרשת התחברות"
     timeout: 30000
 - tapOn: "התחברות"
 - tapOn:
