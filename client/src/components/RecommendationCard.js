@@ -484,7 +484,7 @@ const RecommendationCard = ({
           onDestinationPress={destination.cityId && destination.countryId ? () => navigation.navigate('LandingPage', { cityId: destination.cityId, countryId: destination.countryId }) : undefined}
           metadata={[item.category, getBudgetLabel(item?.facets?.budgetLevel || item?.attributes?.budgetLevel || ''), Number.isFinite(item.distanceKm) ? item.distanceKm.toFixed(1) + ' ק״מ ממך' : ''].filter(Boolean).join(' · ')}
           description={item.description} onPress={handleCardPress} />
-        {showActionBar && <ActionBar item={item} onCommentPress={onCommentPress} onReadMore={handleCardPress} />}
+        {showActionBar && <ActionBar item={item} onCommentPress={onCommentPress} compact />}
       </>}
     </View>
   );

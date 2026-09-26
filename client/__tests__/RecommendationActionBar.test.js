@@ -3,6 +3,7 @@ import { StyleSheet } from 'react-native';
 import { fireEvent, render } from '@testing-library/react-native';
 
 import { RecommendationActionBar } from '../src/components/RecommendationActionBar';
+import CommunityCardBody from '../src/features/community/components/CommunityCardBody';
 
 jest.mock('@expo/vector-icons', () => {
   const ReactModule = require('react');
@@ -32,7 +33,8 @@ describe('RecommendationActionBar', () => {
     const onReadMore = jest.fn();
     const onLikePress = jest.fn();
     const onCommentPress = jest.fn();
-    const screen = render(<RecommendationActionBar onReadMore={onReadMore} onLikePress={onLikePress} onCommentPress={onCommentPress} />);
+    const screen = render(<><CommunityCardBody title="המלצה" description="תקציר" onPress={onReadMore} />
+      <RecommendationActionBar compact onLikePress={onLikePress} onCommentPress={onCommentPress} /></>);
     const stopPropagation = jest.fn();
     fireEvent.press(screen.getByLabelText('קריאת ההמלצה במלואה'), { stopPropagation });
     expect(onReadMore).toHaveBeenCalledTimes(1);
@@ -80,7 +82,7 @@ describe('RecommendationActionBar', () => {
       minHeight: 44,
     });
     expect(StyleSheet.flatten(screen.getByTestId('recommendation-action-comments').props.style)).toMatchObject({
-      width: 88,
+      width: 52,
       minHeight: 44,
     });
     expect(StyleSheet.flatten(screen.getByTestId('recommendation-action-share').props.style)).toMatchObject({
@@ -94,7 +96,8 @@ describe('RecommendationActionBar', () => {
     expect(screen.getByLabelText('12 לייקים, הצגת הרשימה')).toBeTruthy();
     expect(screen.getByLabelText('4 תגובות')).toBeTruthy();
     expect(screen.getByLabelText('שיתוף המסלול')).toBeTruthy();
-    expect(screen.getByText('שיתוף')).toBeTruthy();
+    expect(screen.queryByText('שיתוף')).toBeNull();
+    expect(screen.queryByTestId('recommendation-action-add-to-trip')).toBeNull();
     expect(screen.queryByLabelText('דיווח על המסלול')).toBeNull();
   });
 

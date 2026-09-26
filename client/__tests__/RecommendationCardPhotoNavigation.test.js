@@ -102,6 +102,14 @@ const recommendation = {
 };
 
 describe('RecommendationCard photo navigation', () => {
+  it('opens recommendation details once from read more in the excerpt', () => {
+    const screen = render(<RecommendationCard item={recommendation} variant="community" />);
+    const stopPropagation = jest.fn();
+    fireEvent.press(screen.getByTestId('community-card-read-more'), { stopPropagation });
+    expect(mockNavigate).toHaveBeenCalledTimes(1);
+    expect(mockNavigate).toHaveBeenCalledWith('RecommendationDetail', { item: recommendation });
+    expect(stopPropagation).toHaveBeenCalledTimes(1);
+  });
   it('preserves the destination shortcut in a compact community card', () => {
     const item = { ...recommendation, destination: { cityId: 'bay', countryId: 'lk', cityName: 'ארוגם באי', countryName: 'סרי לנקה' } };
     const screen = render(<RecommendationCard item={item} variant="community" showActionBar={false} />);

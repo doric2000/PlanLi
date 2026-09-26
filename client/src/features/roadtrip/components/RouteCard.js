@@ -392,8 +392,8 @@ export const RouteCard = ({
                 {compact ? <>
                   <CommunityCardBody testID="route-content" title={item.title} destination={destinationPreviews.map((value) => value.name).join(' · ')}
                     metadata={[item.dayCount === 1 ? 'יום אחד' : item.dayCount ? item.dayCount + ' ימים' : '', item.stopCount ? item.stopCount + ' עצירות' : '', getBudgetLabel(item?.facets?.budgetLevel || item?.attributes?.budgetLevel || '')].filter(Boolean).join(' · ')}
-                    description={item.description} onPress={onPress} />
-                  {showActionBar && <ActionBar item={item} onCommentPress={onCommentPress} collectionName="routes" onReadMore={onPress} />}
+                    description={item.description} onPress={onPress} contentLabel="המסלול" />
+                  {showActionBar && <ActionBar item={item} onCommentPress={onCommentPress} collectionName="routes" compact />}
                 </> : renderContent(true)}
 			</View>
 		);

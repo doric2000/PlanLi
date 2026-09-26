@@ -4,8 +4,6 @@ import { fontFamilies } from './typography';
 
 export const recommendationActionBarStyles = StyleSheet.create({
   compactActions: { minHeight: 44, paddingVertical: 0 },
-  readMore: { minHeight: 44, minWidth: 72, marginRight: 'auto', justifyContent: 'center', flexShrink: 1 },
-  readMoreText: { fontSize: 14, lineHeight: 20, fontFamily: fontFamilies.bold, color: colors.primary, writingDirection: 'rtl', textAlign: 'left' },
   bar: {
     backgroundColor: colors.white,
     // Isolate the physical right-hand anchor from native and inherited Web RTL.
@@ -26,6 +24,10 @@ export const recommendationActionBarStyles = StyleSheet.create({
     minHeight: 44,
     flexShrink: 0,
   },
+  // Comments have one combined target, unlike the separate heart/list targets.
+  comments: { flexDirection: 'row-reverse', alignItems: 'center', width: 52, minHeight: 44, gap: 3, flexShrink: 0 },
+  commentIcon: { width: 22, alignItems: 'center' },
+  commentCount: { width: 27, alignItems: 'center' },
   // Separate 44px targets for the heart and likes list, with an 8px visual gap.
   iconSlot: {
     width: 44,
@@ -64,17 +66,10 @@ export const recommendationActionBarStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     minWidth: 44,
+    width: 44,
     minHeight: 44,
     marginRight: 'auto',
-    gap: 8,
-    flexShrink: 1,
-  },
-  shareText: {
-    color: colors.primary,
-    fontSize: 14,
-    fontFamily: fontFamilies.semiBold,
-    writingDirection: 'rtl',
-    flexShrink: 1,
+    flexShrink: 0,
   },
   addToTrip: {
     minWidth: 70,

@@ -88,6 +88,14 @@ const route = {
 };
 
 describe('RouteCard photo navigation', () => {
+  it('opens the route once from read more in the community excerpt', () => {
+    const openRoute = jest.fn();
+    const screen = render(<RouteCard item={route} variant="community" onPress={openRoute} />);
+    const stopPropagation = jest.fn();
+    fireEvent.press(screen.getByTestId('community-card-read-more'), { stopPropagation });
+    expect(openRoute).toHaveBeenCalledTimes(1);
+    expect(stopPropagation).toHaveBeenCalledTimes(1);
+  });
   it('uses the existing route-details callback when a RoadTrip photo is pressed', () => {
     const openRoute = jest.fn();
     const screen = render(

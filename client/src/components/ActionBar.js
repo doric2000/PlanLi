@@ -6,13 +6,14 @@ import { RecommendationActionBar } from './RecommendationActionBar';
 import AddToTripModal from '../features/tripPlanner/components/AddToTripModal';
 import { useAuthUser } from '../hooks/useAuthUser';
 import { CAPABILITIES } from '../constants/authPolicy';
+import { useContentShare } from '../hooks/useContentShare';
 
 /**
  * ActionBar - Stateful card wrapper around RecommendationActionBar.
  *
  * Handles like toggling, displays like count with a modal showing who liked,
- * and subscribes to the comment count. Detail screens provide sharing directly
- * to RecommendationActionBar because cards do not expose that action.
+ * subscribes to the comment count, and shares the public content link using
+ * the same handler as detail screens.
  *
  * @param {Object} props
  * @param {Object} props.item - Content data with an id and stats counters.
@@ -35,10 +36,12 @@ import { CAPABILITIES } from '../constants/authPolicy';
  *   collectionName="routes"
  * />
  */
-const ActionBar = ({ item, onCommentPress, collectionName = 'recommendations', onReadMore }) => {
+const ActionBar = ({ item, onCommentPress, collectionName = 'recommendations', compact = false }) => {
 	const [showLikesModal, setShowLikesModal] = useState(false);
 	const [showAddToTrip, setShowAddToTrip] = useState(false);
 	const { ensureCapability } = useAuthUser();
+	const shareKind = collectionName === 'routes' ? 'route' : collectionName === 'recommendations' ? 'recommendation' : null;
+	const handleShare = useContentShare({ kind: shareKind, id: item.id, title: item.title, status: item.status });
 	const handleAddToTrip = async () => {
 		if (await ensureCapability(CAPABILITIES.ACTIVE, { name: 'TripPlanner' })) setShowAddToTrip(true);
 	};
@@ -72,7 +75,8 @@ const ActionBar = ({ item, onCommentPress, collectionName = 'recommendations', o
 				onLikePress={toggleLike}
 				onLikesListPress={() => setShowLikesModal(true)}
 				contentLabel={contentLabel}
-				onReadMore={onReadMore}
+				compact={compact}
+				onSharePress={shareKind ? handleShare : undefined}
 				onAddToTrip={collectionName === 'recommendations' ? handleAddToTrip : undefined}
 			/>
 
