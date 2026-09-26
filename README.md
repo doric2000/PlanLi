@@ -25,6 +25,46 @@ The existing Text Search quota remains zero. See
 
 ## Current environment status
 
+### Community sharing OTA (2026-09-26, published)
+
+PR [#440](https://github.com/doric2000/PlanLi/pull/440) merged as
+`30d88e01159b183f9f7bc8119e3a7cdd48f2c776` after all applicable PR checks passed.
+Recommendation and route cards now expose icon-only native sharing using the
+existing `planli.cc` links, with the same validation and duplicate-tap guard as
+detail screens. Recommendations retain share beside add-to-trip; routes do not
+expose add-to-trip. Read more sits in the excerpt and long counters retain exact
+accessibility labels.
+
+Production OTA group **`5a6a57cf-79d3-41ca-b609-354a57cfb4af`** was published at
+`2026-09-26T18:41:37.137Z` from that merge. Android **1.1.0 (12)** and iOS
+**1.1.3 (34)** remain on runtime **1.4.0**, channel/environment `production`.
+The existing EAS builds are Android `597752db-0fd4-4861-a8d7-a530ccf85ca7` and
+iOS `1ff27c70-6a66-4daf-b58d-bb8a3d092091`; no native build, store submission,
+version increment or backend deployment was performed. Store-review state is
+unchanged from the records below.
+
+The public update endpoint independently served the verified candidate assets:
+Android update `01a0df05-d771-7479-aa47-b4c432c45abc` at `18:41:38.294Z`, and
+iOS update `01a0df05-d771-714d-8c0b-0e8b3725a8f7` at `18:41:38.598Z`.
+Staging group `d46ca981-0f1f-4cb9-a3d0-53511bcc1160` was exported once for both
+platforms and promoted without rebuilding. Both native fingerprints matched the
+exact submission-metadata reviews in `docs/eas-native-compatibility.md`; no new
+native exception was introduced.
+
+Validation passed: 18 feature suites / 112 tests, release readiness with 26
+affected client suites / 222 tests, 37 Functions test files / 500 tests, and the
+Functions dependency audit. Read-only review found no actionable regressions.
+Actual card/action-bar Web previews passed at 320px/390px, including RTL order,
+44px targets, long counters, isolated presses and canonical URL payloads. Native
+share sheets were mocked. Physical-device OTA installation and sharing acceptance
+remain **unverified**; the earlier Android emulator waiver was respected.
+
+Rollback targets: Android `879f6607-3360-4523-9c46-eb7184e231c6`; iOS
+`f1a97566-0195-4955-87b9-eb6b6a728757`. Any rollback must be explicitly authorized
+and scoped to the appropriate platform/runtime. Release journal and timings:
+`.codex_tmp/releases/ota-73178521-38b6-4932-a1be-ec0ea646f63b{,-metrics}.json`.
+Immutable bundle sizes and SHA-256 hashes are recorded in the release entries below.
+
 ### Android Production promotion and unified OTA (2026-09-26, published)
 
 Android **1.1.0 (12)** is the release target, EAS build
@@ -6088,3 +6128,23 @@ part of this follow-up.
 - Manual Android emulator auth/return/back scenario passed on the existing development APK (`E1E8E0CBED783618CB95A5EF1F97DCB06429B50D8E2E5EA4F3C58ED5328797B3`). This does not validate the native inputs or physical installation of the store binary.
 - Physical store-device application and post-OTA acceptance: pending. Local test services and the task-owned emulator were stopped.
 - Rollback: no previous android OTA; an authorized rollback must target the embedded build for runtime 1.4.0.
+
+## Android production OTA release
+
+- Source commit: `30d88e01159b183f9f7bc8119e3a7cdd48f2c776`.
+- EAS Update group: `5a6a57cf-79d3-41ca-b609-354a57cfb4af`; channel `production`; runtime `1.4.0`.
+- EAS environment: `production`; published at `2026-09-26T18:41:37.137Z`.
+- Immutable Android launch bundle: update `01a0df05-d771-7479-aa47-b4c432c45abc`; 10959148 bytes; SHA-256 `42FDB13391580CCA515BF064BC983B507553A03DE42F68475C938E741FF5F31A`.
+- Message: Community recommendation and route sharing
+- Device application and post-update security smoke tests: pending.
+- Rollback: republish the immediately preceding verified production group; never change the runtime URL or channel in-app.
+
+## iOS production OTA release
+
+- Source commit: `30d88e01159b183f9f7bc8119e3a7cdd48f2c776`.
+- EAS Update group: `5a6a57cf-79d3-41ca-b609-354a57cfb4af`; channel `production`; runtime `1.4.0`.
+- EAS environment: `production`; published at `2026-09-26T18:41:37.137Z`.
+- Immutable iOS launch bundle: update `01a0df05-d771-714d-8c0b-0e8b3725a8f7`; 10956472 bytes; SHA-256 `EA49A4206ED7D96E154EF19EC57B0006438ACF0C710223DB755594AEAAB20A76`.
+- Message: Community recommendation and route sharing
+- Device application and post-update security smoke tests: pending.
+- Rollback: republish the immediately preceding verified production group; never change the runtime URL or channel in-app.
