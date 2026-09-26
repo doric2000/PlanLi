@@ -43,6 +43,17 @@ function removeFixture(root) {
   fs.rmSync(resolved, { recursive: true, force: true });
 }
 
+test('dependency selection ignores generated exports but includes new source files', (t) => {
+  const root = fixtureRepo({ '.gitignore': 'client/dist-old/\n',
+    'client/src/shared.js': 'module.exports = 1;',
+    'client/__tests__/consumer.test.js': "require('../src/shared');",
+    'client/dist-old/generated.test.js': "require('../src/shared');" });
+  t.after(() => removeFixture(root));
+  require('node:child_process').execFileSync('git', ['init', '-q'], { cwd: root });
+  const plan = createPlan(['client/src/shared.js'], root);
+  assert.deepEqual(plan.clientTests, ['client/__tests__/consumer.test.js']);
+});
+
 test('paths are normalized and deduplicated across Windows and POSIX forms', () => {
   assert.equal(normalizePath('.\\client\\src\\App.js'), 'client/src/App.js');
   assert.deepEqual(unique(['functions\\a.js', './functions/a.js', 'functions/b.js']), [

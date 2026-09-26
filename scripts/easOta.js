@@ -14,6 +14,15 @@ const { verifyProductionUpdateArtifact, verifyPublicUpdate } = require('./easUpd
 const { validateTargets } = require('./releaseReadiness');
 
 const sha = value => crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex');
+function environmentDigest(read, env = process.env) {
+  // Long output includes variable IDs and update timestamps even when values
+  // are masked. Keep only its digest: never persist credentials or values.
+  const remote = ['project', 'account'].map(scope => read(['env:list', 'production', '--scope', scope, '--format', 'long'])
+    .replace(/\u001b\[[0-9;]*m/g, '').replace(/\r\n/g, '\n').trim());
+  const local = Object.keys(env).filter(key => /^(EXPO_|EAS_|PLANLI_|GOOGLE_|NODE_)/.test(key))
+    .sort().map(key => [key, env[key]]);
+  return sha({ remote, local });
+}
 const git = (root, args) => execFileSync('git', args, { cwd: root, encoding: 'utf8', windowsHide: true }).trim();
 const normalize = value => (Array.isArray(value) ? value : value.updates || []).map(update => ({ ...update,
   branch: update.branch?.name || update.branch, runtimeVersion: update.runtime?.version || update.runtimeVersion }));
@@ -151,7 +160,7 @@ function createReadRunner(root, metrics) {
     throw new Error('Install the repository-pinned EAS CLI 22.6.0.');
   }
   return args => {
-    if (!['whoami', 'build:view', 'channel:view', 'update:list', 'update:view'].includes(args[0])) throw new Error('Read runner cannot publish.');
+    if (!['whoami', 'build:view', 'channel:view', 'update:list', 'update:view', 'env:list'].includes(args[0])) throw new Error('Read runner cannot publish.');
     const started = Date.now();
     try {
       return execFileSync(process.execPath, [entry, ...args], { cwd: path.join(root, 'client'), encoding: 'utf8',
@@ -212,8 +221,9 @@ async function main(args, root = path.resolve(__dirname, '..')) {
 
   const directory = path.join(root, '.codex_tmp/releases');
   fs.mkdirSync(directory, { recursive: true });
+  const environment = environmentDigest(read);
   const binding = sha({ head: repo.head, requested, baselines: targets.map(target => target.baseline),
-    node: process.version, environment: 'production', cli: '22.6.0',
+    node: process.version, environment, cli: '22.6.0',
     lock: fs.readFileSync(path.join(root, 'client/package-lock.json'), 'utf8') });
   const statePath = args.resume ? path.resolve(root, args.resume) : path.join(directory, `ota-${crypto.randomUUID()}.json`);
   if (path.dirname(statePath) !== directory || !/^ota-[\da-f-]+\.json$/.test(path.basename(statePath))) throw new Error('Resume journal must be in this repository release directory.');
@@ -249,9 +259,9 @@ async function main(args, root = path.resolve(__dirname, '..')) {
     validate: active => validateTargets(root, active),
     prepare: (target, sourceRecord) => prepareSource({ repoRoot: root, baseline: target.baseline, sourceRecord }),
     native(target, source, previous) {
-      verifySource(source);
-      const proofBinding = sha({ commit: source.commit, baseline: target.baseline, locks: source.dependencyLockDigest });
+      const proofBinding = sha({ commit: source.commit, baseline: target.baseline, locks: source.dependencyLockDigest, environment });
       if (previous?.binding === proofBinding) {
+        verifySource(source);
         validateFingerprint({ hash: previous.fingerprint, baseline: target.baseline, sourceRoot: source.sourceRoot });
         return previous;
       }
@@ -266,6 +276,7 @@ async function main(args, root = path.resolve(__dirname, '..')) {
       const latest = repositoryState(root);
       validateRepositoryState(latest);
       if (latest.head !== repo.head) throw new Error('Source changed during release.');
+      if (environmentDigest(read) !== environment) throw new Error('Production environment changed during release.');
       assertProductionChannel(parseEasJson(read(['channel:view', 'production', '--json'])));
       for (const target of active) {
         const current = currentProductionCommit(path.join(root, 'client'), target.platform, target.baseline, read);
@@ -277,7 +288,6 @@ async function main(args, root = path.resolve(__dirname, '..')) {
       }
     },
     publish({ kind, source, targets: active, candidateGroup, message }) {
-      verifySource(source);
       const platform = active.length === 2 ? 'all' : active[0].platform;
       const command = kind === 'candidate'
         ? ['update', '--branch', 'staging', '--platform', platform, '--environment', 'production', '--emit-metadata']
@@ -348,4 +358,4 @@ async function main(args, root = path.resolve(__dirname, '..')) {
 
 if (require.main === module) main(parseArgs(process.argv.slice(2)))
   .catch(error => { console.error(`OTA stopped: ${error.message}`); process.exitCode = 1; });
-module.exports = { parseArgs, assertUpdates, executeOta, mutation, assertProductionChannel, main };
+module.exports = { parseArgs, assertUpdates, executeOta, mutation, assertProductionChannel, environmentDigest, main };

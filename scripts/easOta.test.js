@@ -2,6 +2,14 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { parseArgs, executeOta, assertUpdates, assertProductionChannel } = require('./easOta');
+test('resume environment binding detects masked variable edits and relevant local changes', () => {
+  const { environmentDigest } = require('./easOta');
+  const read = args => args.includes('project') ? 'ID a\nValue *****\nUpdated at 2026-09-26' : 'No variables';
+  const initial = environmentDigest(read, { EXPO_PUBLIC_API: 'a', TERM: 'a' });
+  assert.equal(initial, environmentDigest(read, { EXPO_PUBLIC_API: 'a', TERM: 'b' }));
+  assert.notEqual(initial, environmentDigest(args => read(args).replace('2026-09-26', '2026-09-27'), { EXPO_PUBLIC_API: 'a' }));
+  assert.notEqual(initial, environmentDigest(read, { EXPO_PUBLIC_API: 'b' }));
+});
 
 function fixture() {
   const events = [];

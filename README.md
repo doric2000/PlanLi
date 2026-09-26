@@ -37,15 +37,19 @@ EAS reports FINISHED/STORE. The existing AAB SHA-256 is
 The same Play artifact was promoted from Internal testing into a Production
 draft (track `4697581935490668054`, release `2`), with 100% rollout across the
 already targeted countries. No new AAB upload or versionCode increment was made.
-Google review has not yet been submitted at this checkpoint; Production build 10
-remains the last verified public release. Managed publishing remains off.
+The Production change was submitted on September 26 around 17:43 Asia/Jerusalem;
+Publishing overview independently showed **Changes in review**, build 12,
+**Start full rollout**. Approval and public availability are not yet verified;
+Production build 10 remains the last verified public release. Managed publishing remains off.
 The console reports a non-blocking missing deobfuscation-file warning.
 
 Release tooling source `99ce9c873596` adds the both-platform `release:ota` workflow
 and separates Google Play `production` from explicitly named `internal-testing`.
 Live read-only planning selected Android for publication and identified the iOS
-application inputs as already current. Android OTA and native submission-metadata
-review are still pending here. Physical installation/acceptance of build 12 is
+application inputs as already current. Exact native fingerprint comparisons for
+both platforms prove only the store-submission metadata changed; the reviewed
+pairs are recorded in `docs/eas-native-compatibility.md`. Android OTA is still
+pending here. Physical installation/acceptance of build 12 is
 unverified. Store review and OTA delivery are recorded separately below when complete.
 
 ### Custom-domain migration in progress (2026-09-26)

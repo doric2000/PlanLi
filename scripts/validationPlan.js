@@ -139,6 +139,17 @@ function extractLiteralSpecifiers(source) {
 
 function listFiles(directory) {
   if (!fs.existsSync(directory)) return [];
+  // Respect Git's ignored build/export outputs instead of traversing generated
+  // bundles (which can contain thousands of modules unrelated to source tests).
+  try {
+    const files = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '-z', '--', '.'],
+      { cwd: directory, encoding: 'utf8', windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 16 * 1024 * 1024 });
+    return [...new Set(files.split('\0').filter(Boolean))].map(file => path.join(directory, file))
+      .filter(file => fs.existsSync(file) && fs.statSync(file).isFile());
+  } catch (error) {
+    // Small standalone test fixtures are intentionally not Git repositories.
+    if (error.status !== 128) throw error;
+  }
   const result = [];
   for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
     if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue;

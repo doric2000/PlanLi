@@ -92,6 +92,7 @@ async function main(args = process.argv.slice(2)) {
     if (!flows.length) { console.log('No Android flow is affected; no emulator or build is needed.'); return; }
     runtimeFlows = flows;
     if (args.includes('--existing-binary') && (args.includes('--build') || flows.length !== 1 || flows[0] !== 'shared-auth')) throw new Error('Existing-binary mode is limited to the shared-auth JavaScript scenario.');
+    if (args.includes('--existing-binary') && !fs.existsSync(path.join(ROOT, 'client/android/app/build/outputs/apk/debug/app-debug.apk'))) throw new Error('No existing Android development APK is available.');
     args = [...args.filter((arg) => !arg.startsWith('--flows=')), '--flows=' + flows.join(',')];
   }
   for (const port of [4400, 4500, 9099, 8080, 9199, 5001, 9230]) {

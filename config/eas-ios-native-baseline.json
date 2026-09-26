@@ -16,5 +16,11 @@
   },
   "metadataLfSha1": {
     "client/GoogleService-Info.plist": "add4349d42ce5679ab2e3801de30069757de245e"
+  },
+  "reviewedSubmissionDelta": {
+    "fingerprint": "766de533788a9b3cca6a0c632845ba913b5391c2",
+    "buildFingerprint": "976661b4a04d2165ecd571430564b16b5f86fc13",
+    "easConfigSha256": "03a8f7a26f2f16c1ec1e1b48ab8b4179bf24116eb506270225a8f8690adbf956",
+    "review": "docs/eas-native-compatibility.md#production-submission-metadata-review"
   }
 }
