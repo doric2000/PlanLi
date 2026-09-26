@@ -50,7 +50,9 @@ const activeDocument = {
   smartProfile: { setupRequired: false, completedAt: { seconds: 1 } },
 };
 
-function Harness({ destination = { name: 'LandingPage', params: { cityId: 'tlv' } } }) {
+function Harness({ destination = { name: 'LandingPage', params: { cityId: 'tlv' } }, onContext }) {
+  const context = useAuth();
+  onContext?.(context);
   const {
     status,
     gate,
@@ -162,6 +164,151 @@ describe('AuthProvider capability gate', () => {
     await waitFor(() => expect(navigationRef.resetRoot).toHaveBeenCalledWith({
       index: 1, routes: [{ name: 'Main' }, destination],
     }));
+  });
+
+  function setupReturn({ navigationReady = true } = {}) {
+    let context;
+    const destination = { name: 'SharedTrip', params: { token: 'shared-token' } };
+    const navigationRef = { isReady: jest.fn(() => navigationReady), resetRoot: jest.fn() };
+    const harness = <Harness destination={destination} onContext={value => { context = value; }} />;
+    const screen = render(<AuthProvider navigationRef={navigationRef} navigationReady={navigationReady}>{harness}</AuthProvider>);
+    fireEvent.press(screen.getByTestId('require-active'));
+    return { navigationRef, destination, screen, harness, context: () => context };
+  }
+
+  async function signIn({ uid = 'user-1', emailVerified = true } = {}) {
+    await act(async () => {
+      authListener({ uid, emailVerified, providerData: [{ providerId: 'password' }] });
+    });
+  }
+
+  function deferred() {
+    let resolve;
+    const promise = new Promise(done => { resolve = done; });
+    return { promise, resolve };
+  }
+
+  it.each(['SharedTrip', 'RouteDetail', 'RecommendationDetail'])(
+    'waits for slow sign-in bootstrap, restores %s once, and ignores subsequent token refreshes', async name => {
+      const test = setupReturn();
+      const destination = { name, params: { token: 'shared-token', id: 'item-1' } };
+      act(() => test.context().requireCapability(CAPABILITIES.ACTIVE, destination));
+      const bootstrap = deferred();
+      let transition;
+      act(() => { transition = test.context().runAuthTransition(() => bootstrap.promise, 'sign_in_email', { name: 'Main' }); });
+      await signIn();
+      expect(test.context().status).toBe(AUTH_STATES.READY);
+      expect(test.navigationRef.resetRoot).not.toHaveBeenCalled();
+      await act(async () => { bootstrap.resolve(); await transition; });
+      expect(test.navigationRef.resetRoot).toHaveBeenCalledTimes(1);
+      expect(test.navigationRef.resetRoot).toHaveBeenLastCalledWith({ index: 1, routes: [{ name: 'Main' }, destination] });
+      await signIn();
+      act(() => profileListener({ exists: () => true, data: () => activeDocument }));
+      expect(test.navigationRef.resetRoot).toHaveBeenCalledTimes(1);
+    }
+  );
+
+  it('waits for a server-confirmed profile when sign-in completes first', async () => {
+    const profile = deferred();
+    getDocFromServer.mockReturnValue(profile.promise);
+    const test = setupReturn();
+    await act(async () => {
+      await test.context().runAuthTransition(async () => {
+        authListener({ uid: 'user-1', emailVerified: true, providerData: [{ providerId: 'password' }] });
+      }, 'sign_in_email', { name: 'Main' });
+    });
+    expect(test.navigationRef.resetRoot).not.toHaveBeenCalled();
+    await act(async () => { profile.resolve({ exists: () => true, data: () => activeDocument }); });
+    expect(test.navigationRef.resetRoot).toHaveBeenCalledTimes(1);
+    expect(test.navigationRef.resetRoot).toHaveBeenCalledWith({ index: 1, routes: [{ name: 'Main' }, test.destination] });
+  });
+
+  it.each([false, true])('uses the normal destination without a pending link (admin=%s)', async admin => {
+    const previous = process.env.EXPO_PUBLIC_ADMIN_WEB;
+    process.env.EXPO_PUBLIC_ADMIN_WEB = String(admin);
+    try {
+      const test = setupReturn();
+      act(() => test.context().clearPendingReturn());
+      await signIn();
+      await act(async () => { await test.context().runAuthTransition(async () => {}, 'sign_in_email', { name: 'Main' }); });
+      expect(test.navigationRef.resetRoot).toHaveBeenCalledTimes(1);
+      expect(test.navigationRef.resetRoot).toHaveBeenCalledWith({ index: 0, routes: [{ name: admin ? 'AdminPanel' : 'Main' }] });
+    } finally {
+      if (previous === undefined) delete process.env.EXPO_PUBLIC_ADMIN_WEB;
+      else process.env.EXPO_PUBLIC_ADMIN_WEB = previous;
+    }
+  });
+
+  it('retains the link through verification, legal completion and optional onboarding', async () => {
+    const test = setupReturn();
+    getDocFromServer.mockResolvedValue({ exists: () => true, data: () => ({ displayName: 'Dana' }) });
+    await signIn({ emailVerified: false });
+    await act(async () => { await test.context().runAuthTransition(async () => {}, 'register_email', { name: 'Main' }); });
+    expect(test.navigationRef.resetRoot).toHaveBeenLastCalledWith({ index: 0, routes: [{ name: 'VerifyEmail' }] });
+    await signIn();
+    expect(test.navigationRef.resetRoot).toHaveBeenCalledTimes(1);
+    act(() => test.context().completeAuthNavigation());
+    expect(test.navigationRef.resetRoot).toHaveBeenLastCalledWith({ index: 0, routes: [{ name: 'CompleteAccount' }] });
+    await act(async () => {
+      await test.context().runAuthTransition(async () => {
+        test.context().synchronizeUserDocument(activeDocument, 'user-1');
+      }, 'complete_account', { name: 'PreferenceSetup', params: { source: 'new-account' } });
+    });
+    expect(test.navigationRef.resetRoot).toHaveBeenCalledTimes(3);
+    expect(test.navigationRef.resetRoot).toHaveBeenLastCalledWith({ index: 0, routes: [{ name: 'PreferenceSetup', params: { source: 'new-account' } }] });
+    act(() => profileListener({ exists: () => true, data: () => activeDocument }));
+    expect(test.navigationRef.resetRoot).toHaveBeenCalledTimes(3);
+    act(() => test.context().completeAuthNavigation());
+    expect(test.navigationRef.resetRoot).toHaveBeenCalledTimes(4);
+    expect(test.navigationRef.resetRoot).toHaveBeenLastCalledWith({ index: 1, routes: [{ name: 'Main' }, test.destination] });
+  });
+
+  it('does not resurrect a cancelled return when an in-flight login finishes', async () => {
+    const test = setupReturn();
+    const login = deferred();
+    let transition;
+    act(() => { transition = test.context().runAuthTransition(() => login.promise, 'sign_in_email', { name: 'Main' }); });
+    act(() => test.context().clearPendingReturn());
+    await signIn();
+    await act(async () => { login.resolve(); await transition; });
+    expect(test.navigationRef.resetRoot).not.toHaveBeenCalled();
+    act(() => test.context().completeAuthNavigation());
+    expect(test.navigationRef.resetRoot).toHaveBeenCalledWith({ index: 0, routes: [{ name: 'Main' }] });
+  });
+
+  it('retains the return after a failed sign-in so a retry can complete it', async () => {
+    const test = setupReturn();
+    await act(async () => {
+      await expect(test.context().runAuthTransition(async () => { throw new Error('offline'); }, 'sign_in_email', { name: 'Main' }))
+        .rejects.toThrow('offline');
+    });
+    expect(test.navigationRef.resetRoot).not.toHaveBeenCalled();
+    await signIn();
+    expect(test.navigationRef.resetRoot).not.toHaveBeenCalled();
+    await act(async () => { await test.context().runAuthTransition(async () => {}, 'sign_in_email', { name: 'Main' }); });
+    expect(test.navigationRef.resetRoot).toHaveBeenCalledWith({ index: 1, routes: [{ name: 'Main' }, test.destination] });
+  });
+
+  it('keeps a completed navigation request until the navigator is ready', async () => {
+    const test = setupReturn({ navigationReady: false });
+    await signIn();
+    act(() => test.context().completeAuthNavigation());
+    expect(test.navigationRef.resetRoot).not.toHaveBeenCalled();
+    test.navigationRef.isReady.mockReturnValue(true);
+    test.screen.rerender(<AuthProvider navigationRef={test.navigationRef} navigationReady>{test.harness}</AuthProvider>);
+    expect(test.navigationRef.resetRoot).toHaveBeenCalledTimes(1);
+    expect(test.navigationRef.resetRoot).toHaveBeenCalledWith({ index: 1, routes: [{ name: 'Main' }, test.destination] });
+  });
+
+  it.each([null, { uid: 'user-2', emailVerified: true }])('clears a pending return on sign-out or account switch: %s', async nextUser => {
+    const test = setupReturn();
+    const login = deferred();
+    let transition;
+    act(() => { transition = test.context().runAuthTransition(() => login.promise, 'sign_in_email', { name: 'Main' }); });
+    await signIn();
+    await act(async () => { authListener(nextUser); });
+    await act(async () => { login.resolve(); await transition; });
+    expect(test.navigationRef.resetRoot).not.toHaveBeenCalled();
   });
 
   it('opens the same central gate for structured server authorization errors', async () => {

@@ -27,8 +27,13 @@ Auth uses one `AuthProvider` state machine:
 
 - Protected actions use `requireCapability`; external entry points use `openAuthFlow`.
 - Guest auth screens remain inside the nested Auth tab navigator.
-- Active access requires verified eligibility, current profile/legal completion,
-  and completed preferences; server checks remain authoritative.
+- Active access follows `deriveAuthState` and server-confirmed profile/legal
+  eligibility; optional preference onboarding must not become an access requirement.
+- Auth success navigation belongs to `AuthProvider`: pass the next step to
+  `runAuthTransition`, or call `completeAuthNavigation` when onboarding finishes.
+  Do not reset Home in screen success callbacks. Keep shared return destinations
+  through required steps, consume once after completion, and clear on cancellation
+  or sign-out. A token/profile refresh must not navigate over an unfinished flow.
 - Display-name changes follow the single-change and verified-email policy.
 - Keep auth/legal versions aligned with Functions, Storage Rules, and legal drafts.
 

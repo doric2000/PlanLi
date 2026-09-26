@@ -17,7 +17,8 @@ import {
 } from '../utils/displayName';
 
 export default function CompleteAccountScreen({ navigation }) {
-  const { status, user, userDocument, synchronizeUserDocument } = useAuth();
+  const { status, user, userDocument, synchronizeUserDocument, authFlowInProgress,
+    runAuthTransition, completeAuthNavigation } = useAuth();
   const [displayName, setDisplayName] = useState('');
   const [acceptedLegal, setAcceptedLegal] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -25,10 +26,11 @@ export default function CompleteAccountScreen({ navigation }) {
   const submittedRef = useRef(false);
   const isLegalRenewal = status === AUTH_STATES.LEGAL_CONSENT_REQUIRED;
   useEffect(() => {
-    if (status === AUTH_STATES.READY && !submittedRef.current) {
-      navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
+    if (status === AUTH_STATES.READY && !submittedRef.current && !authFlowInProgress) {
+      submittedRef.current = true;
+      completeAuthNavigation();
     }
-  }, [navigation, status]);
+  }, [authFlowInProgress, completeAuthNavigation, status]);
   useEffect(() => {
     setDisplayName(userDocument?.displayName || user?.displayName || '');
   }, [user?.displayName, userDocument?.displayName]);
@@ -42,20 +44,17 @@ export default function CompleteAccountScreen({ navigation }) {
     if (!acceptedLegal) return setError('יש לאשר את תנאי השימוש ומדיניות הפרטיות.');
     setLoading(true); setError('');
     try {
-      const result = await completeAccountSetup({ displayName: name, acceptedLegal });
-      submittedRef.current = true;
-      const nextStatus = synchronizeUserDocument(result.userDocument, expectedUid);
-      if (nextStatus === AUTH_STATES.READY) {
-        navigation.reset({
-          index: 0,
-          routes: [{
-            name: isLegalRenewal ? 'Main' : 'PreferenceSetup',
-            params: isLegalRenewal ? undefined : { source: 'new-account' },
-          }],
-        });
-      } else {
-        throw new Error('מצב החשבון לא התעדכן. נסו להתנתק ולהתחבר מחדש.');
-      }
+      await runAuthTransition(async () => {
+        const result = await completeAccountSetup({ displayName: name, acceptedLegal });
+        submittedRef.current = true;
+        const nextStatus = synchronizeUserDocument(result.userDocument, expectedUid);
+        if (nextStatus !== AUTH_STATES.READY) {
+          throw new Error('מצב החשבון לא התעדכן. נסו להתנתק ולהתחבר מחדש.');
+        }
+      }, 'complete_account', {
+        name: isLegalRenewal ? 'Main' : 'PreferenceSetup',
+        ...(isLegalRenewal ? {} : { params: { source: 'new-account' } }),
+      });
     } catch (submitError) {
       setError(formatAuthError(submitError));
     } finally { setLoading(false); }

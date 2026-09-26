@@ -7,6 +7,8 @@ import AuthEntryScreen from '../src/features/auth/screens/AuthEntryScreen';
 import LoginScreen from '../src/features/auth/screens/LoginScreen';
 import RegisterScreen from '../src/features/auth/screens/RegisterScreen';
 import CompleteAccountScreen from '../src/features/auth/screens/CompleteAccountScreen';
+import VerifyEmailScreen from '../src/features/auth/screens/VerifyEmailScreen';
+import TotpChallengeScreen from '../src/features/auth/screens/TotpChallengeScreen';
 import { shouldEnableAccessibleAuthOverflow } from '../src/features/auth/components/AuthFormLayout';
 import { AUTH_STATES } from '../src/constants/authPolicy';
 
@@ -19,7 +21,15 @@ const mockSignInWithGoogle = jest.fn();
 const mockSignInWithApple = jest.fn();
 const mockIsProviderCancellation = jest.fn(() => false);
 const mockIsTotpChallengeRequired = jest.fn(() => false);
-const mockRunAuthTransition = jest.fn(async (operation) => operation());
+const mockCompleteAuthNavigation = jest.fn();
+const mockRunAuthTransition = jest.fn(async (operation, _name, destination) => {
+  const result = await operation();
+  const next = typeof destination === 'function' ? destination(result) : destination;
+  if (next) mockCompleteAuthNavigation(next);
+  return result;
+});
+const mockRefreshAuthenticatedUser = jest.fn();
+const mockCompleteTotpSignIn = jest.fn();
 const mockCompleteAccountSetup = jest.fn();
 const mockSynchronizeUserDocument = jest.fn();
 const mockClearPendingReturn = jest.fn();
@@ -35,6 +45,8 @@ jest.mock('react-native-safe-area-context', () => ({
 jest.mock('../src/features/auth/AuthContext', () => ({
   useAuth: () => ({
     runAuthTransition: mockRunAuthTransition,
+    completeAuthNavigation: mockCompleteAuthNavigation,
+    authFlowInProgress: false,
     clearPendingReturn: mockClearPendingReturn,
     status: mockAuthStatus,
     user: { uid: 'user-1', email: 'a@b.com', displayName: 'Admin' },
@@ -85,10 +97,14 @@ jest.mock('../src/services/AuthService', () => ({
   signInWithEmail: (...args) => mockSignInWithEmail(...args),
   signInWithGoogle: (...args) => mockSignInWithGoogle(...args),
   validateNewPassword: (...args) => mockValidateNewPassword(...args),
+  refreshAuthenticatedUser: (...args) => mockRefreshAuthenticatedUser(...args),
 }));
 
 jest.mock('../src/services/MfaService', () => ({
   isTotpChallengeRequired: (...args) => mockIsTotpChallengeRequired(...args),
+  completeTotpSignIn: (...args) => mockCompleteTotpSignIn(...args),
+  hasPendingTotpSignIn: () => true,
+  clearPendingTotpSignIn: jest.fn(),
 }));
 
 describe('authentication screens', () => {
@@ -118,7 +134,8 @@ describe('authentication screens', () => {
 
     await waitFor(() => {
       expect(mockSignInWithEmail).toHaveBeenCalledWith(' Person@Example.COM ', 'secret');
-      expect(navigation.reset).toHaveBeenCalledWith({ index: 0, routes: [{ name: 'Main' }] });
+      expect(mockCompleteAuthNavigation).toHaveBeenCalledWith({ name: 'Main' });
+      expect(navigation.reset).not.toHaveBeenCalled();
     });
   });
 
@@ -127,6 +144,32 @@ describe('authentication screens', () => {
     const screen = render(<LoginScreen navigation={navigation} />);
     fireEvent.press(screen.getByText('שכחתי סיסמה'));
     expect(navigation.navigate).toHaveBeenCalledWith('ForgotPassword');
+  });
+
+  it.each([true, false])('only completes email verification navigation when verified=%s', async emailVerified => {
+    mockRefreshAuthenticatedUser.mockResolvedValue({ emailVerified });
+    const navigation = { reset: jest.fn(), replace: jest.fn() };
+    const screen = render(<VerifyEmailScreen navigation={navigation} />);
+    fireEvent.press(screen.getByTestId('verify-email-refresh'));
+    await waitFor(() => expect(mockRefreshAuthenticatedUser).toHaveBeenCalled());
+    if (emailVerified) {
+      await waitFor(() => expect(mockCompleteAuthNavigation).toHaveBeenCalledWith({ name: 'Main' }));
+    } else {
+      await waitFor(() => expect(screen.getByText(/האימייל עדיין לא אומת/)).toBeTruthy());
+      expect(mockCompleteAuthNavigation).not.toHaveBeenCalled();
+    }
+    expect(navigation.reset).not.toHaveBeenCalled();
+  });
+
+  it('completes the TOTP flow through the same central navigation owner', async () => {
+    mockCompleteTotpSignIn.mockResolvedValue({ user: { uid: 'mfa-user' } });
+    const navigation = { reset: jest.fn(), goBack: jest.fn() };
+    const screen = render(<TotpChallengeScreen navigation={navigation} />);
+    fireEvent.changeText(screen.getByTestId('totp-challenge-code'), '123456');
+    fireEvent.press(screen.getByTestId('totp-challenge-submit'));
+    await waitFor(() => expect(mockCompleteAuthNavigation).toHaveBeenCalledWith({ name: 'Main' }));
+    expect(mockEnsureAuthenticatedUserProfile).toHaveBeenCalledWith({ uid: 'mfa-user' }, {});
+    expect(navigation.reset).not.toHaveBeenCalled();
   });
 
   it('routes an email MFA challenge to the TOTP screen without exposing provider details', async () => {
@@ -178,10 +221,8 @@ describe('authentication screens', () => {
     const screen = render(<AuthEntryScreen navigation={navigation} />);
     fireEvent.press(screen.getByTestId('mock-google-login'));
 
-    await waitFor(() => expect(navigation.reset).toHaveBeenCalledWith({
-      index: 0,
-      routes: [{ name: 'Main' }],
-    }));
+    await waitFor(() => expect(mockCompleteAuthNavigation).toHaveBeenCalledWith({ name: 'Main' }));
+    expect(navigation.reset).not.toHaveBeenCalled();
   });
 
   it('sends a new external-provider user to legal consent before preferences', async () => {
@@ -195,10 +236,8 @@ describe('authentication screens', () => {
     const screen = render(<AuthEntryScreen navigation={navigation} />);
     fireEvent.press(screen.getByTestId('mock-google-login'));
 
-    await waitFor(() => expect(navigation.reset).toHaveBeenCalledWith({
-      index: 0,
-      routes: [{ name: 'CompleteAccount' }],
-    }));
+    await waitFor(() => expect(mockCompleteAuthNavigation).toHaveBeenCalledWith({ name: 'CompleteAccount' }));
+    expect(navigation.reset).not.toHaveBeenCalled();
   });
 
   it('uses Apple from the welcome screen and keeps provider cancellation silent', async () => {
@@ -234,6 +273,7 @@ describe('authentication screens', () => {
     };
     const screen = render(<AuthEntryScreen navigation={navigation} />);
     fireEvent.press(screen.getByTestId('continue-as-guest'));
+    expect(mockClearPendingReturn).toHaveBeenCalled();
     expect(rootNavigation.navigate).toHaveBeenCalledWith('Main', {
       screen: 'Tabs',
       params: { screen: 'Home' },
@@ -274,7 +314,8 @@ describe('authentication screens', () => {
         password: 'StrongPass1',
         acceptedLegal: true,
       });
-      expect(navigation.reset).toHaveBeenCalledWith({ index: 0, routes: [{ name: 'VerifyEmail' }] });
+      expect(mockCompleteAuthNavigation).toHaveBeenCalledWith({ name: 'VerifyEmail' });
+      expect(navigation.reset).not.toHaveBeenCalled();
     });
   });
 
@@ -289,10 +330,10 @@ describe('authentication screens', () => {
       acceptedLegal: true,
     }));
     expect(mockSynchronizeUserDocument).toHaveBeenCalledWith({ displayName: 'Admin' }, 'user-1');
-    expect(navigation.reset).toHaveBeenCalledWith({
-      index: 0,
-      routes: [{ name: 'PreferenceSetup', params: { source: 'new-account' } }],
+    expect(mockCompleteAuthNavigation).toHaveBeenCalledWith({
+      name: 'PreferenceSetup', params: { source: 'new-account' },
     });
+    expect(navigation.reset).not.toHaveBeenCalled();
   });
 
   it('locks the existing display name when only renewed legal consent is required', () => {
@@ -331,7 +372,8 @@ describe('authentication screens', () => {
       displayName: 'Admin',
       acceptedLegal: true,
     }));
-    expect(navigation.reset).toHaveBeenCalledWith({ index: 0, routes: [{ name: 'Main' }] });
+    expect(mockCompleteAuthNavigation).toHaveBeenCalledWith({ name: 'Main' });
+    expect(navigation.reset).not.toHaveBeenCalled();
   });
 
   it('leaves a stale account-setup route when the server confirms the account is ready', () => {
@@ -340,7 +382,8 @@ describe('authentication screens', () => {
 
     render(<CompleteAccountScreen navigation={navigation} />);
 
-    expect(navigation.reset).toHaveBeenCalledWith({ index: 0, routes: [{ name: 'Main' }] });
+    expect(mockCompleteAuthNavigation).toHaveBeenCalledWith();
+    expect(navigation.reset).not.toHaveBeenCalled();
   });
 
   it('keeps registration email-only and provides a working back action', () => {
