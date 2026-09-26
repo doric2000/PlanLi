@@ -13,6 +13,17 @@ future updates must match the new binary or undergo a separate native review.
 These facts supersede the older installed-iOS references below. They do not
 establish complete device acceptance or installation of Android build 12.
 
+The first build-34 OTA preflight stopped before upload: archive fingerprint
+`c878899fdb9cb021ab9be0955745927dbc7e5caa` differed from the installed binary.
+The detailed provider comparison showed dependency paths resolving outside the
+archive through its junction, and the Firebase plist using CRLF instead of the
+installed build's LF (`add4349d42ce5679ab2e3801de30069757de245e`). The generated
+Expo configuration, app assets and local native module hash were unchanged.
+This baseline now requests a physical copy of the existing dependencies and
+hash-bound LF normalization for that plist. The older baseline's junction/CRLF
+behavior remains the default. No dependency upgrade or fingerprint exception is
+introduced; publication still requires the installed build's exact fingerprint.
+
 ## Android demo metadata review for the iOS map OTA (2026-09-20)
 
 Merged PR #423 added only the `android-demo` build profile to `client/eas.json`.

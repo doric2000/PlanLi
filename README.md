@@ -158,6 +158,12 @@ are not retried. Focused service/screen/consumer tests and an isolated rendering
 of the real screen passed; that browser proof uses synthetic data and iPhone
 insets, not physical iOS. Corrected behavior on the installed iPhone is unverified.
 
+PR #431 merged as `b763f9e2a7318110b7476bf409e053f0e0eccb9c`; release readiness
+passed 91 client test suites / 672 tests, baseline tests and the focused runtime
+proof. CI and final review passed. The initial OTA preflight stopped before upload
+on an archive/build fingerprint mismatch. Dependency layout and plist line-ending
+normalization are being aligned to build 34; no corrected OTA is live yet.
+
 ### Public store links on the landing page (2026-09-21)
 
 The landing page now links to the public PlanLi Travels listings on

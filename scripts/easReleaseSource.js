@@ -10,10 +10,11 @@ function git(repoRoot, args) {
   return execFileSync('git', args, { cwd: repoRoot, encoding: 'utf8', windowsHide: true, maxBuffer: 16 * 1024 * 1024 }).trim();
 }
 
-function nativeMetadataBytes(bytes, expectedSha1, file) {
+function nativeMetadataBytes(bytes, expectedSha1, file, lineEnding = 'crlf') {
+  if (!['lf', 'crlf'].includes(lineEnding)) throw new Error('Unsupported metadata line ending.');
   const text = bytes.toString('utf8');
   if (!Buffer.from(text).equals(bytes)) throw new Error(`Non-text native metadata: ${file}`);
-  const normalized = Buffer.from(text.replace(/\r?\n/g, '\r\n'));
+  const normalized = Buffer.from(text.replace(/\r?\n/g, lineEnding === 'lf' ? '\n' : '\r\n'));
   if (crypto.createHash('sha1').update(normalized).digest('hex') !== expectedSha1) {
     throw new Error(`Native metadata content changed: ${file}. Review the installed-build baseline; do not normalize away a content change.`);
   }
@@ -21,7 +22,7 @@ function nativeMetadataBytes(bytes, expectedSha1, file) {
 }
 
 function verifySource(record) {
-  const { repoRoot, sourceRoot, commit, metadataCrlfSha1 } = record;
+  const { repoRoot, sourceRoot, commit, metadataCrlfSha1, metadataLfSha1 = {} } = record;
   if (git(repoRoot, ['rev-parse', 'HEAD']) !== commit
     || git(repoRoot, ['status', '--porcelain=v1', '--untracked-files=no'])) {
     throw new Error('Tracked source changed during release preparation.');
@@ -41,8 +42,8 @@ function verifySource(record) {
       if (!fs.fstatSync(descriptor).isFile()) throw new Error(`Archived entry is not a regular file: ${file}`);
       bytes = fs.readFileSync(descriptor);
     } finally { fs.closeSync(descriptor); }
-    if (metadataCrlfSha1[file]) {
-      const expected = nativeMetadataBytes(bytes, metadataCrlfSha1[file], file);
+    if (metadataCrlfSha1[file] || metadataLfSha1[file]) {
+      const expected = nativeMetadataBytes(bytes, metadataLfSha1[file] || metadataCrlfSha1[file], file, metadataLfSha1[file] ? 'lf' : 'crlf');
       if (!bytes.equals(expected)) throw new Error(`Native metadata line endings changed: ${file}`);
       bytes = Buffer.from(bytes.toString('utf8').replace(/\r\n/g, '\n'));
     }
@@ -60,6 +61,10 @@ function verifySource(record) {
 }
 
 function prepareSource({ repoRoot, baseline }) {
+  const dependencyLayout = baseline.dependencyLayout || 'junction';
+  if (!['junction', 'local-copy'].includes(dependencyLayout)) throw new Error('Unsupported release dependency layout.');
+  const metadataLfSha1 = baseline.metadataLfSha1 || {};
+  if (Object.keys(metadataLfSha1).some(file => baseline.metadataCrlfSha1[file])) throw new Error('Conflicting metadata line endings.');
   const commit = git(repoRoot, ['rev-parse', 'HEAD']);
   if (git(repoRoot, ['status', '--porcelain=v1', '--untracked-files=no'])) throw new Error('Commit tracked changes before preparing a release.');
   // Stable depth also preserves the dependency paths recorded by the installed
@@ -73,15 +78,20 @@ function prepareSource({ repoRoot, baseline }) {
   execFileSync('git', ['-c', 'core.autocrlf=true', '-c', 'core.eol=crlf', 'archive', '--format=tar', '--output=' + tarPath, commit], { cwd: repoRoot, windowsHide: true });
   execFileSync('tar', ['-xf', tarPath, '-C', sourceRoot], { windowsHide: true });
   validateRootConfigFiles(sourceRoot);
-  for (const [file, hash] of Object.entries(baseline.metadataCrlfSha1)) {
+  for (const [file, hash] of Object.entries({ ...baseline.metadataCrlfSha1, ...metadataLfSha1 })) {
     if (!['client/.gitignore', 'client/eas.json', 'client/GoogleService-Info.plist'].includes(file)) {
       throw new Error(`Unreviewed metadata normalization path: ${file}`);
     }
     const target = path.join(sourceRoot, file);
-    fs.writeFileSync(target, nativeMetadataBytes(fs.readFileSync(target), hash, file));
+    fs.writeFileSync(target, nativeMetadataBytes(fs.readFileSync(target), hash, file, metadataLfSha1[file] ? 'lf' : 'crlf'));
   }
-  fs.symlinkSync(path.join(repoRoot, 'client/node_modules'), path.join(sourceRoot, 'client/node_modules'), process.platform === 'win32' ? 'junction' : 'dir');
-  const record = { repoRoot, sourceRoot, commit, metadataCrlfSha1: baseline.metadataCrlfSha1 };
+  const dependencies = path.join(repoRoot, 'client/node_modules');
+  const archivedDependencies = path.join(sourceRoot, 'client/node_modules');
+  // Build 34 resolved packages within client/. A junction changes their real paths,
+  // autolinking metadata and fingerprint even when dependency bytes are identical.
+  if (dependencyLayout === 'local-copy') fs.cpSync(dependencies, archivedDependencies, { recursive: true, dereference: true, errorOnExist: true, force: false });
+  else fs.symlinkSync(dependencies, archivedDependencies, process.platform === 'win32' ? 'junction' : 'dir');
+  const record = { repoRoot, sourceRoot, commit, metadataCrlfSha1: baseline.metadataCrlfSha1, metadataLfSha1 };
   const recordPath = sourceRoot + '.json';
   fs.writeFileSync(recordPath, JSON.stringify(record, null, 2));
   verifySource(record);

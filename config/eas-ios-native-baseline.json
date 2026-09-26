@@ -9,9 +9,12 @@
   "runtime": "1.4.0",
   "channel": "production",
   "fingerprint": "976661b4a04d2165ecd571430564b16b5f86fc13",
+  "dependencyLayout": "local-copy",
   "metadataCrlfSha1": {
     "client/.gitignore": "51c70b9fea9a53cc5bcb5838c8c31df64d04c1d4",
-    "client/eas.json": "a2f077ce45880541cc6d5d16440dc18c54977b57",
-    "client/GoogleService-Info.plist": "9e9b779534d8bbb77d089a4c4e1dae1066df8817"
+    "client/eas.json": "a2f077ce45880541cc6d5d16440dc18c54977b57"
+  },
+  "metadataLfSha1": {
+    "client/GoogleService-Info.plist": "add4349d42ce5679ab2e3801de30069757de245e"
   }
 }
