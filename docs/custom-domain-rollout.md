@@ -15,7 +15,7 @@ and support address. After edits run `npm run sync:public-links`; CI/local
 | Private trip | `https://planli.cc/trip/<token>` | Existing signed-in gate; copy still requires active eligibility |
 | Community route | `https://planli.cc/route/<routeId>` | Existing canonical route loader and Rules |
 | Recommendation | `https://planli.cc/recommendation/<postId>` | Existing canonical document read and Rules |
-| Email action | `https://planli.cc/__/auth/action` | Firebase-managed browser handler |
+| Email action (target; blocked in Firebase) | `https://planli.cc/__/auth/action` | Firebase-managed browser handler; live links still use firebaseapp.com |
 | OAuth callback | `https://planli.cc/__/auth/handler` | Firebase-managed browser handler |
 | Support | `support@planli.cc` | Active Cloudflare forwarding to existing Gmail |
 
@@ -32,7 +32,7 @@ Keep Firebase Hosting aliases, OAuth callbacks and infrastructure identifiers
 available during migration. API, storage, App Check and EAS service endpoints are
 provider infrastructure and must not be replaced with the public domain.
 
-## Production observations and remaining prerequisites
+## Initial production observations (superseded by rollout activity below)
 
 Read-only inspection on 2026-09-21 found the custom Hosting domain active with a
 valid certificate, and `planli.cc` already allowed by Auth and reCAPTCHA Enterprise.
@@ -210,3 +210,63 @@ impact; do not substitute an unrelated full suite for the device matrix above.
   exception, is rejected. All 34 focused Auth/navigation/share tests passed.
   Upstream source reviewed: https://github.com/react-navigation/react-navigation/releases/tag/@react-navigation%2Fcore@7.22.1
 - Play privacy URL is saved as https://planli.cc/privacy/, pending Play review.
+
+## Live rollout checkpoint (2026-09-26)
+
+PR #429 merged as `1eae24ccf94072490d766202f2ad4f9478d2ce22` after all final
+CI gates passed, including the full client suite and strict zero-advisory audits.
+Hosting release `1790415669255000` / version `06c2d958f2e664af` is live;
+27 independent HTTP checks passed across all three hosts. `createTripShare`
+revision `createtripshare-00002-rom` is ACTIVE. README records exact times and
+build IDs. This supersedes the earlier implementation-only/no-deployment notes.
+
+All four Firebase template Reply-To addresses are now support@planli.cc.
+The action callback is **not migrated**: API callback-only and combined updates,
+and the Firebase console, reject the change with `EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED`.
+Do not blindly retry or reset template content. The real password-reset message
+arrived in the designated inbox with a planli.cc sender/signature and the new
+Reply-To, but its link still uses the old Firebase host. No password was changed.
+Resolving Firebase's template restriction is required before email migration can
+be called complete; switching to a different mail delivery architecture is not
+part of the implemented contract.
+
+Apple Associated Domains is now enabled and profile NGZ4V8B72H was regenerated
+with the same signing certificate. After the owner refreshed Apple authentication,
+EAS received the new profile at 10:17:22 UTC; UUID and entitlement were read back.
+The first iOS build failed on the old profile; retry build 34
+(`1ff27c70-6a66-4daf-b58d-bb8a3d092091`) finished at 10:30:24 UTC. Its signed IPA
+confirms version 1.1.3/build 34, production/runtime 1.4.0 and `applinks:planli.cc`.
+EAS submission `ef8bd5ac-f870-4d0b-9fd9-f7687d5a52a8` finished at 10:33:29 UTC;
+Apple processing completed and ASC build `4b085cf0-48cd-4816-a915-de004d2b8e82`
+is available to the existing Team (Expo) internal group with one tester. Hebrew
+test instructions were saved; device installation is not yet verified. The existing ASC API key
+successfully read the expected app at 10:25:05 UTC; no key rotation was needed.
+Android build 12 finished and its signed AAB's share intent filters and runtime
+were inspected with bundletool. EAS has no Google submission service-account key;
+the AAB was uploaded through Play Console and internal release 9 is available to
+internal testers as of 13:23 Asia/Jerusalem. No new device installation, native
+link acceptance, successful end-to-end OAuth login or verification-email delivery
+has been claimed. Play privacy and account-deletion URL changes are in review;
+App Store 1.1.3 remains a draft with canonical URLs.
+
+### Firebase support handoff (prepared; not sent)
+
+Project `planli-f0b12` (number `633543026638`) has a verified custom Auth mail
+sender domain `planli.cc`, and that domain is authorized in Auth and connected
+to Firebase Hosting. The desired email action URL is
+`https://planli.cc/__/auth/action`; the current value is
+`https://planli-f0b12.firebaseapp.com/__/auth/action`.
+
+On September 26, 2026, both Firebase Console's action-URL editor and the
+Identity Toolkit v2 project configuration API rejected this change with HTTP 400
+`EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED`. A callback-only PATCH failed too; changing
+only template Reply-To fields succeeded. Custom subjects/bodies were preserved.
+A delivered reset email confirms the custom sender and Reply-To work while the
+action link still uses the Firebase host.
+
+Ask Firebase Support to identify and resolve the project restriction preventing
+the documented custom action-URL change. Do not include OAuth access tokens,
+reset/verification codes, passwords or full private project configuration in the
+request. After resolution, rerun the guarded dry run and apply the narrowly
+scoped callback update, then test fresh verification/reset email links without
+changing the owner's password. No provider ticket has been submitted by this task.

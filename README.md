@@ -27,13 +27,14 @@ The existing Text Search quota remains zero. See
 
 ### Custom-domain migration in progress (2026-09-26)
 
-`feat/custom-domain-links`, based on `b6c40e9`, prepares canonical `planli.cc`
+PR [#429](https://github.com/doric2000/PlanLi/pull/429), merged as
+`1eae24ccf94072490d766202f2ad4f9478d2ce22`, implements canonical `planli.cc`
 trip/route/recommendation sharing, scoped native app links, browser landing pages,
 native Auth domain alignment and a dry-run-first email callback configuration tool.
 Source runtime is now **1.4.0**; installed builds and their baseline records remain
-**1.3.0**. The next iOS source version is **1.1.3**. No build, OTA,
-Hosting/Functions deployment, Auth mutation or store submission has yet been
-performed for this migration.
+**1.3.0**. The iOS source version is **1.1.3**. Hosting and `createTripShare`
+are deployed from that merge; no OTA was published. Installation and physical-device
+testing of the new native binaries remain unverified. Auth limitations are below.
 
 Cloudflare Email Routing was activated on September 21. On September 26 the
 `support@planli.cc` rule was independently verified active, forwarding to the
@@ -56,8 +57,16 @@ published. App Store 1.1.3 is **Prepare for Submission**, with canonical support
 marketing and review-note links; public 1.1.1 still has its old support URL until
 a new version is released. Apple's published privacy URL already uses planli.cc.
 
-Release is gated on the reviewed Auth
-configuration apply, Hosting/Functions deployment and new signed native builds.
+Public native release remains gated on physical-device acceptance.
+Firebase rejects the email-action callback change with
+`EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED` (HTTP 400), both through its API and console.
+The callback remains `https://planli-f0b12.firebaseapp.com/__/auth/action`.
+All four template Reply-To fields were independently updated/read back as
+`support@planli.cc` at `2026-09-26T09:52:22Z`, preserving template content.
+A real password-reset email reached the designated test inbox at 12:56
+Asia/Jerusalem: sender, mailed-by and signed-by use planli.cc, Reply-To uses
+support@planli.cc, but the action link still uses firebaseapp.com. No password
+was changed. Verification-email delivery and completed OAuth login remain unverified.
 The pre-existing untracked root `app.json` remains untouched and is already
 excluded by `.easignore`; guarded OTA checks still reject it in the checkout.
 The Codex 0.155.1 review completed; its cold-start back-navigation finding was
@@ -70,14 +79,69 @@ the three failures were then resolved/verified by a focused 5-suite / 55-test pa
 bold family. No SDK major upgrade or Doctor exclusion was introduced.
 See the [rollout and acceptance checklist](docs/custom-domain-rollout.md).
 
-PR [#429](https://github.com/doric2000/PlanLi/pull/429) contains the migration.
-Its first validation run passed client/Functions/Rules, CodeQL, Semgrep and secret
+PR #429's first validation run passed client/Functions/Rules, CodeQL, Semgrep and secret
 checks, but the locked audit correctly stopped on the newly fixable navigation
 advisory. A targeted transitive update to `@react-navigation/core@7.22.1` and
 `@react-navigation/routers@7.6.4` removes query-string/decode-uri-component.
 The old audit exception was removed: all workspaces now require zero advisories.
 The live client audit is clean and all 34 focused Auth/navigation/share tests pass.
-Play privacy URL was saved as `https://planli.cc/privacy/`, pending Play review.
+The final CI run on `bf4eb7850e4818cc07e0dc52251d106654690547` passed the full
+client suite, Functions/Rules, native/admin checks, audits and security scans.
+Play privacy (`https://planli.cc/privacy/`) and Data Safety account-deletion
+(`https://planli.cc/account-deletion`) changes were submitted together and are
+**in review**. Contact email/website changes are already published.
+
+#### September 26 deployment and native build record
+
+- Hosting release `sites/planli-f0b12/releases/1790415669255000`, version
+  `sites/planli-f0b12/versions/06c2d958f2e664af`, deployed at
+  `2026-09-26T09:41:09.255Z`. Independent verification passed 27 HTTP checks over
+  planli.cc and both Firebase aliases, including deployed byte equality,
+  association JSON, share/legal/admin assets and security headers.
+  Live browser smoke verified canonical/legacy share landings, invalid-link
+  handling and the admin login in a clean browser with no console warnings/errors.
+- `createTripShare` is ACTIVE on revision `createtripshare-00002-rom`, Node 22,
+  europe-west1, updated at `2026-09-26T09:51:59.383138627Z`. Exact-target CLI
+  deployment succeeded after increasing local discovery timeout from 10 to 60
+  seconds. No post-deploy ERROR logs were found in the focused read. Authenticated
+  share creation on a physical device remains unverified.
+- Android production build `597752db-0fd4-4861-a8d7-a530ccf85ca7`, app 1.1.0,
+  versionCode 12, runtime 1.4.0, channel production: **finished** at
+  `2026-09-26T09:59:59.210Z`. The signed AAB is 88,454,451 bytes, SHA-256
+  `a611bb619758eca498034854c4d35623ce67568013f2e883b9fad185323777a7`.
+  Bundletool confirmed versionCode/versionName, runtime resource 1.4.0 and HTTPS
+  autoVerify filters for exactly the three planli.cc share paths. EAS submission
+  stopped before scheduling because no Google service-account key is configured;
+  the verified AAB was instead uploaded through Play Console. Internal release 9,
+  `12 (1.1.0) - planli.cc links`, is **Available to internal testers**, released
+  September 26 at 13:23 Asia/Jerusalem on track `4701742858558783307`.
+  Installation and physical-device acceptance remain unverified.
+- iOS production attempt `20ff7d90-e056-42fa-805a-5e89343671ff`, build 33:
+  **failed** because provisioning profile `NGZ4V8B72H` lacked Associated Domains.
+  Apple App ID `C3896WLGP2` now enables that capability and the same profile was
+  regenerated with the existing August 21 distribution certificate. After the
+  owner refreshed the Apple session, the profile was synchronized to EAS at
+  `2026-09-26T10:17:22.748Z`; independent read-back confirmed UUID
+  `93b0bc6a-fdec-45e4-a31a-0db66a9dc377`, Associated Domains capability and an
+  unchanged signing certificate. A fresh ASC API request with the existing
+  submission key succeeded (HTTP 200) at `2026-09-26T10:25:05.196Z`; the earlier
+  Developer Portal validation 401 is not an established submission blocker.
+  EAS metadata reports top-level appVersion 1.1.0; the successful IPA independently
+  confirms the actual iOS version is 1.1.3.
+- iOS retry `1ff27c70-6a66-4daf-b58d-bb8a3d092091`, build 34, uses the refreshed
+  profile, source `1eae24c`, production channel and runtime 1.4.0. It **finished**
+  at `2026-09-26T10:30:24.420Z`. The 40,762,208-byte IPA has SHA-256
+  `c002942a645774777332b0f41f26d8d6336b003220a2ce0f94bd06fc53931783`.
+  Inspection confirmed version 1.1.3/build 34, runtime 1.4.0, production channel,
+  signed `applinks:planli.cc` entitlement, expected application identifier and
+  refreshed profile UUID. EAS submission `ef8bd5ac-f870-4d0b-9fd9-f7687d5a52a8`
+  **finished** at `2026-09-26T10:33:29.821Z`. Apple processing is **Complete**;
+  ASC build `4b085cf0-48cd-4816-a915-de004d2b8e82` is assigned to existing internal
+  group **Team (Expo)** with one tester. Hebrew test instructions were saved.
+  Installation and device acceptance remain unverified; the tester's last observed
+  installed version is 1.1.2 (32). No public App Review submission was made.
+  Both original builds also used source `1eae24c`. Public store versions and installed
+  runtime baselines below remain unchanged.
 
 ### Public store links on the landing page (2026-09-21)
 
