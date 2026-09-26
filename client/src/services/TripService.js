@@ -62,6 +62,8 @@ export const tripErrorMessage = (error, fallback = 'לא הצלחנו לעדכן
   if (reason === 'REVISION_CONFLICT') return 'הטיול השתנה במכשיר אחר. טענו את הגרסה העדכנית ונסו שוב.';
   if (reason === 'STOP_LIMIT_REACHED') return 'הגעתם למספר העצירות המרבי בטיול.';
   if (reason === 'DAY_LIMIT_REACHED') return 'אפשר לתכנן עד 14 ימים בכל טיול.';
+  if (reason === 'DAY_NOT_EMPTY') return 'לפני שמוחקים את היום, צריך להעביר או להסיר את העצירות שבו.';
+  if (reason === 'LAST_DAY_REQUIRED') return 'בכל טיול חייב להישאר לפחות יום אחד.';
   if (reason === 'TRIP_LIMIT_REACHED') return 'אפשר לשמור עד 50 טיולים פעילים. מחקו טיול ישן ונסו שוב.';
   if (reason === 'RECOMMENDATION_UNAVAILABLE') return 'אחת ההמלצות שבחרתם כבר אינה זמינה.';
   if (reason === 'RECOMMENDATION_LOCATION_UNAVAILABLE') return 'לאחת ההמלצות אין מיקום מתאים למסלול. הסירו אותה מהבחירה ונסו שוב.';

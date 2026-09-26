@@ -4236,6 +4236,8 @@ export const routeStopMarkerStyles = StyleSheet.create({
 	},
 	haloSelected: { backgroundColor: 'rgba(255,149,31,0.24)' },
 	haloCompact: { width: 40, height: 46, borderRadius: 20 },
+	pinHeadWrap: { width: 42, height: 42, position: 'relative', overflow: 'visible', zIndex: 2 },
+	pinHeadWrapCompact: { width: 32, height: 32 },
 	pinHead: {
 		width: 42, height: 42, borderRadius: 21, overflow: 'hidden', alignItems: 'center',
 		justifyContent: 'center', backgroundColor: colors.primary, borderWidth: 3,
@@ -4256,7 +4258,7 @@ export const routeStopMarkerStyles = StyleSheet.create({
 	badge: {
 		position: 'absolute', right: -1, bottom: -1, minWidth: 18, height: 18, borderRadius: 9,
 		paddingHorizontal: 3, backgroundColor: colors.brandOrange, borderWidth: 2,
-		borderColor: colors.white, alignItems: 'center', justifyContent: 'center',
+		borderColor: colors.white, alignItems: 'center', justifyContent: 'center', zIndex: 3,
 	},
 	badgeCompact: { minWidth: 15, height: 15, borderRadius: 8, borderWidth: 1 },
 	badgeText: { color: colors.white, fontSize: 9, fontFamily: fontFamilies.semiBold },
@@ -4264,7 +4266,7 @@ export const routeStopMarkerStyles = StyleSheet.create({
 	dayBadge: {
 		position: 'absolute', left: -2, top: -2, minWidth: 18, height: 18, borderRadius: 9,
 		paddingHorizontal: 3, backgroundColor: colors.brandOrange, borderWidth: 2,
-		borderColor: colors.white, alignItems: 'center', justifyContent: 'center',
+		borderColor: colors.white, alignItems: 'center', justifyContent: 'center', zIndex: 3,
 	},
 	dayBadgeCompact: { minWidth: 15, height: 15, borderRadius: 8, borderWidth: 1 },
 	dayBadgeText: { color: colors.white, fontSize: 9, fontFamily: fontFamilies.semiBold },

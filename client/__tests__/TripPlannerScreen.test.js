@@ -107,6 +107,93 @@ test('loading an existing trip settles after one request instead of retriggering
   expect(mockFlushQueue).not.toHaveBeenCalled();
 });
 
+test('an empty added day can be deleted and selection moves to the adjacent day', async () => {
+  const alertSpy = jest.spyOn(require('react-native').Alert, 'alert').mockImplementation(() => {});
+  const twoDayTrip = {
+    ...trip,
+    dayCount: 2,
+    days: [
+      trip.days[0],
+      trip.days[1],
+      { ...trip.days[1], id: 'day-2', title: 'יום 2', order: 2 },
+    ],
+  };
+  const deletedTrip = { ...twoDayTrip, revision: 2, dayCount: 1, days: [twoDayTrip.days[0], twoDayTrip.days[2]] };
+  mockGetPrivateTrip.mockResolvedValueOnce(twoDayTrip).mockResolvedValueOnce(deletedTrip);
+  const screen = render(<TripPlannerScreen navigation={{ goBack: jest.fn(), navigate: jest.fn() }} route={{ params: { tripId: 'trip-1' } }} />);
+  await waitFor(() => expect(screen.getByLabelText('מחיקת יום 1')).toBeTruthy());
+
+  fireEvent.press(screen.getByTestId('trip-delete-day'));
+  expect(alertSpy).toHaveBeenCalledWith('למחוק את יום 1?', 'לא ניתן לבטל את מחיקת היום.', expect.any(Array));
+  act(() => alertSpy.mock.calls[0][2].find((action) => action.style === 'destructive').onPress());
+
+  await waitFor(() => expect(mockApply).toHaveBeenCalledWith(expect.objectContaining({
+    tripId: 'trip-1',
+    expectedRevision: 1,
+    operations: [{ type: 'delete_day', dayId: 'day-1' }],
+  })));
+  await waitFor(() => expect(screen.getByLabelText('מחיקת יום 2')).toBeTruthy());
+  expect(mockCacheTrip).toHaveBeenCalledWith(expect.objectContaining({
+    dayCount: 1,
+    days: expect.not.arrayContaining([expect.objectContaining({ id: 'day-1' })]),
+  }));
+  alertSpy.mockRestore();
+});
+
+test('the only remaining day explains why it cannot be deleted', async () => {
+  const alertSpy = jest.spyOn(require('react-native').Alert, 'alert').mockImplementation(() => {});
+  const screen = render(<TripPlannerScreen navigation={{ goBack: jest.fn(), navigate: jest.fn() }} route={{ params: { tripId: 'trip-1' } }} />);
+  await waitFor(() => expect(screen.getByTestId('trip-delete-day')).toBeTruthy());
+
+  fireEvent.press(screen.getByTestId('trip-delete-day'));
+
+  expect(alertSpy).toHaveBeenCalledWith('אי אפשר למחוק את היום', 'בכל טיול חייב להישאר לפחות יום אחד.');
+  expect(mockApply).not.toHaveBeenCalled();
+  alertSpy.mockRestore();
+});
+
+test('a day with stops explains that its stops must be moved before deletion', async () => {
+  const alertSpy = jest.spyOn(require('react-native').Alert, 'alert').mockImplementation(() => {});
+  mockGetPrivateTrip.mockResolvedValue({
+    ...trip,
+    dayCount: 2,
+    stopCount: 1,
+    days: [
+      trip.days[0],
+      { ...trip.days[1], stopCount: 1, stops: [{ id: 'stop-1', title: 'עצירה', order: 0 }] },
+      { ...trip.days[1], id: 'day-2', title: 'יום 2', order: 2 },
+    ],
+  });
+  const screen = render(<TripPlannerScreen navigation={{ goBack: jest.fn(), navigate: jest.fn() }} route={{ params: { tripId: 'trip-1' } }} />);
+  await waitFor(() => expect(screen.getByTestId('trip-delete-day')).toBeTruthy());
+
+  fireEvent.press(screen.getByTestId('trip-delete-day'));
+
+  expect(alertSpy).toHaveBeenCalledWith('היום עדיין כולל עצירות', 'לפני שמוחקים את היום, צריך להעביר או להסיר את העצירות שבו.');
+  expect(mockApply).not.toHaveBeenCalled();
+  alertSpy.mockRestore();
+});
+
+test('adding after a removed middle day keeps the generated title unique', async () => {
+  mockGetPrivateTrip.mockResolvedValue({
+    ...trip,
+    dayCount: 2,
+    days: [
+      trip.days[0],
+      trip.days[1],
+      { ...trip.days[1], id: 'day-3', title: 'יום 3', order: 3 },
+    ],
+  });
+  render(<TripPlannerScreen navigation={{ goBack: jest.fn(), navigate: jest.fn() }} route={{ params: { tripId: 'trip-1' } }} />);
+  await waitFor(() => expect(mockDayTabsProps).toBeTruthy());
+
+  act(() => mockDayTabsProps.onAddDay());
+
+  await waitFor(() => expect(mockApply).toHaveBeenCalledWith(expect.objectContaining({
+    operations: [expect.objectContaining({ type: 'add_day', title: 'יום 4' })],
+  })));
+});
+
 test('the real stop list and add actions stay visible for a trip with one stop', async () => {
   mockGetPrivateTrip.mockResolvedValue({ ...trip, stopCount: 1, days: [trip.days[0], {
     ...trip.days[1], stopCount: 1,

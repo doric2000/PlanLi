@@ -35,3 +35,24 @@ test('optimistic operations keep stop counts and day ownership consistent', () =
   expect(next.days[1].stops[0].id).toBe('stop');
   expect(next.stopCount).toBe(1);
 });
+
+test('optimistic day deletion preserves ideas and unrelated days', () => {
+  const trip = {
+    id: 'trip', title: 'טיול', revision: 4, dayCount: 3, stopCount: 2,
+    days: [
+      { id: 'ideas', kind: 'ideas', order: 0, stopCount: 1, stops: [{ id: 'idea', order: 0 }] },
+      { id: 'day-1', kind: 'day', order: 1, stopCount: 1, stops: [{ id: 'stop', order: 0 }] },
+      { id: 'day-2', kind: 'day', order: 2, stopCount: 0, stops: [] },
+      { id: 'day-3', kind: 'day', order: 3, stopCount: 0, stops: [] },
+    ],
+  };
+
+  const next = applyOperationsLocally(trip, [{ type: 'delete_day', dayId: 'day-2' }]);
+
+  expect(next.revision).toBe(5);
+  expect(next.dayCount).toBe(2);
+  expect(next.stopCount).toBe(2);
+  expect(next.days.map((day) => day.id)).toEqual(['ideas', 'day-1', 'day-3']);
+  expect(next.days[0].stops[0].id).toBe('idea');
+  expect(next.days[1].stops[0].id).toBe('stop');
+});

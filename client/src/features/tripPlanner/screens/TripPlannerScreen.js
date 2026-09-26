@@ -203,9 +203,42 @@ export default function TripPlannerScreen({ navigation, route }) {
   };
   const addDay = () => {
     if (!trip) return;
-    const number = (trip.days || []).filter((day) => day.kind === 'day').length + 1;
+    const realDays = (trip.days || []).filter((day) => day.kind === 'day');
+    const highestGeneratedNumber = realDays.reduce((highest, day) => {
+      const match = /^יום\s+(\d+)$/.exec(String(day.title || '').trim());
+      return Math.max(highest, Number(match?.[1]) || 0);
+    }, 0);
+    const number = Math.max(realDays.length, highestGeneratedNumber) + 1;
     const clientId = `day-${uuid.v4()}`;
     mutate([{ type: 'add_day', clientId, title: `יום ${number}`, travelMode: 'DRIVE' }]).then((result) => { if (result) setSelectedDayId(clientId); });
+  };
+  const removeDay = () => {
+    if (!trip || selectedDay?.kind !== 'day') return;
+    const realDays = [...(trip.days || [])]
+      .filter((day) => day.kind === 'day')
+      .sort((a, b) => Number(a.order) - Number(b.order));
+    if (realDays.length <= 1) {
+      Alert.alert('אי אפשר למחוק את היום', 'בכל טיול חייב להישאר לפחות יום אחד.');
+      return;
+    }
+    if (stops.length) {
+      Alert.alert('היום עדיין כולל עצירות', 'לפני שמוחקים את היום, צריך להעביר או להסיר את העצירות שבו.');
+      return;
+    }
+    const selectedIndex = realDays.findIndex((day) => day.id === selectedDay.id);
+    const fallbackDay = realDays[selectedIndex + 1] || realDays[selectedIndex - 1];
+    Alert.alert(`למחוק את ${selectedDay.title}?`, 'לא ניתן לבטל את מחיקת היום.', [
+      { text: 'ביטול', style: 'cancel' },
+      {
+        text: 'מחיקה',
+        style: 'destructive',
+        onPress: () => {
+          setSelectedDayId(fallbackDay.id);
+          setSelectedStopId('');
+          mutate([{ type: 'delete_day', dayId: selectedDay.id }]);
+        },
+      },
+    ]);
   };
   const reorder = (next) => {
     if (selectedDay && next.some((stop, index) => stop.id !== stops[index]?.id)) mutate([{ type: 'reorder_stops', dayId: selectedDay.id, stopIds: next.map((stop) => stop.id) }]);
@@ -274,7 +307,7 @@ export default function TripPlannerScreen({ navigation, route }) {
       {graphMismatch ? <TouchableOpacity style={styles.conflictCard} onPress={() => load({ quiet: true })} accessibilityRole="button" accessibilityLabel="טעינה מחדש של עצירות הטיול"><AppText style={styles.errorText}>מספר העצירות לא תואם לרשימה. לחצו לטעינה מחדש.</AppText></TouchableOpacity> : null}
       <View style={styles.editorBody}>
         <TripDayTabs trip={trip} selectedDayId={selectedDayId} onSelect={(id) => { setSelectedDayId(id); setSelectedStopId(''); }} onAddDay={addDay} />
-        <View style={styles.summary}><View><AppText style={styles.summaryTitle}>{selectedDay?.kind === 'ideas' ? 'רעיונות לטיול' : selectedDay?.title}</AppText><AppText style={styles.summaryMeta}>{stops.length} עצירות{routeSummary(routeData) ? ` · ${routeSummary(routeData)}` : ''}</AppText></View>{selectedDay?.kind === 'day' ? <View style={styles.modeToggle}>{['DRIVE', 'WALK'].map((mode) => <TouchableOpacity key={mode} style={[styles.modeButton, selectedDay.travelMode === mode && styles.modeButtonSelected]} onPress={() => mutate([{ type: 'update_day', dayId: selectedDay.id, travelMode: mode }])} accessibilityRole="button" accessibilityLabel={mode === 'DRIVE' ? 'רכב' : 'הליכה'} accessibilityState={{ selected: selectedDay.travelMode === mode }}><Ionicons name={mode === 'DRIVE' ? 'car-outline' : 'walk-outline'} size={17} color={colors.primary} /><AppText style={styles.modeText}>{mode === 'DRIVE' ? 'רכב' : 'הליכה'}</AppText></TouchableOpacity>)}</View> : null}</View>
+        <View style={styles.summary}><View style={styles.summaryCopy}><AppText style={styles.summaryTitle}>{selectedDay?.kind === 'ideas' ? 'רעיונות לטיול' : selectedDay?.title}</AppText><AppText style={styles.summaryMeta}>{stops.length} עצירות{routeSummary(routeData) ? ` · ${routeSummary(routeData)}` : ''}</AppText></View>{selectedDay?.kind === 'day' ? <View style={styles.summaryActions}><View style={styles.modeToggle}>{['DRIVE', 'WALK'].map((mode) => <TouchableOpacity key={mode} style={[styles.modeButton, selectedDay.travelMode === mode && styles.modeButtonSelected]} onPress={() => mutate([{ type: 'update_day', dayId: selectedDay.id, travelMode: mode }])} accessibilityRole="button" accessibilityLabel={mode === 'DRIVE' ? 'רכב' : 'הליכה'} accessibilityState={{ selected: selectedDay.travelMode === mode }}><Ionicons name={mode === 'DRIVE' ? 'car-outline' : 'walk-outline'} size={17} color={colors.primary} /><AppText style={styles.modeText}>{mode === 'DRIVE' ? 'רכב' : 'הליכה'}</AppText></TouchableOpacity>)}</View><TouchableOpacity style={styles.dayDeleteButton} onPress={removeDay} accessibilityRole="button" accessibilityLabel={`מחיקת ${selectedDay.title}`} testID="trip-delete-day"><Ionicons name="trash-outline" size={20} color="#B42318" /></TouchableOpacity></View> : null}</View>
         {locatedStops.length ? renderMap() : <View style={styles.editorMapCard} testID="trip-map-card"><View style={styles.editorMapHint}><Ionicons name="map-outline" size={26} color={colors.primary} /><AppText style={styles.editorMapHintText}>{stops.length ? 'לעצירות האלה אין עדיין מיקום במפה' : 'הוסיפו עצירה כדי לראות את המסלול על המפה'}</AppText></View></View>}
         {conflict ? <View style={[styles.conflictCard, { margin: 14 }]}><AppText style={styles.errorText}>{conflict.message}</AppText><View style={{ flexDirection: 'row-reverse', gap: 8 }}><TouchableOpacity style={[styles.primaryButton, { flex: 1 }]} onPress={() => { const retry = conflict.operations; setConflict(null); mutate(retry); }} accessibilityRole="button"><AppText style={styles.primaryButtonText}>ניסיון חוזר</AppText></TouchableOpacity><TouchableOpacity style={[styles.secondaryButton, { flex: 1 }]} onPress={() => setConflict(null)} accessibilityRole="button"><AppText style={styles.secondaryButtonText}>השארת העדכני</AppText></TouchableOpacity></View></View> : null}
         {stops.length ? <TripStopList stops={stops} selectedStopId={selectedStopId} onSelect={(id) => setSelectedStopId((current) => current === id ? '' : id)} onReorder={reorder} onDelete={remove} onMoveToDay={setMovingStop} onOpenRecommendation={(stop) => navigation.navigate('RecommendationDetail', { postId: stop.recommendationId })} onEditCustom={openCustom} /> : <View style={[styles.empty, { flex: 1 }]}><View style={styles.emptyIcon}><Ionicons name="map-outline" size={30} color={colors.accentAction} /></View><AppText style={styles.emptyTitle}>{selectedDay?.kind === 'ideas' ? 'אוספים רעיונות לטיול' : 'היום הזה מחכה לעצירה הראשונה'}</AppText><AppText style={styles.emptyText}>בחרו המלצה שמורה או הוסיפו מקום משלכם.</AppText></View>}
