@@ -277,14 +277,14 @@ if (packageJson.dependencies?.['expo-modules-core']) {
 if (packageJson.dependencies?.['@expo/config-plugins']) {
   fail('@expo/config-plugins must be consumed through expo/config-plugins, not installed directly.');
 }
-if (packageJson.dependencies?.['expo-notifications'] !== '~57.0.17') {
-  fail('expo-notifications must stay on the SDK 57 compatible ~57.0.17 release.');
+if (packageJson.dependencies?.['expo-notifications'] !== '~57.0.21') {
+  fail('expo-notifications must stay on the SDK 57 compatible ~57.0.21 release.');
 }
 if (app.version !== '1.1.0') {
   fail('The beta marketing version must remain fixed at 1.1.0.');
 }
-if (app.runtimeVersion !== '1.3.0') {
-  fail('The Atlas release with native WebView must remain isolated on EAS runtime 1.3.0.');
+if (app.runtimeVersion !== '1.4.0') {
+  fail('The custom-domain links release must remain isolated on EAS runtime 1.4.0.');
 }
 if (reactNativeFirebase?.app_check_token_auto_refresh !== true) {
   fail('The client firebase.json must keep native App Check token refresh enabled.');
@@ -341,7 +341,7 @@ try {
   const { sharedTripLinking } = require(reviewedLinkingPath);
   const token = 'x'.repeat(43);
   const parsed = sharedTripLinking.getStateFromPath(`shared-trip/${token}`);
-  if (JSON.stringify(parsed) !== JSON.stringify({ routes: [{ name: 'SharedTrip', params: { token } }] })) {
+  if (JSON.stringify(parsed) !== JSON.stringify({ index: 1, routes: [{ name: 'Main' }, { name: 'SharedTrip', params: { token } }] })) {
     fail('The reviewed shared-trip parser must preserve the server-issued token.');
   }
   for (const unsafe of [`shared-trip/${token}?x=%E0%A4`, `shared-trip/${token}#x`,

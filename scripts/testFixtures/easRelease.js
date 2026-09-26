@@ -13,12 +13,22 @@ function fixture(t) {
     fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
     fs.copyFileSync(path.join(__dirname, '../..', file), path.join(root, file));
   }
+  // Simulate a matching installed build. Real tracked baselines stay at 1.3.0
+  // until a separately authorized native build is installed and verified.
+  const app = JSON.parse(fs.readFileSync(path.join(root, 'client/app.json'))).expo;
+  const runtime = app.runtimeVersion;
+  for (const platform of ['ios', 'android']) {
+    const file = path.join(root, `config/eas-${platform}-native-baseline.json`);
+    const baseline = JSON.parse(fs.readFileSync(file));
+    fs.writeFileSync(file, JSON.stringify({ ...baseline, runtime,
+      ...(platform === 'ios' ? { iosVersion: app.ios.version } : {}) }));
+  }
   fs.writeFileSync(path.join(root, 'README.md'), '# Test release\n');
   const head = 'a'.repeat(40);
   const group = '11111111-2222-4333-8444-555555555555';
   const calls = [];
   const native = { status: 'exact', fingerprint: 'b'.repeat(40) };
-  const updates = [{ id: 'candidate-id', branch: 'staging', gitCommitHash: head, runtimeVersion: '1.3.0', group, platform: 'ios' }];
+  const updates = [{ id: 'candidate-id', branch: 'staging', gitCommitHash: head, runtimeVersion: '1.4.0', group, platform: 'ios' }];
   const dependencies = {
     prepareSource: () => ({ repoRoot: root, sourceRoot: root, commit: head }),
     runPreflight: () => ({ head, deployedCommit: 'c'.repeat(40) }),

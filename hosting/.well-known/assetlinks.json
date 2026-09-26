@@ -1,0 +1,15 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.planli.planlitravels",
+      "sha256_cert_fingerprints": [
+        "D8:A8:90:C5:D9:4D:92:2C:CB:F4:5D:D7:C9:FE:30:AF:35:8A:72:9B:7B:F2:EA:BD:3F:66:D9:6D:99:61:8D:35",
+        "BA:C9:7A:1A:56:3B:BC:F5:51:37:C3:1E:32:F2:94:B4:A2:67:B8:7B:CC:E2:F6:8B:7D:1F:04:14:1E:2C:19:5D"
+      ]
+    }
+  }
+]

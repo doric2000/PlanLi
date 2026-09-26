@@ -41,6 +41,13 @@ test('baseline identity must agree with actual app configuration', t => {
   assert.throws(() => readBaseline(f.root), /does not match the configured/);
 });
 
+test('the pending custom-domain runtime cannot publish to the old installed baseline', t => {
+  const f = fixture(t);
+  const actual = readBaseline(f.root);
+  fs.writeFileSync(path.join(f.root, 'config/eas-ios-native-baseline.json'), JSON.stringify({ ...actual, runtime: '1.3.0' }));
+  assert.throws(() => readBaseline(f.root), /does not match the configured/);
+});
+
 test('the exact installed fingerprint is accepted, missing and unknown hashes fail closed', () => {
   assert.equal(check(baseline.fingerprint).status, 'exact');
   assert.throws(() => check(null), /Missing or invalid/);

@@ -20,7 +20,8 @@ const {
 } = require('./tripPlannerValidation');
 
 const SHARE_TOKEN_BYTES = 32;
-const SHARE_BASE_URL = 'https://planli-f0b12.web.app/trip';
+const publicLinks = require('./publicLinks');
+const SHARE_BASE_URL = `${publicLinks.origin}/${publicLinks.paths.trip}`;
 const DEEP_LINK_BASE_URL = 'com.planli.planlitravels://shared-trip';
 const RECEIPT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const REVOKED_SHARE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -610,7 +611,7 @@ async function createTripShare({ admin, auth, data }) {
   });
   return {
     tripId,
-    shareUrl: `${SHARE_BASE_URL}/${token}`,
+    shareUrl: publicLinks.shareUrl('trip', token),
     deepLink: `${DEEP_LINK_BASE_URL}/${token}`,
   };
 }

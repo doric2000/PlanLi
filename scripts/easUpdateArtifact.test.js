@@ -16,7 +16,7 @@ const updateId = '01a05f00-0000-7000-8000-000000000000';
 test('Android artifact verification rejects an iOS artifact before any download', async () => {
   let fetched = false;
   await assert.rejects(verifyProductionUpdateArtifact([{
-    id: updateId, group: groupId, platform: 'ios', runtimeVersion: '1.3.0', manifestPermalink: 'https://example.test',
+    id: updateId, group: groupId, platform: 'ios', runtimeVersion: '1.4.0', manifestPermalink: 'https://example.test',
   }], groupId, async () => { fetched = true; }, 'android'), /matching android artifact/);
   assert.equal(fetched, false);
 });
@@ -25,7 +25,7 @@ test('rejects an update for the previous native runtime before fetching assets',
   assert.throws(() => validateCandidateUpdates([{
     id: updateId, group: groupId, platform: 'ios', runtimeVersion: '1.2.0',
     manifestPermalink: 'https://u.expo.dev/update/test',
-  }], groupId), /runtime 1.3.0/);
+  }], groupId), /runtime 1.4.0/);
 });
 
 function productionBundle(extra = '') {
@@ -74,7 +74,7 @@ for (const platform of ['ios', 'android']) test(`downloads, hashes, and validate
   const launchHash = crypto.createHash('sha256').update(bundle).digest('base64url');
   const manifest = {
     id: updateId,
-    runtimeVersion: '1.3.0',
+    runtimeVersion: '1.4.0',
     metadata: { updateGroup: groupId },
     launchAsset: {
       hash: launchHash,
@@ -97,7 +97,7 @@ for (const platform of ['ios', 'android']) test(`downloads, hashes, and validate
     id: updateId,
     group: groupId,
     platform,
-    runtimeVersion: '1.3.0',
+    runtimeVersion: '1.4.0',
     manifestPermalink: 'https://u.expo.dev/update/test',
     isRollBackToEmbedded: false,
   }], groupId, fetchImpl, platform);

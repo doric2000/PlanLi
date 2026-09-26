@@ -76,6 +76,13 @@ const EXPLICIT_FUNCTION_TESTS = new Map([
     'functions/notificationWiring.test.js',
   ]],
 ]);
+const PUBLIC_LINK_PATHS = new Set([
+  'functions/publicLinks.js', 'functions/tripService.js',
+  'client/src/config/publicLinks.generated.js', 'client/src/navigation/sharedTripLinking.js',
+  'scripts/syncPublicLinks.js', 'scripts/publicLinks.test.js',
+  'scripts/configurePublicAuthDomain.js', 'scripts/configurePublicAuthDomain.test.js',
+  'scripts/hostingSecurityHeaders.test.js', 'firebase.json',
+]);
 // This script dynamically loads the operator's Firebase CLI only in --apply mode.
 // Its explicit proof executes the credential-free CLI dry run as well as policy tests.
 const SCRIPT_DRY_RUN_PROOFS = new Map([
@@ -245,13 +252,15 @@ function classifyChanges(files) {
     SECURITY_TOOLING_PATHS.has(file) || file.startsWith('.semgrep/')
   ));
   const legalPolicy = changedFiles.some((file) => LEGAL_POLICY_PATHS.has(file));
+  const publicLinks = changedFiles.some((file) => PUBLIC_LINK_PATHS.has(file) || file.startsWith('hosting/'));
 
   return {
     changedFiles,
-    tooling: validationTooling || securityTooling || legalPolicy,
+    tooling: validationTooling || securityTooling || legalPolicy || publicLinks,
     validationTooling,
     securityTooling,
     legalPolicy,
+    publicLinks,
     client: clientRuntimeFiles.length > 0 || taxonomy,
     functions: functionsRuntimeFiles.length > 0 || taxonomy || indexes,
     rules,
@@ -448,6 +457,7 @@ function printablePlan(plan) {
       validationTooling: plan.validationTooling,
       securityTooling: plan.securityTooling,
       legalPolicy: plan.legalPolicy,
+      publicLinks: plan.publicLinks,
       client: plan.client,
       functions: plan.functions,
       rules: plan.rules,
@@ -477,6 +487,7 @@ function compactPlan(plan) {
     plan.validationTooling && 'planner',
     plan.securityTooling && 'security',
     plan.legalPolicy && 'legal',
+    plan.publicLinks && 'public-links',
   ].filter(Boolean);
   return [
     `checks=${checks.length ? checks.join(',') : 'none'}`,
@@ -679,6 +690,12 @@ function shouldRunSecurityPreflight(env = process.env) {
 
 function runTooling(plan, repoRoot = REPO_ROOT) {
   if (!plan.tooling) return;
+  if (plan.publicLinks) {
+    runCommand('public-link-tests', process.execPath,
+      ['--test', '--test-reporter=spec', 'scripts/publicLinks.test.js',
+        'scripts/configurePublicAuthDomain.test.js', 'scripts/hostingSecurityHeaders.test.js',
+        'client/scripts/sharedTripLinking.test.js'], repoRoot, repoRoot);
+  }
   if (plan.validationTooling) {
     runCommand('validation-planner-tests', process.execPath,
       ['--test', '--test-reporter=spec', 'scripts/validationPlan.test.js', 'scripts/validationReceipt.test.js',

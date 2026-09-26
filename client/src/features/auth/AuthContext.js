@@ -50,7 +50,7 @@ function capabilityAllowed(capability, status, user) {
   return capability === CAPABILITIES.ACTIVE && status === AUTH_STATES.READY;
 }
 
-export function AuthProvider({ children, navigationRef }) {
+export function AuthProvider({ children, navigationRef, navigationReady = true }) {
   const [user, setUser] = useState(auth.currentUser);
   const [userDocument, setUserDocument] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -261,13 +261,16 @@ export function AuthProvider({ children, navigationRef }) {
   }, [status]);
 
   useEffect(() => {
-    if (status !== AUTH_STATES.READY || !pendingReturnToRef.current) return;
+    if (!navigationReady || status !== AUTH_STATES.READY || !pendingReturnToRef.current) return;
     if (!navigationRef?.isReady?.()) return;
     const returnTo = pendingReturnToRef.current;
     pendingReturnToRef.current = null;
     setGate(null);
-    navigationRef.resetRoot({ index: 0, routes: [{ name: returnTo.name, params: returnTo.params }] });
-  }, [navigationRef, status]);
+    const destination = { name: returnTo.name, params: returnTo.params };
+    const isSharedDetail = ['SharedTrip', 'RouteDetail', 'RecommendationDetail'].includes(returnTo.name);
+    navigationRef.resetRoot({ index: isSharedDetail ? 1 : 0,
+      routes: isSharedDetail ? [{ name: 'Main' }, destination] : [destination] });
+  }, [navigationRef, navigationReady, status]);
 
   const dismissGate = useCallback(() => {
     const shouldLeaveBlockedRoute = gate?.blockedRoute === true;

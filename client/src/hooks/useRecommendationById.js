@@ -7,6 +7,7 @@ export function useRecommendationById(id) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(Boolean(id));
   const [error, setError] = useState(null);
+  const [resolvedId, setResolvedId] = useState(null);
   const requestSerial = useRef(0);
 
   const load = useCallback(async ({ keepData = true } = {}) => {
@@ -28,10 +29,16 @@ export function useRecommendationById(id) {
       setData(nextData);
       return nextData;
     } catch (nextError) {
-      if (serial === requestSerial.current) setError(nextError);
+      if (serial === requestSerial.current) {
+        setData(null);
+        setError(nextError);
+      }
       return null;
     } finally {
-      if (serial === requestSerial.current) setLoading(false);
+      if (serial === requestSerial.current) {
+        setResolvedId(id);
+        setLoading(false);
+      }
     }
   }, [id]);
 
@@ -43,5 +50,5 @@ export function useRecommendationById(id) {
   }, [load]);
 
   const refresh = useCallback(() => load({ keepData: true }), [load]);
-  return { data, loading, error, refresh };
+  return { data, loading, error, resolved: resolvedId === id, refresh };
 }

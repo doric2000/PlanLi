@@ -1,5 +1,6 @@
 import { StyleSheet } from 'react-native';
 import { colors } from './colors';
+import { fontFamilies } from './typography';
 
 export default StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background || '#F5F7FA' },
@@ -10,12 +11,12 @@ export default StyleSheet.create({
   card: { padding: 16, backgroundColor: '#FFFFFF', borderRadius: 16, borderWidth: 1, borderColor: '#DCE4EC', gap: 8 },
   row: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
   copy: { flex: 1, gap: 6 },
-  title: { color: colors.primary, fontSize: 16, fontWeight: '700', textAlign: 'right', writingDirection: 'rtl' },
+  title: { color: colors.primary, fontSize: 16, fontFamily: fontFamilies.bold, textAlign: 'right', writingDirection: 'rtl' },
   detail: { color: '#526477', fontSize: 14, textAlign: 'right', writingDirection: 'rtl' },
   error: { color: '#B42318' },
   actions: { flexDirection: 'row-reverse', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
   button: { minHeight: 44, minWidth: 44, paddingHorizontal: 12, alignItems: 'center', justifyContent: 'center' },
-  buttonText: { color: colors.primary, fontSize: 14, fontWeight: '700', textAlign: 'right' },
+  buttonText: { color: colors.primary, fontSize: 14, fontFamily: fontFamilies.bold, textAlign: 'right' },
   track: { height: 5, backgroundColor: '#E5EDF3', borderRadius: 3, overflow: 'hidden', flexDirection: 'row-reverse' },
   fill: { height: 5, backgroundColor: colors.primary },
   empty: { padding: 32, textAlign: 'center', color: '#526477' },

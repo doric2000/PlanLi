@@ -1,0 +1,15 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "C22ZFVA6M6.com.planli.planlitravels",
+        "paths": [
+          "/trip/*",
+          "/route/*",
+          "/recommendation/*"
+        ]
+      }
+    ]
+  }
+}

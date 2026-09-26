@@ -129,7 +129,7 @@ export default function App() {
 	return (
 		<AppFontProvider>
 			<SafeAreaProvider initialMetrics={initialWindowMetrics}>
-				<AuthProvider navigationRef={navigationRef}>
+				<AuthProvider navigationRef={navigationRef} navigationReady={navigationReady}>
 				<OperationProvider>
 				<ProfilePhotoProvider>
 				<RegionSelectionProvider>

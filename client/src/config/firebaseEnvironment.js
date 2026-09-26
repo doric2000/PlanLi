@@ -31,8 +31,6 @@ export function resolveFirebaseEnvironment(values, platform) {
 
   return {
     ...normalized,
-    authDomain: platform === 'web'
-      ? normalized.authDomain
-      : `${normalized.projectId}.firebaseapp.com`,
+    authDomain: normalized.authDomain,
   };
 }

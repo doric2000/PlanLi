@@ -25,6 +25,51 @@ The existing Text Search quota remains zero. See
 
 ## Current environment status
 
+### Custom-domain migration in progress (2026-09-26)
+
+`feat/custom-domain-links`, based on `b6c40e9`, prepares canonical `planli.cc`
+trip/route/recommendation sharing, scoped native app links, browser landing pages,
+native Auth domain alignment and a dry-run-first email callback configuration tool.
+Source runtime is now **1.4.0**; installed builds and their baseline records remain
+**1.3.0**. The next iOS source version is **1.1.3**. No build, OTA,
+Hosting/Functions deployment, Auth mutation or store submission has yet been
+performed for this migration.
+
+Cloudflare Email Routing was activated on September 21. On September 26 the
+`support@planli.cc` rule was independently verified active, forwarding to the
+verified `planli.travel.il@gmail.com` destination. A real message from a separate
+mailbox arrived at 11:54 Asia/Jerusalem (in Gmail Spam); its reply was independently
+received at 11:59:42. Public DNS has three Cloudflare MX
+records and one combined SPF record preserving Firebase mail authorization.
+
+The production Google OAuth client now permits `https://planli.cc` and
+`https://planli.cc/__/auth/handler`, preserving the previous Firebase callback.
+Google consent branding now links to the canonical home, privacy and terms pages.
+Its support identity remains the existing Google account: Google only offers
+account/group identities, so email forwarding alone cannot select `support@planli.cc`.
+Apple Services ID `com.planli.planlitravels.auth` now registers `planli.cc` and the
+same callback, independently read back after saving; legacy registration retained.
+The Apple team is `C22ZFVA6M6`. Google Play's generated association JSON confirms
+the committed `BA:C9:7A:1A:...:19:5D` app-signing fingerprint.
+Google Play contact email `support@planli.cc` and website `https://planli.cc` were
+published. App Store 1.1.3 is **Prepare for Submission**, with canonical support,
+marketing and review-note links; public 1.1.1 still has its old support URL until
+a new version is released. Apple's published privacy URL already uses planli.cc.
+
+Release is gated on the reviewed Auth
+configuration apply, Hosting/Functions deployment and new signed native builds.
+The pre-existing untracked root `app.json` remains untouched and is already
+excluded by `.easignore`; guarded OTA checks still reject it in the checkout.
+The Codex 0.155.1 review completed; its cold-start back-navigation finding was
+fixed and covered by router and Auth tests. SDK 57 patch alignment is complete:
+Expo Doctor 21/21, package compatibility, native configuration, production EAS
+environment and admin export passed. The full client run passed 223/226 suites;
+the three failures were then resolved/verified by a focused 5-suite / 55-test pass
+(stale version expectations, existing font-family policy violation, and transient
+5-second integration timeouts). The font correction uses the existing Assistant
+bold family. No SDK major upgrade or Doctor exclusion was introduced.
+See the [rollout and acceptance checklist](docs/custom-domain-rollout.md).
+
 ### Public store links on the landing page (2026-09-21)
 
 The landing page now links to the public PlanLi Travels listings on

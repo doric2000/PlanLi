@@ -14,9 +14,17 @@ describe('Firebase release environment', () => {
     expect(resolveFirebaseEnvironment(valid, 'web').authDomain).toBe('planli.cc');
   });
 
-  it('uses the Firebase-owned Auth domain on native platforms', () => {
-    expect(resolveFirebaseEnvironment(valid, 'ios').authDomain).toBe('planli-f0b12.firebaseapp.com');
-    expect(resolveFirebaseEnvironment(valid, 'android').authDomain).toBe('planli-f0b12.firebaseapp.com');
+  it('uses the configured custom Auth domain on native platforms', () => {
+    expect(resolveFirebaseEnvironment(valid, 'ios').authDomain).toBe('planli.cc');
+    expect(resolveFirebaseEnvironment(valid, 'android').authDomain).toBe('planli.cc');
+  });
+
+  it('preserves a separate staging Auth domain on every platform', () => {
+    for (const platform of ['web', 'ios', 'android']) {
+      expect(resolveFirebaseEnvironment({ ...valid, projectId: 'planli-staging-f0b12',
+        authDomain: 'planli-staging-f0b12.firebaseapp.com' }, platform).authDomain)
+        .toBe('planli-staging-f0b12.firebaseapp.com');
+    }
   });
 
   it('fails closed when a required value is missing or a dummy fallback appears', () => {

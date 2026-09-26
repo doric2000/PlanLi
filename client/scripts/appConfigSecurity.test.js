@@ -66,6 +66,22 @@ function withEnvironment(values, action) {
   }
 }
 
+test('only production app identities claim HTTPS sharing links', () => {
+  const env = productionEnvironment({ EAS_BUILD: '', GOOGLE_MAPS_IOS_KEY: '', GOOGLE_MAPS_ANDROID_KEY: '' });
+  withEnvironment(env, () => {
+    const result = configureApp({ config: appJson });
+    assert.deepEqual(result.ios.associatedDomains, ['applinks:planli.cc']);
+    assert.equal(result.android.intentFilters[0].autoVerify, true);
+    assert.deepEqual(result.android.intentFilters[0].data.map(value => value.pathPrefix),
+      ['/trip/', '/route/', '/recommendation/']);
+  });
+  withEnvironment({ ...env, PLANLI_ENV: 'staging', EXPO_PUBLIC_FIREBASE_PROJECT_ID: 'planli-staging-f0b12' }, () => {
+    const result = configureApp({ config: appJson });
+    assert.deepEqual(result.ios.associatedDomains, []);
+    assert.deepEqual(result.android.intentFilters, []);
+  });
+});
+
 test('protected EAS builds reject missing Firebase configuration', () => {
   assert.throws(() => assertProtectedFirebaseEnvironment({
     EAS_BUILD: '1', EAS_BUILD_PROFILE: 'staging', PLANLI_ENV: 'staging',
