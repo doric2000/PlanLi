@@ -25,7 +25,7 @@ The existing Text Search quota remains zero. See
 
 ## Current environment status
 
-### Android Production promotion and unified OTA (2026-09-26, in progress)
+### Android Production promotion and unified OTA (2026-09-26, published)
 
 Android **1.1.0 (12)** is the release target, EAS build
 `597752db-0fd4-4861-a8d7-a530ccf85ca7`, native source
@@ -38,19 +38,53 @@ The same Play artifact was promoted from Internal testing into a Production
 draft (track `4697581935490668054`, release `2`), with 100% rollout across the
 already targeted countries. No new AAB upload or versionCode increment was made.
 The Production change was submitted on September 26 around 17:43 Asia/Jerusalem;
-Publishing overview independently showed **Changes in review**, build 12,
-**Start full rollout**. Approval and public availability are not yet verified;
-Production build 10 remains the last verified public release. Managed publishing remains off.
+Publishing overview initially showed **Changes in review**, build 12,
+**Start full rollout**. A later independent console check around 18:47
+Asia/Jerusalem confirmed **Latest production release: 12 (1.1.0) - planli.cc links**,
+**100%** rollout and **no unpublished changes**, plus the app-update-published
+notification. Google has approved and published build 12; the console's exact
+publication timestamp was not captured. Managed publishing remains off.
 The console reports a non-blocking missing deobfuscation-file warning.
 
-Release tooling source `99ce9c873596` adds the both-platform `release:ota` workflow
-and separates Google Play `production` from explicitly named `internal-testing`.
-Live read-only planning selected Android for publication and identified the iOS
-application inputs as already current. Exact native fingerprint comparisons for
-both platforms prove only the store-submission metadata changed; the reviewed
-pairs are recorded in `docs/eas-native-compatibility.md`. Android OTA is still
-pending here. Physical installation/acceptance of build 12 is
-unverified. Store review and OTA delivery are recorded separately below when complete.
+PR [#437](https://github.com/doric2000/PlanLi/pull/437), merged as
+`1cb218a2756850d9da22b71f7d856d9602dfa696`, adds the both-platform `release:ota`
+workflow and separates Google Play `production` from explicitly named
+`internal-testing`. Android production OTA group
+`879f6607-3360-4523-9c46-eb7184e231c6` was published at
+`2026-09-26T15:47:22.114Z`; the public endpoint served its verified bundle at
+`15:47:27.204Z`. iOS was skipped because its deployed application inputs already
+match; group `f1a97566-0195-4955-87b9-eb6b6a728757` remains unchanged.
+Exact native fingerprint comparisons prove only store-submission metadata changed;
+the reviewed pairs are recorded in `docs/eas-native-compatibility.md`.
+
+The shared-link → guest gate → email login → shared trip flow passed by direct
+UI interaction on the existing Android development APK in `PlanLi_E2E_API34`,
+against seeded `demo-planli-e2e` services. The shared trip remained visible after
+background/foreground, and explicit Back returned to Home. The automated Maestro
+attempt reached Login but its device server died during `inputText`; this is
+recorded as an automation failure, not a passing Maestro run. The manual proof
+verifies unchanged source inputs and is saved separately. Physical installation
+and acceptance of the Google Play binary/OTA remain unverified; build 10 users
+must install the store update to receive runtime 1.4.0 fixes.
+
+Validation: 107 affected client suites / 819 tests passed through one batch plus
+a focused retry of its sole 5-second timeout (106 passing suites were reused).
+Release readiness reused that evidence after source/dependency/command/environment
+verification. Release-helper tests, the final 15 lock/cache tests, and all required
+PR checks passed. CodeQL's lock-race finding was fixed with atomic exclusive lock
+creation. The one CLI `/review` attempt was blocked by the installed CLI's model
+support; the final diff was inspected directly without a second review run.
+
+The production command prepared dependencies once, exported/uploaded one Android
+bundle, downloaded/inspected it once and republished the same assets. It performed
+19 read-only EAS CLI calls plus fingerprint, candidate and republish commands
+(22 total); zero native builds, zero AAB uploads and zero iOS publications.
+Measured stages: cached validation 3s, preparation 257s, native proof 172s,
+candidate publication 549s, candidate inspection 108s, fresh-state checks 126s,
+promotion 48s and public delivery verification 1s. These timings include local
+CLI/file-system overhead; they are not token-usage measurements. The one-time
+submission-metadata investigation is separate from this production-run record.
+Resumable journal and metrics: `.codex_tmp/releases/ota-86b7c17b-4fd0-4efd-ba69-87cf8202cb1a{,-metrics}.json`.
 
 ### Custom-domain migration in progress (2026-09-26)
 
@@ -6039,3 +6073,18 @@ part of this follow-up.
 - Validation: 49 related client suites / 460 tests, 46 release guard tests, isolated auth/navigation browser proof, final reviews and applicable PR checks passed.
 - Device application and post-update security smoke tests: pending.
 - Rollback: republish verified iOS group `f54aca26-f3fa-4015-afc6-b733f179cff3`; never change the runtime URL or channel in-app.
+
+## Android production OTA release
+
+- Source commit: `1cb218a2756850d9da22b71f7d856d9602dfa696`.
+- EAS Update group: `879f6607-3360-4523-9c46-eb7184e231c6`; channel `production`; runtime `1.4.0`.
+- EAS environment: `production`; published at `2026-09-26T15:47:22.114Z`.
+- Immutable Android launch bundle: update `01a0de66-4f82-799f-89e6-0afc72a2c2f1`; 10925992 bytes; SHA-256 `54C2FF5D0B23D687151D839B498CF6997702FDDE4CDE4BC7FEC1911D187A823E`.
+- Message: Preserve shared trips after sign-in on Android
+- Target: Google Play Production `1.1.0 (12)`, EAS build `597752db-0fd4-4861-a8d7-a530ccf85ca7`; Google confirmed published at 100% rollout.
+- Verified candidate: `0649ca52-2555-4f10-ab15-1be72a519358`, update `01a0de63-36d3-7013-a70e-03bbcde7280c`; the production launch-asset hash is identical.
+- Native compatibility: reviewed submission-only fingerprint `a288be2d72f7efe12ed7ecd2e82040eb464ac3a0`, bound to build fingerprint `64d77fc362e400f5754e05a9886052a2e88eeb45`.
+- Public production endpoint verified at `2026-09-26T15:47:27.204Z`; iOS publication was skipped as already current.
+- Manual Android emulator auth/return/back scenario passed on the existing development APK (`E1E8E0CBED783618CB95A5EF1F97DCB06429B50D8E2E5EA4F3C58ED5328797B3`). This does not validate the native inputs or physical installation of the store binary.
+- Physical store-device application and post-OTA acceptance: pending. Local test services and the task-owned emulator were stopped.
+- Rollback: no previous android OTA; an authorized rollback must target the embedded build for runtime 1.4.0.
