@@ -97,6 +97,12 @@ export function applyOperationsLocally(tripValue, operations, recommendationPrev
       trip.days.push({ id: operation.clientId, kind: 'day', title: operation.title, date: operation.date || null, travelMode: operation.travelMode || 'DRIVE', order: maxOrder + 1, stopCount: 0, stops: [] });
       trip.dayCount += 1;
     }
+    if (operation.type === 'delete_day') {
+      trip.days = trip.days.filter((day) => day.id !== operation.dayId);
+      trip.dayCount = trip.days.filter((day) => day.kind === 'day').length;
+      trip.stopCount = trip.days.reduce((sum, day) => sum + (day.stops?.length || 0), 0);
+      return;
+    }
     const day = trip.days.find((item) => item.id === operation.dayId);
     if (!day) return;
     if (operation.type === 'update_day') Object.assign(day, { ...operation, type: undefined, dayId: undefined });

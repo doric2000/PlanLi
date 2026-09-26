@@ -139,6 +139,11 @@ test('active trip quota errors explain how to make room', () => {
   expect(service.tripErrorMessage({ details: { reason: 'TRIP_LIMIT_REACHED' } })).toContain('50 טיולים');
 });
 
+test('day deletion errors explain the remaining action', () => {
+  expect(service.tripErrorMessage({ details: { reason: 'DAY_NOT_EMPTY' } })).toContain('להעביר או להסיר');
+  expect(service.tripErrorMessage({ details: { reason: 'LAST_DAY_REQUIRED' } })).toContain('לפחות יום אחד');
+});
+
 describe('shared-link read recovery', () => {
   beforeEach(() => jest.useFakeTimers());
   afterEach(() => jest.useRealTimers());
