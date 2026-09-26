@@ -50,6 +50,9 @@ function parseArgs(argv) {
     } else if (value === '--preview-group') {
       args.previewGroup = String(argv[index + 1] || '').trim();
       index += 1;
+    } else if (value === '--source-record') {
+      args.sourceRecord = argv[++index];
+      if (!args.sourceRecord || args.sourceRecord.startsWith('--')) fail('--source-record requires a path.');
     } else {
       fail(`Unknown argument: ${value}`);
     }
@@ -250,7 +253,7 @@ async function runRelease({ repoRoot, args }, dependencies = {}) {
   const preflight = (dependencies.runPreflight || runPreflight)({ repoRoot, deployedCommit: args.deployedCommit, archive: true, platform, baseline });
   validateConfirmation({ ...args, head: preflight.head });
 
-  const source = (dependencies.prepareSource || prepareSource)({ repoRoot, baseline });
+  const source = (dependencies.prepareSource || prepareSource)({ repoRoot, baseline, sourceRecord: args.sourceRecord });
   const runEas = (dependencies.createEasRunner || createEasRunner)(source);
   validateEasVersion(runEas(['--version']));
   validateEasIdentity(runEas(['whoami']));
@@ -266,7 +269,7 @@ async function runRelease({ repoRoot, args }, dependencies = {}) {
     message: args.message,
   });
   if (!args.apply) {
-    return { apply: false, command, preflight, native, previewArtifact, previewGroup: args.previewGroup };
+    return { apply: false, command, preflight, native, previewArtifact, previewGroup: args.previewGroup, sourceRecord: source.recordPath };
   }
 
   const latest = (dependencies.runPreflight || runPreflight)({ repoRoot, archive: true, platform, baseline });
@@ -286,6 +289,7 @@ async function runRelease({ repoRoot, args }, dependencies = {}) {
   );
   return {
     apply: true,
+    sourceRecord: source.recordPath,
     command,
     metadata,
     preflight,

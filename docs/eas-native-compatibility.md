@@ -1,5 +1,38 @@
 # OTA native compatibility
 
+## Repeatable release preparation
+
+Use the tracked wrappers and the repository-pinned EAS CLI. They set the public
+production Firebase project before CLI startup and use `--environment production`
+for fingerprinting/export. The parent environment matters in CLI 22.6 even when
+the server environment is selected. Build 34 also requires physically local
+dependencies and the baseline's exact LF/CRLF metadata bytes. Do not substitute a
+junction, run a raw update from the checkout, or alter native inputs to hide a mismatch.
+
+Prepare dependencies once per source commit. Candidate/dry-run results include
+`sourceRecord`; pass it as `--source-record` during promotion or a retry. Reuse
+rejects a foreign archive, changed HEAD, dirty tracked files, changed dependency
+locks, changed installed-build baseline, wrong dependency layout, or altered
+tracked archive content. Legacy records must be prepared again. Account, live
+lineage, native fingerprint and immutable published-artifact checks still run;
+the receipt saves the archive/copy, not those checks. Each CLI phase reports its
+duration without printing environment values.
+
+Run affected release readiness once against the deployed source and retain its
+receipt. A Git push/merge or network retry does not require repeating successful
+tests when their inputs are unchanged. Native preflight is included in candidate
+apply, and production verification is included in promotion apply; separate dry
+runs are useful for investigation but are not required stages of an authorized
+release. Do not pre-export the iOS bundle before EAS packages the candidate.
+
+On a compatibility failure, retain the archive/proof and compare the two explicit
+fingerprint hashes once. Correct the evidenced input difference, rerun its focused
+check, then retry with the verified source record if still valid. A real native
+change requires its own reviewed build; unknown fingerprints remain blocked.
+
+References: [Expo environment variables](https://docs.expo.dev/eas/environment-variables/)
+and [update deployment](https://docs.expo.dev/eas-update/deployment/).
+
 ## Installed iOS runtime 1.4.0 baseline (2026-09-26)
 
 The owner confirmed TestFlight 1.1.3 (34) is installed and opened a shared trip
@@ -101,8 +134,7 @@ Unknown fingerprints or changed fallback source still stop publication.
 
 ```powershell
 npm run release:eas-candidate -- --platform android --apply --message '<summary>'
-npm run release:eas-production -- --platform android --preview-group '<candidate-group>' --message '<summary>'
-npm run release:eas-production -- --platform android --preview-group '<candidate-group>' --message '<summary>' --apply --confirm 'PUBLISH PRODUCTION <12-char-HEAD>'
+npm run release:eas-production -- --platform android --source-record '<returned sourceRecord>' --preview-group '<candidate-group>' --message '<summary>' --apply --confirm 'PUBLISH PRODUCTION <12-char-HEAD>'
 ```
 
 Candidate export, immutable manifest download and production republish are scoped
@@ -146,23 +178,22 @@ notices and rejects malformed results without printing environment output.
 `npm run preflight:eas-native` is a dry run: no Metro export, EAS update, native
 build or store submission. It creates an immutable Git archive from the committed
 source, restores only the three verified metadata files to their baseline CRLF
-bytes, verifies every tracked archive blob allowing UTF-8 LF/CRLF normalization,
+or LF bytes, verifies every tracked archive blob allowing UTF-8 LF/CRLF normalization,
 verifies EAS identity/build metadata,
 and computes the iOS fingerprint with the production environment. Native metadata
 content changes are rejected; normalization never conceals an actual edit.
 The archive command explicitly pins Git's CRLF conversion for this installed
 baseline, so machine-local `core.autocrlf`/`core.eol` settings cannot change it.
-Archive depth and dependency-junction layout are stable, preserving fingerprint
-paths. Untracked root configuration and local environment files never enter the
+Archive depth and the baseline-specific dependency layout are stable, preserving
+fingerprint paths. Untracked root configuration and local environment files never enter the
 archive and are left untouched in the shared workspace.
 
 For an authorized release from synchronized, tracked-clean `main`:
 
 ```powershell
 npm run release:eas-candidate -- --apply --message '<release summary>'
-npm run release:eas-production -- --preview-group '<candidate group>' --message '<release summary>'
 # Only after production release authorization:
-npm run release:eas-production -- --preview-group '<candidate group>' --message '<release summary>' --apply --confirm 'PUBLISH PRODUCTION <12-char-HEAD>'
+npm run release:eas-production -- --source-record '<returned sourceRecord>' --preview-group '<candidate group>' --message '<release summary>' --apply --confirm 'PUBLISH PRODUCTION <12-char-HEAD>'
 ```
 
 The candidate command runs the native guard before calling `eas update`, then

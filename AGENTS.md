@@ -119,6 +119,8 @@ Validate changed behavior and consumers, not the repository by habit.
   Remote advisory scans and generated exports are never satisfied by cached receipts.
 - Review the final diff. Run `/review` once only for a final sensitive, shared-contract,
   cross-subsystem, or release diff; it does not replace runtime evidence.
+  Give the review the immutable commit/range and existing validation receipts.
+  Request inspection without repeating passed tests unless it finds a new concern.
 - Keep output bounded: store noisy logs in ignored `.codex_tmp/validation/`, summarize
   passes, and inspect the relevant failure excerpt first.
 - With no relevant test, add one for changed logic or report runtime evidence and the
@@ -144,6 +146,18 @@ Implementation authorization alone does not imply deployment, EAS build, OTA,
 TestFlight/App Store submission, IAM changes, migrations, or destructive live work.
 
 ## Deployment and completion
+
+For authorized EAS OTA work, follow `docs/eas-native-compatibility.md`: one
+release-readiness pass, one guarded candidate export, then promotion of that exact
+candidate. `release:eas-candidate --apply` already includes native preflight;
+`release:eas-production --apply` includes promotion verification. A separate dry
+run is optional, not an extra mandatory gate. Pass the returned `sourceRecord`
+with `--source-record` to reuse preparation across phases/retries. The wrappers
+recheck source, locks, account, lineage, native fingerprint and published artifact.
+Use their pinned CLI/production environment and baseline-specific archive layout;
+do not reconstruct EAS commands or copy ignored helper scripts. A mismatch needs
+one comparison of the explicit fingerprints and correction of the differing input,
+not repeated exports, blanket test reruns, or a new build just to silence it.
 
 Repository state is not deployment state. Before an authorized release, read
 `README.md`, verify project/branch/commit/live state, and use the safe dependency
