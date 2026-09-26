@@ -12,6 +12,14 @@ function git(repoRoot, args) {
 
 const digest = value => crypto.createHash('sha256').update(value).digest('hex');
 
+function dependencyCopyInput(relative) {
+  const file = relative.replace(/\\/g, '/');
+  // Generated Gradle/CMake state is ignored by Expo's native fingerprint and
+  // can be locked by a local build. Keep published JS build/ directories.
+  return !/(?:^|\/)(?:\.gradle|\.cxx)(?:\/|$)/.test(file)
+    && !/(?:^|\/)(?:android(?:\/app)?|android-annotation(?:-processor)?|[^/]*gradle-plugin|ios)\/build(?:\/|$)/.test(file);
+}
+
 function dependencyLockDigest(root) {
   return digest(JSON.stringify(['client/package-lock.json', 'client/node_modules/.package-lock.json'].map(file => {
     const target = path.join(root, file);
@@ -130,7 +138,8 @@ function prepareSource({ repoRoot, baseline, sourceRecord }) {
   // autolinking metadata and fingerprint even when dependency bytes are identical.
   if (dependencyLayout === 'local-copy') {
     console.error('[EAS source] Preparing dependency copy once for this release.');
-    fs.cpSync(dependencies, archivedDependencies, { recursive: true, dereference: true, errorOnExist: true, force: false });
+    fs.cpSync(dependencies, archivedDependencies, { recursive: true, dereference: true, errorOnExist: true, force: false,
+      filter: file => dependencyCopyInput(path.relative(dependencies, file)) });
   }
   else fs.symlinkSync(dependencies, archivedDependencies, process.platform === 'win32' ? 'junction' : 'dir');
   const record = { version: 1, repoRoot, sourceRoot, commit,
@@ -179,4 +188,4 @@ function createEasRunner(source, { entry = resolveEasEntry() } = {}) {
   };
 }
 
-module.exports = { git, nativeMetadataBytes, verifySource, prepareSource, createEasRunner };
+module.exports = { git, nativeMetadataBytes, verifySource, prepareSource, createEasRunner, dependencyCopyInput };

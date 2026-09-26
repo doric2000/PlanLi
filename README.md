@@ -25,6 +25,29 @@ The existing Text Search quota remains zero. See
 
 ## Current environment status
 
+### Android Production promotion and unified OTA (2026-09-26, in progress)
+
+Android **1.1.0 (12)** is the release target, EAS build
+`597752db-0fd4-4861-a8d7-a530ccf85ca7`, native source
+`1eae24ccf94072490d766202f2ad4f9478d2ce22`, runtime **1.4.0**, channel
+`production`, fingerprint `64d77fc362e400f5754e05a9886052a2e88eeb45`.
+EAS reports FINISHED/STORE. The existing AAB SHA-256 is
+`A611BB619758ECA498034854C4D35623CE67568013F2E883B9FAD185323777A7`.
+
+The same Play artifact was promoted from Internal testing into a Production
+draft (track `4697581935490668054`, release `2`), with 100% rollout across the
+already targeted countries. No new AAB upload or versionCode increment was made.
+Google review has not yet been submitted at this checkpoint; Production build 10
+remains the last verified public release. Managed publishing remains off.
+The console reports a non-blocking missing deobfuscation-file warning.
+
+Release tooling source `99ce9c873596` adds the both-platform `release:ota` workflow
+and separates Google Play `production` from explicitly named `internal-testing`.
+Live read-only planning selected Android for publication and identified the iOS
+application inputs as already current. Android OTA and native submission-metadata
+review are still pending here. Physical installation/acceptance of build 12 is
+unverified. Store review and OTA delivery are recorded separately below when complete.
+
 ### Custom-domain migration in progress (2026-09-26)
 
 PR [#429](https://github.com/doric2000/PlanLi/pull/429), merged as
@@ -33,7 +56,8 @@ trip/route/recommendation sharing, scoped native app links, browser landing page
 native Auth domain alignment and a dry-run-first email callback configuration tool.
 Source runtime is now **1.4.0**. The owner confirmed installed TestFlight
 **1.1.3 (34)** on September 26; the iOS baseline now matches its signed build and
-runtime. Android installation/baseline remains **1.3.0**, unverified for build 12.
+runtime. The Android release baseline is now build **12 / 1.4.0**, with physical
+installation unverified; users of build 10 / 1.3.0 need the store update.
 Hosting and `createTripShare` are deployed from that merge; no migration OTA was
 published at this checkpoint. Auth limitations are below.
 

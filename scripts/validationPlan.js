@@ -144,6 +144,7 @@ function listFiles(directory) {
     if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue;
     if (path.basename(directory) === 'client' && ['android', 'ios', 'dist', 'coverage'].includes(entry.name)) continue;
     const absolute = path.join(directory, entry.name);
+    if (!require('./easReleaseSource').dependencyCopyInput(absolute)) continue;
     if (entry.isDirectory()) result.push(...listFiles(absolute));
     else result.push(absolute);
   }
@@ -704,7 +705,8 @@ function runTooling(plan, repoRoot = REPO_ROOT) {
         'scripts/securityCiPlan.test.js', 'scripts/releaseReadiness.test.js', 'scripts/e2e/environment.test.js',
         'scripts/e2e/flowPlan.test.js', 'scripts/e2e/native.test.js', 'scripts/easNativeCompatibility.test.js',
         'scripts/easReleaseSource.test.js', 'scripts/easCandidate.test.js', 'scripts/easProductionPreflight.test.js',
-        'scripts/easProductionUpdate.test.js'], repoRoot, repoRoot);
+        'scripts/easProductionUpdate.test.js', 'scripts/easOta.test.js', 'scripts/easReleasePlan.test.js',
+        'scripts/easUpdateArtifact.test.js'], repoRoot, repoRoot);
   }
   if (plan.securityTooling) {
     runCommand('security-local-scanner-tests', process.execPath,

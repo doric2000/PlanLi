@@ -8,6 +8,14 @@ const { nativeMetadataBytes, prepareSource, verifySource, createEasRunner } = re
 const { fixture } = require('./testFixtures/easRelease');
 const sha1 = b => crypto.createHash('sha1').update(b).digest('hex');
 
+test('dependency copying omits generated native caches but retains published JS and native source', () => {
+  const { dependencyCopyInput } = require('./easReleaseSource');
+  for (const file of ['@react-native/gradle-plugin/.gradle/lock', 'expo/android/build/generated',
+    'expo/android/.cxx/cache', 'expo-module-gradle-plugin/build/classes']) assert.equal(dependencyCopyInput(file), false);
+  for (const file of ['expo/build/index.js', '@react-native/gradle-plugin/src/main/build.kt',
+    'expo/android/src/main/AndroidManifest.xml', '.package-lock.json']) assert.equal(dependencyCopyInput(file), true);
+});
+
 test('only line endings are normalized and a real native metadata edit is rejected', () => {
   const expected = Buffer.from('build metadata\r\n');
   assert.deepEqual(nativeMetadataBytes(Buffer.from('build metadata\n'), sha1(expected), 'metadata'), expected);
