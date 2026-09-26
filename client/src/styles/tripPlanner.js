@@ -109,6 +109,8 @@ export const tripPlannerStyles = StyleSheet.create({
   loadingOverlay: { ...StyleSheet.absoluteFill, zIndex: 40, backgroundColor: 'rgba(249,250,251,0.9)', alignItems: 'center', justifyContent: 'center', gap: 12 },
   loadingText: { color: navy, fontSize: 14, writingDirection: 'rtl' },
   fullScreen: { flex: 1, backgroundColor: '#F4F6F8' },
+  sharedStateLoading: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
+  sharedStateError: { gap: 12 },
   pageHeader: { flexDirection: 'row-reverse', minHeight: 64, paddingHorizontal: 16, alignItems: 'center', gap: 8, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E1E7EB', backgroundColor: '#FFFFFF' },
   pageHeaderTitle: { flex: 1, color: '#102A43', fontSize: 22, fontFamily: fontFamilies.bold, textAlign: 'right', writingDirection: 'rtl' },
   pageContent: { padding: 16, paddingBottom: 42, gap: 14 },

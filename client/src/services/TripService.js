@@ -113,7 +113,29 @@ export const deletePrivateTrip = (tripId) => trackOperation(
 
 export const createTripShare = (tripId) => call('createTripShare', { tripId });
 export const revokeTripShare = (tripId) => call('revokeTripShare', { tripId });
-export const getSharedTrip = (token) => call('getSharedTrip', { token });
+export const sharedTripErrorMessage = (error) => {
+  const reason = tripErrorReason(error);
+  if (['SHARE_NOT_AVAILABLE', 'INVALID_SHARE_TOKEN'].includes(reason)
+    || ['functions/not-found', 'functions/invalid-argument'].includes(error?.code)) {
+    return 'הקישור אינו זמין יותר.';
+  }
+  if (error?.code === 'functions/unauthenticated') return 'כדי לפתוח את הטיול, התחברו שוב לחשבון.';
+  if (isOfflineTripError(error)) return 'לא הצלחנו להתחבר כרגע. בדקו את החיבור ונסו שוב.';
+  return 'לא הצלחנו לטעון את הטיול כרגע. נסו שוב.';
+};
+
+// A shared-link read can fail transiently while the app resumes from another app.
+// Retry only this side-effect-free read, never copy/share/planner mutations or
+// business failures such as a revoked link, authorization denial or rate limits.
+export const getSharedTrip = async (token) => {
+  try {
+    return await call('getSharedTrip', { token });
+  } catch (error) {
+    if (tripErrorReason(error) || !isOfflineTripError(error)) throw error;
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    return call('getSharedTrip', { token });
+  }
+};
 export const copySharedTrip = (token) => trackOperation(
   { kind: 'trip' },
   () => call('copySharedTrip', { token }),

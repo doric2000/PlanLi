@@ -138,3 +138,59 @@ test('route availability errors explain that the plan itself is preserved', () =
 test('active trip quota errors explain how to make room', () => {
   expect(service.tripErrorMessage({ details: { reason: 'TRIP_LIMIT_REACHED' } })).toContain('50 טיולים');
 });
+
+describe('shared-link read recovery', () => {
+  beforeEach(() => jest.useFakeTimers());
+  afterEach(() => jest.useRealTimers());
+
+  test.each(['functions/internal', 'functions/unavailable', 'functions/deadline-exceeded'])(
+    'recovers one transient %s failure without requiring a manual retry', async (code) => {
+      const trip = { id: 'shared', days: [] };
+      mockCallable.mockRejectedValueOnce({ code }).mockResolvedValueOnce({ data: trip });
+      const pending = service.getSharedTrip('share-token');
+      await jest.advanceTimersByTimeAsync(499);
+      expect(mockCallable).toHaveBeenCalledTimes(1);
+      await jest.advanceTimersByTimeAsync(1);
+      await expect(pending).resolves.toEqual(trip);
+      expect(mockCallable.mock.calls).toEqual([
+        ['getSharedTrip', { token: 'share-token' }], ['getSharedTrip', { token: 'share-token' }],
+      ]);
+    },
+  );
+
+  test('stops after the second transient failure', async () => {
+    const error = { code: 'functions/unavailable' };
+    mockCallable.mockRejectedValue(error);
+    const pending = expect(service.getSharedTrip('share-token')).rejects.toBe(error);
+    await jest.advanceTimersByTimeAsync(500);
+    await pending;
+    expect(mockCallable).toHaveBeenCalledTimes(2);
+  });
+
+  test.each([
+    { code: 'functions/not-found', details: { reason: 'SHARE_NOT_AVAILABLE' } },
+    { code: 'functions/invalid-argument', details: { reason: 'INVALID_SHARE_TOKEN' } },
+    { code: 'functions/permission-denied' },
+    { code: 'functions/unauthenticated' },
+    { code: 'functions/resource-exhausted' },
+    { code: 'functions/internal', details: { reason: 'BUSINESS_FAILURE' } },
+  ])('does not retry definitive failures: %j', async (error) => {
+    mockCallable.mockRejectedValue(error);
+    await expect(service.getSharedTrip('share-token')).rejects.toBe(error);
+    await jest.runAllTimersAsync();
+    expect(mockCallable).toHaveBeenCalledTimes(1);
+  });
+
+  test('never retries the copy mutation after a transient failure', async () => {
+    mockCallable.mockRejectedValue({ code: 'functions/unavailable' });
+    await expect(service.copySharedTrip('share-token')).rejects.toMatchObject({ code: 'functions/unavailable' });
+    await jest.runOnlyPendingTimersAsync();
+    expect(mockCallable).toHaveBeenCalledTimes(1);
+  });
+
+  test('read errors do not claim that local changes were saved or that a valid link expired', () => {
+    expect(service.sharedTripErrorMessage({ details: { reason: 'SHARE_NOT_AVAILABLE' } })).toBe('הקישור אינו זמין יותר.');
+    expect(service.sharedTripErrorMessage({ code: 'functions/unavailable' })).toBe('לא הצלחנו להתחבר כרגע. בדקו את החיבור ונסו שוב.');
+    expect(service.sharedTripErrorMessage(new Error('unknown'))).toBe('לא הצלחנו לטעון את הטיול כרגע. נסו שוב.');
+  });
+});
