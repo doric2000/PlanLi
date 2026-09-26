@@ -1,3 +1,4 @@
+import { BackLabel } from './BackButton';
 import React from 'react';
 import { TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,7 +9,7 @@ import { colors, routeMapStyles as styles } from '../styles';
 
 export default function MapStopDetails({
   title, number, dayLabel, imageUrl, address, meta, description, onClose,
-  actionLabel, actionIcon = 'list-outline', onAction, style,
+  actionLabel, actionIcon = 'list-outline', actionBack = false, onAction, style,
 }) {
   return (
     <View style={[styles.sheet, style]} testID="map-stop-details">
@@ -27,8 +28,10 @@ export default function MapStopDetails({
       {!!address && <AppText style={styles.sheetAddress} numberOfLines={2}>{address}</AppText>}
       {!!description && <AppText style={styles.sheetDescription} numberOfLines={3}>{description}</AppText>}
       <TouchableOpacity style={styles.primaryButton} onPress={onAction} accessibilityRole="button" accessibilityLabel={actionLabel}>
-        <Ionicons name={actionIcon} size={18} color={colors.white} />
-        <AppText style={styles.primaryButtonText}>{actionLabel}</AppText>
+        {actionBack ? <BackLabel style={styles.primaryButtonText}>{actionLabel}</BackLabel> : <>
+          <Ionicons name={actionIcon} size={18} color={colors.white} />
+          <AppText style={styles.primaryButtonText}>{actionLabel}</AppText>
+        </>}
       </TouchableOpacity>
     </View>
   );

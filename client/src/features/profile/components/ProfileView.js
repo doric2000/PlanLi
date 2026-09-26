@@ -1,3 +1,4 @@
+import BackButton from '../../../components/BackButton';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   FlatList,
@@ -104,9 +105,9 @@ export default function ProfileView({
     <SafeAreaView style={styles.screen} edges={['top', 'left', 'right']}>
       <View style={styles.toolbar} testID="profile-refresh-toolbar">
         {typeof (isOwner ? onMenuPress : onBackPress) === 'function' ? (
-          <Pressable style={styles.toolbarAction} onPress={isOwner ? onMenuPress : onBackPress} accessibilityRole="button" accessibilityLabel={isOwner ? 'פתיחת תפריט פרופיל' : 'חזרה'}>
-            <Ionicons name={isOwner ? 'menu-outline' : 'arrow-forward-outline'} size={26} color={colors.white} />
-          </Pressable>
+          isOwner ? <Pressable style={styles.toolbarAction} onPress={onMenuPress} accessibilityRole="button" accessibilityLabel="פתיחת תפריט פרופיל">
+            <Ionicons name="menu-outline" size={26} color={colors.white} />
+          </Pressable> : <BackButton onPress={onBackPress} />
         ) : null}
         <AppText style={styles.toolbarTitle} numberOfLines={1}>{isOwner ? 'הפרופיל שלי' : 'פרופיל המטייל/ת'}</AppText>
         {!isOwner && profileUid ? <ReportButton target={{ type: 'profile', id: profileUid }} ownerId={profileUid} compact color={colors.white} subjectLabel="פרופיל" /> : null}

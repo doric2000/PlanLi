@@ -221,11 +221,22 @@ export const discoveryFilterTriggerStyles = StyleSheet.create({
 // components/BackButton.js
 export const backButtonStyles = StyleSheet.create({
   button: {
-    padding: 8,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    minWidth: 44,
+    minHeight: 44,
+    padding: 0,
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+    borderRadius: 22,
+    flexShrink: 0,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  disabled: { opacity: 0.45 },
+  label: { maxWidth: '100%', flexShrink: 1, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 4 },
+  labelText: { flexShrink: 1, minWidth: 0 },
+  labelIcon: { flexShrink: 0 },
 });
 
 // components/CityCard.js

@@ -45,10 +45,6 @@ jest.mock('../src/features/auth/components/AuthLayout', () => {
   };
 });
 
-jest.mock('../src/styles', () => ({
-  authStyles: {},
-}));
-
 jest.mock('../src/services/AuthService', () => ({
   formatAuthError: (error) => error?.message || 'שגיאה',
   signOutCentral: (...args) => mockSignOutCentral(...args),

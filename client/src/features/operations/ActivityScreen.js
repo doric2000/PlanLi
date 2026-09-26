@@ -1,3 +1,4 @@
+import BackButton from '../../components/BackButton';
 import React, { useEffect, useRef, useState } from 'react';
 import { Alert, FlatList, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -44,7 +45,7 @@ export default function ActivityScreen({ navigation, route }) {
   const ordered = [...entries].sort((a, b) => Number(b.serverOperationId === route?.params?.operationId && !!b.serverOperationId) - Number(a.serverOperationId === route?.params?.operationId && !!a.serverOperationId) || Number(TERMINAL_STATES.has(a.status)) - Number(TERMINAL_STATES.has(b.status)) || b.updatedAt - a.updatedAt);
   return <SafeAreaView edges={['top', 'bottom']} style={styles.screen} testID="activity-screen">
     <View style={[styles.row, { paddingHorizontal: 16 }]}>
-      <OperationButton onPress={() => navigation.goBack()} label="חזרה">חזרה</OperationButton>
+      <BackButton color="dark" variant="solid" onPress={() => navigation.goBack()} />
       <AppText style={[styles.title, { flex: 1 }]}>הפעילות שלי</AppText>
     </View>
     {persistenceError && <AppText style={[styles.detail, { padding: 16 }]}>לא הצלחנו לשמור את כל היסטוריית הפעילות במכשיר. תוצאות הפעולות מוצגות כאן כל עוד האפליקציה פתוחה.</AppText>}

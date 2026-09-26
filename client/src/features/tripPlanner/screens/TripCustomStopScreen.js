@@ -1,3 +1,4 @@
+import BackButton from '../../../components/BackButton';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, ScrollView, StatusBar, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -106,7 +107,7 @@ export default function TripCustomStopScreen({ navigation, route }) {
   return (
     <SafeAreaView style={styles.fullScreen} edges={['top', 'left', 'right', 'bottom']}>
       <StatusBar barStyle="dark-content" />
-      <View style={styles.pageHeader}><TouchableOpacity style={styles.iconButton} onPress={() => navigation.goBack()} accessibilityLabel="חזרה"><Ionicons name="arrow-forward" size={22} color={colors.primary} /></TouchableOpacity><AppText style={styles.pageHeaderTitle}>{editing ? 'עריכת עצירה' : 'עצירה משלי'}</AppText></View>
+      <View style={styles.pageHeader}><BackButton color="dark" variant="solid" onPress={() => navigation.goBack()} accessibilityLabel="חזרה" /><AppText style={styles.pageHeaderTitle}>{editing ? 'עריכת עצירה' : 'עצירה משלי'}</AppText></View>
       <ScrollView contentContainerStyle={styles.pageContent} keyboardShouldPersistTaps="handled">
         {loadingStop ? <ActivityIndicator color={colors.primary} /> : null}
         <View style={styles.filterRow}>{MODES.map((item) => { const active = item.id === mode; return <TouchableOpacity key={item.id} onPress={() => { setMode(item.id); setError(''); }} style={[styles.filterChip, active && styles.filterChipSelected]} accessibilityRole="button" accessibilityState={{ selected: active }}><Ionicons name={item.icon} size={17} color={colors.primary} /><AppText style={styles.filterText}>{item.label}</AppText></TouchableOpacity>; })}</View>

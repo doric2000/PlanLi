@@ -102,7 +102,7 @@ describe('RTL recommendation actions', () => {
 
   it('uses a right-pointing back icon when RTL is explicit', () => {
     const { getByTestId, queryByTestId } = render(<BackButton iconDirection="rtl" />);
-    expect(getByTestId('icon-chevron-forward')).toBeTruthy();
+    expect(getByTestId('icon-chevron-forward', { includeHiddenElements: true })).toBeTruthy();
     expect(queryByTestId('icon-chevron-back')).toBeNull();
   });
 
@@ -115,7 +115,7 @@ describe('RTL recommendation actions', () => {
 
     expect(style.flexDirection).toBe('row-reverse');
     expect(style.justifyContent).toBe('space-between');
-    expect(getByTestId('icon-chevron-forward')).toBeTruthy();
+    expect(getByTestId('icon-chevron-forward', { includeHiddenElements: true })).toBeTruthy();
     expect(mockContentActionMenu).toHaveBeenLastCalledWith(expect.objectContaining({
       target: { type: 'recommendation', id: item.id },
     }));

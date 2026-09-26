@@ -1,92 +1,42 @@
 import React from 'react';
-import { TouchableOpacity } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import AppText from './AppText';
+import NavigationChevron from './NavigationChevron';
 import { colors, backButtonStyles as styles } from '../styles';
 
-/**
- * BackButton - A beautiful, reusable back button component
- * 
- * Features:
- * - Semi-transparent circular background
- * - RTL-facing chevron-forward icon by default
- * - Works with any background (light or dark)
- * 
- * @param {Object} props
- * @param {string} [props.color='white'] - Icon color ('white', 'dark', or custom color)
- * @param {string} [props.variant='overlay'] - Button style variant ('overlay', 'solid', 'ghost')
- * @param {number} [props.size=24] - Icon size
- * @param {Function} [props.onPress] - Custom onPress handler (defaults to navigation.goBack)
- * @param {Object} [props.style] - Additional styles for the button container
- * @param {'back'|'rtl'} [props.iconDirection='rtl'] - Explicit chevron direction
- * 
- * @example
- * // Basic usage (white icon with overlay background)
- * <BackButton />
- * 
- * @example
- * // Dark variant for light backgrounds
- * <BackButton color="dark" variant="solid" />
- * 
- * @example
- * // Custom onPress handler
- * <BackButton onPress={() => navigation.navigate('Home')} />
- */
-export const BackButton = ({ 
-  color = 'white', 
-  variant = 'overlay', 
-  size = 24, 
-  onPress, 
-  style,
-  iconDirection = 'rtl',
-  accessibilityLabel = 'חזרה',
-}) => {
+// Used inside larger return actions that need to keep their destination label.
+export function BackLabel({ children, style, color, ...props }) {
+  const iconColor = color || StyleSheet.flatten(style)?.color || colors.primary;
+  return <View style={styles.label}>
+    <NavigationChevron aria-hidden size={24} color={iconColor} style={styles.labelIcon} />
+    <AppText {...props} style={[style, styles.labelText]}>{children}</AppText>
+  </View>;
+}
+
+function NavigationBackButton(props) {
   const navigation = useNavigation();
+  return <BackButton {...props} onPress={() => navigation.goBack()} />;
+}
 
-  const handlePress = () => {
-    if (onPress) {
-      onPress();
-    } else {
-      navigation.goBack();
-    }
-  };
-
-  const getIconColor = () => {
-    if (color === 'white') return colors.white;
-    if (color === 'dark') return colors.textPrimary;
-    return color;
-  };
-
-  const getBackgroundStyle = () => {
-    switch (variant) {
-      case 'overlay':
-        return { backgroundColor: 'rgba(255,255,255,0.2)' };
-      case 'solid':
-        return { backgroundColor: colors.white };
-      case 'ghost':
-        return { backgroundColor: 'transparent' };
-      default:
-        return { backgroundColor: 'rgba(255,255,255,0.2)' };
-    }
-  };
-
-  return (
-    <TouchableOpacity
-      onPress={handlePress}
-      style={[styles.button, getBackgroundStyle(), style]}
-      activeOpacity={0.7}
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel}
-    >
-      <Ionicons
-        name={iconDirection === 'rtl' ? 'chevron-forward' : 'chevron-back'}
-        size={size}
-        color={getIconColor()}
-      />
-    </TouchableOpacity>
-  );
-};
-
-
+// Explicit handlers also work outside a navigation provider (dialogs and headers).
+export function BackButton({
+  color = 'white', variant = 'overlay', onPress, style,
+  accessibilityLabel = 'חזרה', accessibilityState, disabled = false,
+  // Retain compatibility with old callers; all Hebrew back controls face right.
+  iconDirection: _iconDirection, size: _size, ...props
+}) {
+  if (!onPress) return <NavigationBackButton {...props} color={color} variant={variant}
+    style={style} accessibilityLabel={accessibilityLabel} accessibilityState={accessibilityState} disabled={disabled} />;
+  const iconColor = color === 'white' ? colors.white : color === 'dark' ? colors.primary : color;
+  const backgroundColor = variant === 'solid' ? colors.surfaceSubtle
+    : variant === 'ghost' ? 'transparent' : 'rgba(255,255,255,0.2)';
+  return <TouchableOpacity {...props} onPress={onPress} disabled={disabled}
+    style={[style, styles.button, { backgroundColor }, disabled && styles.disabled]}
+    activeOpacity={0.7} accessibilityRole="button" accessibilityLabel={accessibilityLabel}
+    accessibilityState={{ ...accessibilityState, disabled }}>
+    <NavigationChevron aria-hidden size={24} color={iconColor} />
+  </TouchableOpacity>;
+}
 
 export default BackButton;

@@ -1,14 +1,13 @@
+import BackButton from '../../../components/BackButton';
 import React, { useEffect, useState } from 'react';
 import {
   Keyboard,
   Platform,
   ScrollView,
-  TouchableOpacity,
   TouchableWithoutFeedback,
   View,
   useWindowDimensions,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Circle, Path } from 'react-native-svg';
@@ -81,15 +80,12 @@ export default function AuthFormLayout({ children, header, testID, onBack }) {
               style={[authStyles.formCard, compact && authStyles.formCardCompact]}
               testID={testID}
             >
-              <TouchableOpacity
-                style={authStyles.formBackButton}
+              <BackButton color="dark" variant="solid" style={authStyles.formBackButton}
                 onPress={onBack}
                 accessibilityRole="button"
                 accessibilityLabel="חזרה"
                 testID="auth-back-button"
-              >
-                <Ionicons name="chevron-forward" size={24} color="#1E3A5F" />
-              </TouchableOpacity>
+              />
               <View style={authStyles.formFixedHeader} testID="auth-form-fixed-header">
                 {headerContent}
               </View>

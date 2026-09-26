@@ -1,3 +1,4 @@
+import { BackLabel } from '../../../components/BackButton';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, AppState, Keyboard, KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -1083,7 +1084,7 @@ export default function AddRoutesScreen({ navigation, route }) {
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <View style={styles.card}>
         <AppText style={styles.startTitle}>{existingDraft?.title || 'שינויים שלא פורסמו'}</AppText>
-        <TouchableOpacity accessibilityRole="button" style={styles.secondaryButton} onPress={() => finishLeave()} testID="route-switch-cancel"><AppText style={styles.secondaryButtonText}>ביטול וחזרה</AppText></TouchableOpacity>
+        <TouchableOpacity accessibilityRole="button" style={styles.secondaryButton} onPress={() => finishLeave()} testID="route-switch-cancel"><BackLabel style={styles.secondaryButtonText}>ביטול וחזרה</BackLabel></TouchableOpacity>
         <TouchableOpacity accessibilityRole="button" style={styles.primaryButton} onPress={discardExistingAndContinue} disabled={startBusy} testID="route-switch-discard">{startBusy ? <ActivityIndicator color={colors.white} /> : <AppText style={styles.primaryButtonText}>ויתור על השינויים ופתיחת המסלול</AppText>}</TouchableOpacity>
       </View>
     </ScrollView>

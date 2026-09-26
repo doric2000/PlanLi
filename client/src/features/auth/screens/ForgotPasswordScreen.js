@@ -1,3 +1,4 @@
+import { BackLabel } from '../../../components/BackButton';
 import React, { useState } from 'react';
 import { ActivityIndicator, TouchableOpacity } from 'react-native';
 import AppText from '../../../components/AppText';
@@ -34,7 +35,7 @@ export default function ForgotPasswordScreen({ navigation }) {
       <TouchableOpacity style={authStyles.primaryButton} onPress={send} disabled={loading} testID="send-reset-link">
         {loading ? <ActivityIndicator color="#FFFFFF" /> : <AppText style={authStyles.primaryButtonText}>שליחת קישור</AppText>}
       </TouchableOpacity>
-      <TouchableOpacity style={authStyles.textButton} onPress={() => navigation.replace('Login')}><AppText style={authStyles.textButtonText}>חזרה להתחברות</AppText></TouchableOpacity>
+      <TouchableOpacity style={authStyles.textButton} onPress={() => navigation.replace('Login')}><BackLabel style={authStyles.textButtonText}>חזרה להתחברות</BackLabel></TouchableOpacity>
     </AuthLayout>
   );
 }

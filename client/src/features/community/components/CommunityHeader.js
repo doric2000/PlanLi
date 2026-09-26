@@ -1,3 +1,4 @@
+import BackButton from '../../../components/BackButton';
 import React from 'react';
 import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -22,11 +23,14 @@ export default function CommunityHeader({ navigation, mode, filters, onSubmit, o
       <View style={s.iconButton}>{isRegionDiscoveryEnabled() && <RegionHeaderAction regionId={regionId} mode={regionMode}
         onPress={() => navigation.navigate('RegionSelector', { source: `${prefix}-change` })} testID={`${prefix}-region-change`} />}</View>
       <CommunityContentSwitch navigation={navigation} selected={mode} compact />
-      {onMapToggle && <Pressable ref={targets.map?.ref} onLayout={targets.map?.onLayout} collapsable={false}
-        style={[s.iconButton, s.mapButton]} onPress={onMapToggle} testID="community-map-toggle"
-        accessibilityRole="button" accessibilityLabel={mapOpen ? 'חזרה לרשימת המלצות' : 'מפת ההמלצות'}>
-        {mapOpen ? <AppText style={s.mapLabel}>רשימה</AppText> : <Ionicons name="map-outline" size={20} color={c.navy} />}
-      </Pressable>}
+      {onMapToggle && (mapOpen ? <BackButton color="dark" variant="solid"
+        ref={targets.map?.ref} onLayout={targets.map?.onLayout} collapsable={false}
+        onPress={onMapToggle} testID="community-map-toggle" accessibilityLabel="חזרה לרשימת המלצות" />
+        : <Pressable ref={targets.map?.ref} onLayout={targets.map?.onLayout} collapsable={false}
+          style={[s.iconButton, s.mapButton]} onPress={onMapToggle} testID="community-map-toggle"
+          accessibilityRole="button" accessibilityLabel="מפת ההמלצות">
+          <Ionicons name="map-outline" size={20} color={c.navy} />
+        </Pressable>)}
     </View>}>
     <CommunitySearch query={filters.query} destinations={filters.destinations} onSubmit={onSubmit}
       onDestinationsChange={onDestinationsChange} prefix={prefix} navigation={navigation} target={targets.search}>

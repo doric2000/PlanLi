@@ -1,3 +1,4 @@
+import BackButton from '../../../components/BackButton';
 import { useEffect, useRef, useState } from 'react';
 import {
   AccessibilityInfo, ActivityIndicator, AppState, Pressable, ScrollView,
@@ -90,10 +91,8 @@ export default function RegionSelectorScreen({ navigation, route }) {
         <View style={styles.header}>
           <View style={styles.brandRow}>
             <AppText weight="bold" style={styles.logo}>Plan<AppText weight="bold" style={styles.logoGold}>Li</AppText></AppText>
-            {canCancel ? <Pressable onPress={() => closeSelector(navigation)} disabled={busy} style={({ pressed }) => [styles.close, pressed && styles.pressed]}
-              accessibilityRole="button" accessibilityLabel="ביטול וחזרה" testID="region-selector-cancel">
-              <AppText style={styles.closeText}>חזרה</AppText>
-            </Pressable> : <View style={styles.closeSpace} />}
+            {canCancel ? <BackButton onPress={() => closeSelector(navigation)} disabled={busy}
+              accessibilityLabel="ביטול וחזרה" testID="region-selector-cancel" /> : <View style={styles.closeSpace} />}
           </View>
           <AppText weight="extraBold" style={styles.title}>כל העולם.</AppText>
           <AppText weight="extraBold" style={[styles.title, styles.gold]}>המסע שלכם.</AppText>

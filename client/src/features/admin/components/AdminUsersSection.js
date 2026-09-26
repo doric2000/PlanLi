@@ -97,7 +97,7 @@ export default function AdminUsersSection({ focusUid = '', onBackToCase }) {
 
   return (
     <View testID="admin-users-content">
-      {onBackToCase ? <AdminAction compact label="חזרה לתיק המודרציה" onPress={onBackToCase} testID="admin-user-back-to-case" /> : null}
+      {onBackToCase ? <AdminAction back compact label="חזרה לתיק המודרציה" onPress={onBackToCase} testID="admin-user-back-to-case" /> : null}
       <View style={styles.sectionHeading}><AppText style={styles.sectionTitle}>משתמשים</AppText><AppText style={styles.sectionDescription}>חיפוש מדויק, מצב חשבון ופעולות אבטחה. הרשאות מנהלים נמצאות באזור מתקדם ונפרד.</AppText></View>
       <View style={styles.searchHero}><Ionicons name="search-outline" size={20} color="#667085" /><AppTextInput style={styles.searchInput} value={query} onChangeText={setQuery} placeholder="שם מלא, אימייל מדויק או מזהה משתמש" autoCapitalize="none" onSubmitEditing={() => load({ searchQuery: query })} testID="admin-user-search-input" /><AdminAction label="חיפוש" primary busy={state.loading && state.items.length > 0} onPress={() => load({ searchQuery: query })} testID="admin-user-search" /><AdminAction label="ניקוי" compact onPress={() => { setQuery(''); load(); }} testID="admin-user-search-clear" /></View>
       <AdminAsyncState loading={state.loading} error={state.error} empty={!state.loading && !state.error && !state.items.length} onRetry={() => load({ searchQuery: query })} testID="admin-users" />

@@ -161,6 +161,6 @@ describe('Settings authentication behavior', () => {
     const screen = render(<SettingsScreen navigation={{ navigate: jest.fn(), goBack: jest.fn() }} />);
     const backButton = screen.getByTestId('settings-back-button');
 
-    expect(backButton.findByProps({ name: 'arrow-forward' })).toBeTruthy();
+    expect(backButton.findByProps({ name: 'chevron-forward' })).toBeTruthy();
   });
 });
