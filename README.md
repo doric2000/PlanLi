@@ -31,10 +31,11 @@ PR [#429](https://github.com/doric2000/PlanLi/pull/429), merged as
 `1eae24ccf94072490d766202f2ad4f9478d2ce22`, implements canonical `planli.cc`
 trip/route/recommendation sharing, scoped native app links, browser landing pages,
 native Auth domain alignment and a dry-run-first email callback configuration tool.
-Source runtime is now **1.4.0**; installed builds and their baseline records remain
-**1.3.0**. The iOS source version is **1.1.3**. Hosting and `createTripShare`
-are deployed from that merge; no OTA was published. Installation and physical-device
-testing of the new native binaries remain unverified. Auth limitations are below.
+Source runtime is now **1.4.0**. The owner confirmed installed TestFlight
+**1.1.3 (34)** on September 26; the iOS baseline now matches its signed build and
+runtime. Android installation/baseline remains **1.3.0**, unverified for build 12.
+Hosting and `createTripShare` are deployed from that merge; no migration OTA was
+published at this checkpoint. Auth limitations are below.
 
 Cloudflare Email Routing was activated on September 21. On September 26 the
 `support@planli.cc` rule was independently verified active, forwarding to the
@@ -138,10 +139,24 @@ Play privacy (`https://planli.cc/privacy/`) and Data Safety account-deletion
   **finished** at `2026-09-26T10:33:29.821Z`. Apple processing is **Complete**;
   ASC build `4b085cf0-48cd-4816-a915-de004d2b8e82` is assigned to existing internal
   group **Team (Expo)** with one tester. Hebrew test instructions were saved.
-  Installation and device acceptance remain unverified; the tester's last observed
-  installed version is 1.1.2 (32). No public App Review submission was made.
-  Both original builds also used source `1eae24c`. Public store versions and installed
-  runtime baselines below remain unchanged.
+  The owner subsequently confirmed installation of 1.1.3 (34) and opened a shared
+  trip from WhatsApp. The first load displayed an error; manual retry succeeded.
+  This establishes installation and link dispatch, not complete device acceptance.
+  No public App Review submission was made. Both original builds also used source
+  `1eae24c`. Older baseline/release sections below are historical.
+
+#### Shared-trip first-open correction (2026-09-26; pending release)
+
+The shared-trip error screen omitted safe-area insets and reported every unknown
+read failure as an unavailable link. The owner reproduced this in build 34.
+Focused production logs show two successful reads with valid Auth/App Check;
+they do not establish the exact client-side error behind the first-load failure.
+The correction retries only a transient, side-effect-free shared-trip read once,
+keeps definitive failures final, distinguishes temporary errors from revoked links,
+and places loading/error content inside the device's safe areas. Copy/write calls
+are not retried. Focused service/screen/consumer tests and an isolated rendering
+of the real screen passed; that browser proof uses synthetic data and iPhone
+insets, not physical iOS. Corrected behavior on the installed iPhone is unverified.
 
 ### Public store links on the landing page (2026-09-21)
 

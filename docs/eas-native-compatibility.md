@@ -1,5 +1,18 @@
 # OTA native compatibility
 
+## Installed iOS runtime 1.4.0 baseline (2026-09-26)
+
+The owner confirmed TestFlight 1.1.3 (34) is installed and opened a shared trip
+from WhatsApp (initial read failed; manual retry succeeded). The baseline now
+binds EAS build `1ff27c70-6a66-4daf-b58d-bb8a3d092091`, source
+`1eae24ccf94072490d766202f2ad4f9478d2ce22`, production channel/runtime 1.4.0 and
+fingerprint `976661b4a04d2165ecd571430564b16b5f86fc13`. The signed IPA independently
+confirmed its version, runtime, channel and `applinks:planli.cc` entitlement.
+The earlier build-30 optional-module exception is removed for this baseline;
+future updates must match the new binary or undergo a separate native review.
+These facts supersede the older installed-iOS references below. They do not
+establish complete device acceptance or installation of Android build 12.
+
 ## Android demo metadata review for the iOS map OTA (2026-09-20)
 
 Merged PR #423 added only the `android-demo` build profile to `client/eas.json`.

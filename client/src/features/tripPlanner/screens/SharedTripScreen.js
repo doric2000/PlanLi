@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import AppText from '../../../components/AppText';
 import { colors, tripPlannerStyles as styles } from '../../../styles';
-import { copySharedTrip, getSharedTrip, tripErrorMessage } from '../../../services/TripService';
+import { copySharedTrip, getSharedTrip, sharedTripErrorMessage, tripErrorMessage } from '../../../services/TripService';
 import TripDayTabs from '../components/TripDayTabs';
 import TripPlannerMapCard from '../components/TripPlannerMapCard';
 import MapStopDetails from '../../../components/MapStopDetails';
@@ -37,7 +37,7 @@ export default function SharedTripScreen({ navigation, route }) {
       setTrip(value);
       setDayId((current) => value.days?.some((day) => day.id === current)
         ? current : value.days?.find((day) => day.kind === 'day')?.id || value.ideasDayId);
-    } catch (cause) { if (requestId.current === currentRequest) setError(tripErrorMessage(cause, 'הקישור אינו זמין יותר.')); }
+    } catch (cause) { if (requestId.current === currentRequest) setError(sharedTripErrorMessage(cause)); }
     finally { if (requestId.current === currentRequest) setLoading(false); }
   }, [token]);
   useEffect(() => {
@@ -60,8 +60,19 @@ export default function SharedTripScreen({ navigation, route }) {
     finally { setCopying(false); }
   };
 
-  if (loading && !trip) return <View style={styles.fullScreen}><StatusBar barStyle="dark-content" /><View style={styles.loadingOverlay}><ActivityIndicator size="large" color={colors.primary} /><AppText style={styles.loadingText}>טוענים את הטיול המשותף…</AppText></View></View>;
-  if (!trip) return <View style={styles.fullScreen}><View style={styles.empty}><Ionicons name="link-outline" size={42} color={colors.primary} /><AppText style={styles.emptyTitle}>לא הצלחנו לפתוח את הטיול</AppText><AppText style={styles.errorText}>{error}</AppText><TouchableOpacity style={styles.secondaryButton} onPress={load} accessibilityRole="button"><AppText style={styles.secondaryButtonText}>ניסיון נוסף</AppText></TouchableOpacity><TouchableOpacity style={styles.secondaryButton} onPress={() => navigation.goBack()} accessibilityRole="button"><AppText style={styles.secondaryButtonText}>חזרה</AppText></TouchableOpacity></View></View>;
+  const stateInsets = { paddingTop: insets.top, paddingBottom: insets.bottom,
+    paddingLeft: insets.left, paddingRight: insets.right };
+  if (loading && !trip) return <View style={[styles.fullScreen, stateInsets]}><StatusBar barStyle="dark-content" /><View style={styles.sharedStateLoading}><ActivityIndicator size="large" color={colors.primary} /><AppText style={styles.loadingText}>טוענים את הטיול המשותף…</AppText></View></View>;
+  if (!trip) return <View style={[styles.fullScreen, stateInsets]} testID="shared-trip-error-safe-area">
+    <StatusBar barStyle="dark-content" />
+    <View style={[styles.empty, styles.sharedStateError]}>
+      <Ionicons name="link-outline" size={42} color={colors.primary} />
+      <AppText style={styles.emptyTitle}>לא הצלחנו לפתוח את הטיול</AppText>
+      <AppText style={styles.errorText}>{error}</AppText>
+      <TouchableOpacity style={styles.secondaryButton} onPress={load} accessibilityRole="button"><AppText style={styles.secondaryButtonText}>ניסיון נוסף</AppText></TouchableOpacity>
+      <TouchableOpacity style={styles.secondaryButton} onPress={() => navigation.goBack()} accessibilityRole="button"><AppText style={styles.secondaryButtonText}>חזרה</AppText></TouchableOpacity>
+    </View>
+  </View>;
 
   return <View style={styles.editorScreen} testID="shared-trip-screen">
     <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />

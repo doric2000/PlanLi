@@ -239,14 +239,16 @@ confirms version 1.1.3/build 34, production/runtime 1.4.0 and `applinks:planli.c
 EAS submission `ef8bd5ac-f870-4d0b-9fd9-f7687d5a52a8` finished at 10:33:29 UTC;
 Apple processing completed and ASC build `4b085cf0-48cd-4816-a915-de004d2b8e82`
 is available to the existing Team (Expo) internal group with one tester. Hebrew
-test instructions were saved; device installation is not yet verified. The existing ASC API key
+test instructions were saved. The owner subsequently confirmed installation of
+1.1.3 (34) and link dispatch from WhatsApp; the first read failed and manual retry
+succeeded. The iOS baseline now records that installed binary. The existing ASC API key
 successfully read the expected app at 10:25:05 UTC; no key rotation was needed.
 Android build 12 finished and its signed AAB's share intent filters and runtime
 were inspected with bundletool. EAS has no Google submission service-account key;
 the AAB was uploaded through Play Console and internal release 9 is available to
-internal testers as of 13:23 Asia/Jerusalem. No new device installation, native
-link acceptance, successful end-to-end OAuth login or verification-email delivery
-has been claimed. Play privacy and account-deletion URL changes are in review;
+internal testers as of 13:23 Asia/Jerusalem. Android installation, complete native
+link acceptance, successful end-to-end OAuth login and verification-email delivery
+remain unverified. Play privacy and account-deletion URL changes are in review;
 App Store 1.1.3 remains a draft with canonical URLs.
 
 ### Firebase support handoff (prepared; not sent)
