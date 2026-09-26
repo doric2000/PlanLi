@@ -6180,3 +6180,31 @@ part of this follow-up.
 - Message: Community recommendation and route sharing
 - Device application and post-update security smoke tests: pending.
 - Rollback: republish the immediately preceding verified production group; never change the runtime URL or channel in-app.
+
+## Android production OTA release
+
+- Source commit: `175625b10989c14702ba08a8438a66d8a298ea44`.
+- EAS Update group: `45fde4ae-12bf-40e6-bc3a-eb9efe3251d1`; channel `production`; runtime `1.4.0`.
+- EAS environment: `production`; published at `2026-09-26T23:52:12.854Z`.
+- Immutable Android launch bundle: update `01a0e022-3336-7fa2-bdfc-c19c09e535c3`; 10957836 bytes; SHA-256 `A916F2360EEF18E98B8E9B4E5E32B633D22FE0EF02E9CC39A18E9A91DFBBA368`.
+- Message: Fix trip day removal and map marker badges
+- Target: Google Play Production `1.1.0 (12)`, EAS build `597752db-0fd4-4861-a8d7-a530ccf85ca7`; no new native build or store submission.
+- Verified staging candidate: group `69b28733-c312-401e-8733-877c79ccc383`, update `01a0e020-5df5-795d-a312-cf054e87b2a7`; identical launch bundle promoted without another export.
+- Native compatibility used the reviewed submission-metadata fingerprint bound to Android build 12. Public production delivery was verified at `2026-09-26T23:52:13.959Z`.
+- Validation: 99 affected client suites, PR validation/security checks, native compatibility, immutable candidate inspection and production delivery verification passed.
+- Device application and post-update security smoke tests: pending.
+- Rollback: republish verified production group `5a6a57cf-79d3-41ca-b609-354a57cfb4af`; never change the runtime URL or channel in-app.
+
+## iOS production OTA release
+
+- Source commit: `175625b10989c14702ba08a8438a66d8a298ea44`.
+- EAS Update group: `45fde4ae-12bf-40e6-bc3a-eb9efe3251d1`; channel `production`; runtime `1.4.0`.
+- EAS environment: `production`; published at `2026-09-26T23:52:12.854Z`.
+- Immutable iOS launch bundle: update `01a0e022-3336-7367-a849-0ce120350c1b`; 10947548 bytes; SHA-256 `9596160E4383F311E635099DE1A19B3F2415644EB7CA67CF7C1611CCAD6EB9FF`.
+- Message: Fix trip day removal and map marker badges
+- Target: owner-confirmed TestFlight `1.1.3 (34)`, EAS build `1ff27c70-6a66-4daf-b58d-bb8a3d092091`; no new native build or Apple submission.
+- Verified staging candidate: group `69b28733-c312-401e-8733-877c79ccc383`, update `01a0e020-5df5-7cd5-8847-1bd0fc5f1c8b`; identical launch bundle promoted without another export.
+- Native compatibility used the reviewed submission-metadata fingerprint bound to iOS build 34. Public production delivery was verified at `2026-09-26T23:52:13.959Z`.
+- Validation: 99 affected client suites, PR validation/security checks, native compatibility, immutable candidate inspection and production delivery verification passed.
+- Device application and post-update security smoke tests: pending.
+- Rollback: republish verified production group `5a6a57cf-79d3-41ca-b609-354a57cfb4af`; never change the runtime URL or channel in-app.
