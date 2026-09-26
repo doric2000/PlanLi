@@ -94,10 +94,13 @@ function fakeRepairDatabase(seed, { beforeTransaction = null } = {}) {
 test('notification repair recognizes only schema-v2 empty-map createdAt values', () => {
   assert.equal(isEmptyPlainObject({}), true);
   assert.equal(isEmptyPlainObject([]), false);
-  assert.equal(hasMalformedCreatedAt({ schemaVersion: 2, createdAt: {} }), true);
-  assert.equal(hasMalformedCreatedAt({ schemaVersion: 1, createdAt: {} }), false);
+  assert.equal(hasMalformedCreatedAt({ schemaVersion: 2, channel: 'personal', createdAt: {} }), true);
+  assert.equal(hasMalformedCreatedAt({ schemaVersion: 2, channel: 'admin', createdAt: {} }), true);
+  assert.equal(hasMalformedCreatedAt({ schemaVersion: 2, channel: 'other', createdAt: {} }), false);
+  assert.equal(hasMalformedCreatedAt({ schemaVersion: 1, channel: 'personal', createdAt: {} }), false);
   assert.equal(hasMalformedCreatedAt({
     schemaVersion: 2,
+    channel: 'personal',
     createdAt: { toMillis: () => 1 },
   }), false);
 });
@@ -148,7 +151,7 @@ test('notification repair scans every personal and admin inbox across pages', as
 test('notification repair reports truncation only after finding more candidates than the limit', async () => {
   const documents = Array.from({ length: 12 }, (_, index) => ({
     ref: { path: `users/user/notifications/row-${String(index).padStart(2, '0')}` },
-    data: () => ({ schemaVersion: 2, createdAt: {} }),
+    data: () => ({ schemaVersion: 2, channel: 'personal', createdAt: {} }),
   }));
   const result = await loadMalformedNotifications(fakeCollectionGroup(documents), 10);
   assert.equal(result.records.length, 10);

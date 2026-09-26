@@ -52,7 +52,9 @@ function isEmptyPlainObject(value) {
 }
 
 function hasMalformedCreatedAt(data) {
-  return Number(data?.schemaVersion) === 2 && isEmptyPlainObject(data?.createdAt);
+  return Number(data?.schemaVersion) === 2
+    && ['personal', 'admin'].includes(data?.channel)
+    && isEmptyPlainObject(data?.createdAt);
 }
 
 function timestampMillis(value) {
