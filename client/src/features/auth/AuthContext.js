@@ -15,7 +15,7 @@ import {
   setDiagnosticTag,
   setErrorReportingUser,
 } from '../../services/ErrorReporting';
-import { getAuthFallbackTab, openAuthFlow } from '../../navigation/authNavigation';
+import { getAuthFallbackTab, isAdminWebRuntime, openAuthFlow } from '../../navigation/authNavigation';
 
 const AuthContext = createContext(null);
 
@@ -58,7 +58,10 @@ export function AuthProvider({ children, navigationRef, navigationReady = true }
   const [profileConfirmedUid, setProfileConfirmedUid] = useState(null);
   const [gate, setGate] = useState(null);
   const [authFlowTransitionCount, setAuthFlowTransitionCount] = useState(0);
+  const [authNavigationRequest, setAuthNavigationRequest] = useState(null);
   const pendingReturnToRef = useRef(null);
+  const pendingReturnPausedRef = useRef(false);
+  const authNavigationEpochRef = useRef(0);
   const previousStatusRef = useRef(null);
   const serverConfirmedProfileUidRef = useRef(null);
   const activeUserRef = useRef(auth.currentUser);
@@ -139,6 +142,13 @@ export function AuthProvider({ children, navigationRef, navigationReady = true }
   useEffect(() => {
     let unsubscribeProfile = null;
     const unsubscribeAuth = onIdTokenChanged(auth, (nextUser) => {
+      if (activeUserRef.current?.uid && activeUserRef.current.uid !== nextUser?.uid) {
+        authNavigationEpochRef.current += 1;
+        pendingReturnToRef.current = null;
+        pendingReturnPausedRef.current = false;
+        setAuthNavigationRequest(null);
+        setGate(null);
+      }
       unsubscribeProfile?.();
       unsubscribeProfile = null;
       sessionSequenceRef.current += 1;
@@ -260,17 +270,41 @@ export function AuthProvider({ children, navigationRef, navigationReady = true }
     }
   }, [status]);
 
+  const completeAuthNavigation = useCallback((destination = { name: 'Main' }) => {
+    pendingReturnPausedRef.current = true;
+    setAuthNavigationRequest(destination);
+  }, []);
+
   useEffect(() => {
-    if (!navigationReady || status !== AUTH_STATES.READY || !pendingReturnToRef.current) return;
+    if (!navigationReady || loading || authFlowTransitionCount > 0) return;
     if (!navigationRef?.isReady?.()) return;
     const returnTo = pendingReturnToRef.current;
-    pendingReturnToRef.current = null;
+    if (!authNavigationRequest && (!returnTo || pendingReturnPausedRef.current)) return;
+    if (status === AUTH_STATES.GUEST) return;
+
+    // Required steps retain the link. Only the final successful completion may
+    // consume it; a profile snapshot must not overtake a still-running sign-in.
+    const requiredStep = !isAdminWebRuntime() && STATE_ROUTES[status];
+    let destination = requiredStep ? { name: requiredStep } : authNavigationRequest;
+    const continuingAccountFlow = destination && Object.values(STATE_ROUTES).includes(destination.name);
+    if (!authNavigationRequest && status !== AUTH_STATES.READY) return;
+    if (continuingAccountFlow) {
+      pendingReturnPausedRef.current = true;
+    } else if (status === AUTH_STATES.READY && returnTo) {
+      destination = { name: returnTo.name, params: returnTo.params };
+      pendingReturnToRef.current = null;
+      pendingReturnPausedRef.current = false;
+    } else {
+      pendingReturnPausedRef.current = false;
+    }
+    if (!destination) return;
+    if (destination.name === 'Main' && isAdminWebRuntime()) destination = { ...destination, name: 'AdminPanel' };
+    setAuthNavigationRequest(null);
     setGate(null);
-    const destination = { name: returnTo.name, params: returnTo.params };
-    const isSharedDetail = ['SharedTrip', 'RouteDetail', 'RecommendationDetail'].includes(returnTo.name);
+    const isSharedDetail = ['SharedTrip', 'RouteDetail', 'RecommendationDetail'].includes(destination.name);
     navigationRef.resetRoot({ index: isSharedDetail ? 1 : 0,
       routes: isSharedDetail ? [{ name: 'Main' }, destination] : [destination] });
-  }, [navigationRef, navigationReady, status]);
+  }, [authFlowTransitionCount, authNavigationRequest, loading, navigationRef, navigationReady, status]);
 
   const dismissGate = useCallback(() => {
     const shouldLeaveBlockedRoute = gate?.blockedRoute === true;
@@ -280,6 +314,9 @@ export function AuthProvider({ children, navigationRef, navigationReady = true }
       data: { operation: 'dismiss_gate', status: gate?.status || status },
     });
     pendingReturnToRef.current = null;
+    pendingReturnPausedRef.current = false;
+    authNavigationEpochRef.current += 1;
+    setAuthNavigationRequest(null);
     setGate(null);
     if (shouldLeaveBlockedRoute && navigationRef?.isReady?.()) {
       navigationRef.resetRoot({
@@ -299,6 +336,7 @@ export function AuthProvider({ children, navigationRef, navigationReady = true }
     });
     setGate(null);
     if (!navigationRef?.isReady?.()) return;
+    pendingReturnPausedRef.current = true;
     if (nextStatus === AUTH_STATES.GUEST) {
       openAuthFlow(navigationRef, 'Login', {
         fallbackTab: getAuthFallbackTab(navigationRef.getCurrentRoute?.()?.name),
@@ -310,6 +348,7 @@ export function AuthProvider({ children, navigationRef, navigationReady = true }
 
   const openRegistration = useCallback(() => {
     setGate(null);
+    pendingReturnPausedRef.current = true;
     if (navigationRef?.isReady?.()) {
       openAuthFlow(navigationRef, 'Register', {
         fallbackTab: getAuthFallbackTab(navigationRef.getCurrentRoute?.()?.name),
@@ -395,10 +434,15 @@ export function AuthProvider({ children, navigationRef, navigationReady = true }
 
   const clearPendingReturn = useCallback(() => {
     pendingReturnToRef.current = null;
+    pendingReturnPausedRef.current = false;
+    authNavigationEpochRef.current += 1;
+    setAuthNavigationRequest(null);
   }, []);
 
-  const runAuthTransition = useCallback(async (operation, operationName = 'auth_flow') => {
+  const runAuthTransition = useCallback(async (operation, operationName = 'auth_flow', destination) => {
     const startedAt = Date.now();
+    const navigationEpoch = authNavigationEpochRef.current;
+    pendingReturnPausedRef.current = true;
     addDiagnosticBreadcrumb({
       category: 'auth',
       message: 'Authentication operation started',
@@ -407,6 +451,10 @@ export function AuthProvider({ children, navigationRef, navigationReady = true }
     setAuthFlowTransitionCount((count) => count + 1);
     try {
       const result = await operation();
+      if (destination && navigationEpoch === authNavigationEpochRef.current) {
+        const next = typeof destination === 'function' ? destination(result) : destination;
+        if (next) completeAuthNavigation(next);
+      }
       addDiagnosticBreadcrumb({
         category: 'auth',
         message: 'Authentication operation completed',
@@ -433,9 +481,9 @@ export function AuthProvider({ children, navigationRef, navigationReady = true }
     } finally {
       setAuthFlowTransitionCount((count) => Math.max(0, count - 1));
     }
-  }, []);
+  }, [completeAuthNavigation]);
 
-  const authFlowInProgress = authFlowTransitionCount > 0;
+  const authFlowInProgress = authFlowTransitionCount > 0 || !!authNavigationRequest;
 
   const value = useMemo(() => ({
     user,
@@ -445,6 +493,7 @@ export function AuthProvider({ children, navigationRef, navigationReady = true }
     profileError,
     authFlowInProgress,
     runAuthTransition,
+    completeAuthNavigation,
     isGuest: status === AUTH_STATES.GUEST,
     isActive: status === AUTH_STATES.READY,
     gate,
@@ -467,6 +516,7 @@ export function AuthProvider({ children, navigationRef, navigationReady = true }
     profileError,
     authFlowInProgress,
     runAuthTransition,
+    completeAuthNavigation,
     requireCapability,
     ensureCapability,
     handleCallableAuthError,

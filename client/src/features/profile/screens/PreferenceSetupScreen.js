@@ -44,7 +44,8 @@ const INTEREST_ICONS = Object.freeze({
   wellness: 'sparkles-outline',
 });
 
-function closeFlow(navigation, source) {
+function closeFlow(navigation, source, completeAuthNavigation) {
+  if (source === 'new-account') { completeAuthNavigation(); return; }
   if (source === 'profile' && navigation.canGoBack()) navigation.goBack();
   else navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
 }
@@ -126,7 +127,7 @@ export default function PreferenceSetupScreen({ navigation, route }) {
   const { selectedRegionId } = useOptionalRegionSelection();
   const source = route?.params?.source || '';
   const uid = auth.currentUser?.uid;
-  const { synchronizeUserDocument } = useAuth();
+  const { synchronizeUserDocument, completeAuthNavigation } = useAuth();
   const [step, setStep] = useState(0);
   const [profile, setProfile] = useState(EMPTY_PROFILE);
   const [loading, setLoading] = useState(true);
@@ -183,8 +184,8 @@ export default function PreferenceSetupScreen({ navigation, route }) {
       saveNoyaOnboardingStatus('dismissed', NOYA_ONBOARDING_VERSION).catch(() => {});
     }
     else dismissGuestNoya().catch(() => {});
-    closeFlow(navigation, source);
-  }, [navigation, source, uid]);
+    closeFlow(navigation, source, completeAuthNavigation);
+  }, [completeAuthNavigation, navigation, source, uid]);
 
   const loadPreview = useCallback(async () => {
     setPreviewLoading(true);
@@ -274,7 +275,7 @@ export default function PreferenceSetupScreen({ navigation, route }) {
           ) : null}
         </View>
         <View style={styles.finishActions}>
-          <TouchableOpacity style={styles.primaryButton} onPress={() => closeFlow(navigation, source)} testID="noya-open-home">
+          <TouchableOpacity style={styles.primaryButton} onPress={() => closeFlow(navigation, source, completeAuthNavigation)} testID="noya-open-home">
             <AppText style={styles.primaryButtonText}>לראות מה מצאתי</AppText></TouchableOpacity>
           <TouchableOpacity style={styles.textButton} onPress={() => setStep(1)} testID="noya-edit-answers">
             <AppText style={styles.textButtonText}>שינוי תשובות</AppText></TouchableOpacity>

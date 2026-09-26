@@ -7,13 +7,17 @@ import PreferenceSetupScreen from '../src/features/profile/screens/PreferenceSet
 const mockSaveProfile = jest.fn();
 const mockSaveStatus = jest.fn();
 const mockSynchronizeUserDocument = jest.fn();
+const mockCompleteAuthNavigation = jest.fn();
 const mockLoadGuestProfile = jest.fn();
 const mockSaveGuestProfile = jest.fn();
 const mockGetPersonalizedRecommendations = jest.fn();
 let mockHiddenRecommendationIds = new Set();
 
 jest.mock('../src/features/auth/AuthContext', () => ({
-  useAuth: () => ({ synchronizeUserDocument: mockSynchronizeUserDocument }),
+  useAuth: () => ({
+    synchronizeUserDocument: mockSynchronizeUserDocument,
+    completeAuthNavigation: mockCompleteAuthNavigation,
+  }),
 }));
 
 jest.mock('../src/features/profile/context/PersonalizationFeedbackContext', () => ({
@@ -90,7 +94,8 @@ describe('PreferenceSetupScreen V2', () => {
     await waitFor(() => expect(screen.getByTestId('noya-welcome-screen')).toBeTruthy());
     expect(screen.getByText('נעים להכיר')).toBeTruthy();
     fireEvent.press(screen.getByTestId('noya-later'));
-    expect(nav.reset).toHaveBeenCalledWith({ index: 0, routes: [{ name: 'Main' }] });
+    expect(mockCompleteAuthNavigation).toHaveBeenCalled();
+    expect(nav.reset).not.toHaveBeenCalled();
     expect(mockSaveStatus).toHaveBeenCalledWith('dismissed', 2);
   });
 

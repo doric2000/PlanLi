@@ -16,11 +16,11 @@ import {
   signInWithGoogle,
 } from '../../../services/AuthService';
 import { isTotpChallengeRequired } from '../../../services/MfaService';
-import { openMainTab, resetToMain, resetToRootRoute } from '../../../navigation/authNavigation';
+import { openMainTab } from '../../../navigation/authNavigation';
 import { useAuth } from '../AuthContext';
 
 export default function AuthEntryScreen({ navigation }) {
-  const { runAuthTransition } = useAuth();
+  const { clearPendingReturn, runAuthTransition } = useAuth();
   const [loadingProvider, setLoadingProvider] = useState(null);
   const [error, setError] = useState('');
   const { fontScale = 1 } = useWindowDimensions();
@@ -34,10 +34,9 @@ export default function AuthEntryScreen({ navigation }) {
     try {
       await runAuthTransition(async () => {
         const result = provider === 'apple' ? await signInWithApple() : await signInWithGoogle();
-        const bootstrap = await ensureAuthenticatedUserProfile(result.user, result.profile);
-        if (bootstrap?.created) resetToRootRoute(navigation, 'CompleteAccount');
-        else resetToMain(navigation);
-      }, provider === 'apple' ? 'sign_in_apple' : 'sign_in_google');
+        return ensureAuthenticatedUserProfile(result.user, result.profile);
+      }, provider === 'apple' ? 'sign_in_apple' : 'sign_in_google',
+      (bootstrap) => ({ name: bootstrap?.created ? 'CompleteAccount' : 'Main' }));
     } catch (socialError) {
       if (isTotpChallengeRequired(socialError)) navigation.navigate('TotpChallenge');
       else if (!isProviderCancellation(socialError)) setError(formatAuthError(socialError));
@@ -91,7 +90,7 @@ export default function AuthEntryScreen({ navigation }) {
         />
         <TouchableOpacity
           style={authStyles.welcomeGuestButton}
-          onPress={() => openMainTab(navigation, 'Home')}
+          onPress={() => { clearPendingReturn(); openMainTab(navigation, 'Home'); }}
           disabled={loading}
           accessibilityRole="button"
           testID="continue-as-guest"

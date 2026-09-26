@@ -13,7 +13,6 @@ import BrandWordmark from '../components/BrandWordmark';
 import {
   isAdminWebRuntime,
   leaveAuthFlow,
-  resetToMain,
 } from '../../../navigation/authNavigation';
 import { useAuth } from '../AuthContext';
 
@@ -26,7 +25,6 @@ export default function LoginScreen({ navigation, route }) {
   const [loading, setLoading] = useState(false);
   const passwordRef = useRef(null);
 
-  const complete = () => resetToMain(navigation);
   const handleBack = () => {
     clearPendingReturn();
     leaveAuthFlow(navigation, route?.params?.fallbackTab);
@@ -38,10 +36,7 @@ export default function LoginScreen({ navigation, route }) {
     setLoading(true);
     setError('');
     try {
-      await runAuthTransition(async () => {
-        await signInWithEmail(email, password);
-        complete();
-      }, 'sign_in_email');
+      await runAuthTransition(() => signInWithEmail(email, password), 'sign_in_email', { name: 'Main' });
     } catch (loginError) {
       if (isTotpChallengeRequired(loginError)) navigation.navigate('TotpChallenge');
       else setError(formatAuthError(loginError));

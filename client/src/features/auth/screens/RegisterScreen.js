@@ -12,7 +12,7 @@ import {
 import AuthFormLayout from '../components/AuthFormLayout';
 import BrandWordmark from '../components/BrandWordmark';
 import LegalConsent from '../components/LegalConsent';
-import { leaveAuthFlow, resetToRootRoute } from '../../../navigation/authNavigation';
+import { leaveAuthFlow } from '../../../navigation/authNavigation';
 import { useAuth } from '../AuthContext';
 import {
   normalizeDisplayName,
@@ -52,8 +52,7 @@ export default function RegisterScreen({ navigation, route }) {
       if (!policy.isValid) return setError(policy.message);
       await runAuthTransition(async () => {
         await registerWithEmail({ displayName, email, password, acceptedLegal });
-        resetToRootRoute(navigation, 'VerifyEmail');
-      }, 'register_email');
+      }, 'register_email', { name: 'VerifyEmail' });
     } catch (registrationError) {
       setError(formatAuthError(registrationError));
     } finally {

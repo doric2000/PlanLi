@@ -9,7 +9,7 @@ import AuthLayout from '../components/AuthLayout';
 import BrandWordmark from '../components/BrandWordmark';
 
 export default function VerifyEmailScreen({ navigation }) {
-  const { user } = useAuth();
+  const { user, clearPendingReturn, runAuthTransition } = useAuth();
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const run = async (operation) => {
@@ -17,9 +17,9 @@ export default function VerifyEmailScreen({ navigation }) {
     try { await operation(); } catch (error) { setMessage(formatAuthError(error)); } finally { setLoading(false); }
   };
   const refresh = () => run(async () => {
-    const current = await refreshAuthenticatedUser();
-    if (current?.emailVerified) navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
-    else setMessage('האימייל עדיין לא אומת. פתחו את הקישור שקיבלתם ונסו שוב.');
+    const current = await runAuthTransition(refreshAuthenticatedUser, 'verify_email_refresh',
+      (nextUser) => nextUser?.emailVerified ? { name: 'Main' } : null);
+    if (!current?.emailVerified) setMessage('האימייל עדיין לא אומת. פתחו את הקישור שקיבלתם ונסו שוב.');
   });
   return (
     <AuthLayout testID="verify-email-screen" keyboard={false}>
@@ -33,7 +33,7 @@ export default function VerifyEmailScreen({ navigation }) {
         {loading ? <ActivityIndicator color="#FFFFFF" /> : <AppText style={authStyles.primaryButtonText}>כבר אימתתי — רענון</AppText>}
       </TouchableOpacity>
       <TouchableOpacity style={authStyles.secondaryButton} onPress={() => run(resendVerificationEmail)} disabled={loading} testID="verify-email-resend"><AppText style={authStyles.secondaryButtonText}>שליחה חוזרת</AppText></TouchableOpacity>
-      <TouchableOpacity style={authStyles.textButton} onPress={() => navigation.replace('Main', { allowUnverified: true })}><AppText style={authStyles.textButtonText}>המשך לגלישה ציבורית</AppText></TouchableOpacity>
+      <TouchableOpacity style={authStyles.textButton} onPress={() => { clearPendingReturn(); navigation.replace('Main', { allowUnverified: true }); }}><AppText style={authStyles.textButtonText}>המשך לגלישה ציבורית</AppText></TouchableOpacity>
       <View style={authStyles.utilityRow}>
         <TouchableOpacity style={authStyles.utilityLink} onPress={() => run(async () => { await signOutCentral(); navigation.reset({ index: 0, routes: [{ name: 'Main' }] }); })}><AppText style={authStyles.utilityText}>התנתקות</AppText></TouchableOpacity>
         <TouchableOpacity style={authStyles.utilityLink} onPress={() => navigation.navigate('Settings')}><AppText style={authStyles.utilityText}>מחיקת חשבון</AppText></TouchableOpacity>
