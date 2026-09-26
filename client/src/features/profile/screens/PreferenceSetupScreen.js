@@ -1,3 +1,4 @@
+import { BackLabel } from '../../../components/BackButton';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -333,7 +334,7 @@ export default function PreferenceSetupScreen({ navigation, route }) {
               {step === 3 ? 'לראות מה מצאתי' : 'המשך'}</AppText>}
           </TouchableOpacity>
           <TouchableOpacity onPress={() => setStep((current) => Math.max(0, current - 1))} style={styles.textButton}>
-            <AppText style={styles.textButtonText}>חזרה</AppText></TouchableOpacity>
+            <BackLabel style={styles.textButtonText}>חזרה</BackLabel></TouchableOpacity>
         </View>
       </View>
     </SafeAreaView>

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
-import { TouchableOpacity, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { View } from "react-native";
+import BackButton from "../components/BackButton";
 
 /**
  * useBackButton - A hook for adding a consistent back button to screen headers.
@@ -63,26 +63,15 @@ export const useBackButton = (navigation, options = {}) => {
 			headerBackVisible: false,
 			headerLeft: () => <View style={{ width: 54, height: 44 }} />,
 			headerRight: () => (
-				<TouchableOpacity
-					onPress={() => {
-						const fn = onPressRef.current;
-						if (fn) fn();
-						else navigation.goBack();
-					}}
-					style={{
-						width: 54,
-						height: 44,
-						paddingRight: 10,
-						alignItems: "center",
-						justifyContent: "center",
-						...style,
-					}}
-					accessibilityRole="button"
-					accessibilityLabel="חזרה"
-				>
-					<Ionicons name="chevron-forward" size={24} color={color} />
-				</TouchableOpacity>
-			),
+                <View style={{ width: 54, height: 44, paddingRight: 10 }}>
+                    <BackButton color={color} variant="solid" style={style}
+                        onPress={() => {
+                            const fn = onPressRef.current;
+                            if (fn) fn();
+                            else navigation.goBack();
+                        }} />
+                </View>
+            ),
 		});
 	}, [navigation, title, color, style]);
 };

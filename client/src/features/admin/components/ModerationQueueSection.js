@@ -281,7 +281,7 @@ function HeldContentDetails({
   const systemManaged = holdContext.systemGate === 'destination_pending_approval';
   return (
     <ScrollView style={styles.caseDetailPane} contentContainerStyle={styles.caseDetailContent} keyboardShouldPersistTaps="handled" testID="admin-held-content-details">
-      {onBack ? <AdminAction compact label="חזרה לתור" onPress={onBack} testID="admin-held-back" /> : null}
+      {onBack ? <AdminAction back compact label="חזרה לתור" onPress={onBack} testID="admin-held-back" /> : null}
       <View style={styles.row}>
         <View style={styles.detailTitleBlock}>
           <AppText style={styles.sectionTitle}>{preview.title || TARGET_LABELS[resource.target?.type] || 'תוכן מוחזק'}</AppText>
@@ -335,7 +335,7 @@ function CaseDetails({ details, loading, error, policy, supportState, actionStat
   } : null);
   return (
     <ScrollView style={styles.caseDetailPane} contentContainerStyle={styles.caseDetailContent} keyboardShouldPersistTaps="handled">
-      {onBack ? <AdminAction compact label="חזרה לתור" onPress={onBack} testID="admin-case-back" /> : null}
+      {onBack ? <AdminAction back compact label="חזרה לתור" onPress={onBack} testID="admin-case-back" /> : null}
       <View style={styles.row}>
         <View style={styles.detailTitleBlock}>
           <AppText style={styles.sectionTitle}>{target.title || TARGET_LABELS[details.target?.type] || 'תיק מודרציה'}</AppText>

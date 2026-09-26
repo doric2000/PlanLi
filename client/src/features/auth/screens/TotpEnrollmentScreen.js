@@ -1,3 +1,4 @@
+import { BackLabel } from '../../../components/BackButton';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, TouchableOpacity, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
@@ -104,7 +105,7 @@ export default function TotpEnrollmentScreen({ navigation }) {
           style={authStyles.primaryButton}
           testID="totp-enrollment-active-return"
         >
-          <AppText style={authStyles.primaryButtonText}>חזרה לאפליקציה</AppText>
+          <BackLabel style={authStyles.primaryButtonText}>חזרה לאפליקציה</BackLabel>
         </TouchableOpacity>
       ) : (
         <>

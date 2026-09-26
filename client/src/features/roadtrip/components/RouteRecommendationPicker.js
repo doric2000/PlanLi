@@ -1,3 +1,4 @@
+import { BackLabel } from '../../../components/BackButton';
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Keyboard, ScrollView, TouchableOpacity, View } from 'react-native';
 import AppText from '../../../components/AppText';
@@ -59,11 +60,11 @@ export default function RouteRecommendationPicker({ routeDestination, onSelect, 
       <View style={styles.modeHeader}>
         <View style={styles.sectionHeader}>
           <AppText style={styles.sectionTitle}>בחירה מהמלצות PlanLi</AppText>
-          <TouchableOpacity style={styles.textButton} onPress={() => { Keyboard.dismiss(); onCancel(); }} accessibilityRole="button" testID="route-recommendations-cancel"><AppText style={styles.retryText}>חזרה לעצירה</AppText></TouchableOpacity>
+          <TouchableOpacity style={styles.textButton} onPress={() => { Keyboard.dismiss(); onCancel(); }} accessibilityRole="button" testID="route-recommendations-cancel"><BackLabel style={styles.retryText}>חזרה לעצירה</BackLabel></TouchableOpacity>
         </View>
         <AppTextInput accessibilityLabel="חיפוש המלצות" placeholder="חיפוש מקום או המלצה" value={query} onChangeText={setQuery} maxLength={120} style={styles.searchInput} returnKeyType="search" onSubmitEditing={Keyboard.dismiss} testID="route-recommendations-search" />
         <TouchableOpacity style={styles.detailsToggle} onPress={() => { Keyboard.dismiss(); setFiltersOpen((open) => !open); }} accessibilityRole="button" accessibilityState={{ expanded: filtersOpen }} testID="route-recommendations-filters">
-          <AppText style={styles.body}>{scopeName}{categoryId || budget ? ' · סינון פעיל' : ''}</AppText><AppText style={styles.retryText}>{filtersOpen ? 'חזרה לתוצאות' : 'שינוי וסינון'}</AppText>
+          <AppText style={styles.body}>{scopeName}{categoryId || budget ? ' · סינון פעיל' : ''}</AppText>{filtersOpen ? <BackLabel style={styles.retryText}>חזרה לתוצאות</BackLabel> : <AppText style={styles.retryText}>שינוי וסינון</AppText>}
         </TouchableOpacity>
       </View>
       {filtersOpen ? <ScrollView style={styles.modeList} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">

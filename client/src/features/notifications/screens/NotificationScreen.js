@@ -1,3 +1,4 @@
+import BackButton from '../../../components/BackButton';
 import React, {
   useCallback,
   useEffect,
@@ -449,27 +450,18 @@ export default function NotificationScreen({
     <>
       <View style={styles.header}>
         <View style={styles.headerSide} testID="notifications-header-profile-slot">
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={route?.name === 'Notifications' ? 'חזרה' : 'פתיחת הפרופיל שלי'}
+          {route?.name === 'Notifications' ? <BackButton color="dark" variant="solid" testID="notifications-back"
             onPress={() => {
-              if (route?.name === 'Notifications') {
-                if (navigation.canGoBack?.()) navigation.goBack();
-                else openMainTab(navigation, 'Profile');
-              } else if (onProfilePress) onProfilePress(user);
+              if (navigation.canGoBack?.()) navigation.goBack();
+              else openMainTab(navigation, 'Profile');
+            }} /> : <Pressable accessibilityRole="button" accessibilityLabel="פתיחת הפרופיל שלי"
+            onPress={() => {
+              if (onProfilePress) onProfilePress(user);
               else if (user?.uid) navigation.navigate('UserProfile', { uid: user.uid });
-            }}
-            style={({ pressed }) => [styles.iconButton, pressed && styles.rowPressed]}
-            testID={route?.name === 'Notifications' ? 'notifications-back' : 'notifications-profile'}
-          >
-            {route?.name === 'Notifications' ? (
-              <Ionicons name="chevron-forward" size={26} color={colors.textPrimary} />
-            ) : user ? (
-              <Avatar photoURL={user.photoURL} displayName={user.displayName} size={36} />
-            ) : (
-              <Ionicons name="person-circle-outline" size={34} color={colors.textSecondary} />
-            )}
-          </Pressable>
+            }} style={({ pressed }) => [styles.iconButton, pressed && styles.rowPressed]} testID="notifications-profile">
+            {user ? <Avatar photoURL={user.photoURL} displayName={user.displayName} size={36} />
+              : <Ionicons name="person-circle-outline" size={34} color={colors.textSecondary} />}
+          </Pressable>}
         </View>
         <View style={styles.headerTitleWrap}>
           <AppText style={styles.headerTitle}>התראות</AppText>
@@ -579,7 +571,7 @@ export default function NotificationScreen({
                   onDeletePress={deleteNotification}
                   isSwipeOpen={openSwipeId === item.id}
                   onSwipeOpen={() => setOpenSwipeId(item.id)}
-                />
+               />
               )}
               contentContainerStyle={[
                 styles.listContent,
@@ -593,7 +585,7 @@ export default function NotificationScreen({
                   onRefresh={() => center.refresh(channel)}
                   colors={[colors.brand]}
                   tintColor={colors.brand}
-                />
+               />
               )}
               onEndReached={() => center.loadMore(channel)}
               onEndReachedThreshold={0.35}

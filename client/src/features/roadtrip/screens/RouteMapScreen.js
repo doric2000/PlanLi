@@ -1,3 +1,4 @@
+import BackButton from '../../../components/BackButton';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Modal, Platform, Pressable, ScrollView, TouchableOpacity, View } from 'react-native';
 import AppText from '../../../components/AppText';
@@ -128,9 +129,7 @@ export default function RouteMapScreen({ route, navigation }) {
     return (
       <SafeAreaView style={styles.screen} edges={['top', 'left', 'right']} testID="route-map-unavailable">
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerIconButton} accessibilityLabel="חזרה למסלול">
-            <Ionicons name="chevron-forward" size={24} color={colors.textPrimary} />
-          </TouchableOpacity>
+          <BackButton color="dark" variant="solid" onPress={() => navigation.goBack()} accessibilityLabel="חזרה למסלול" />
           <AppText style={styles.headerTitle}>המפה אינה זמינה</AppText>
           <View style={styles.headerActionSpacer} />
         </View>
@@ -142,9 +141,7 @@ export default function RouteMapScreen({ route, navigation }) {
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerIconButton} accessibilityLabel="חזרה למסלול">
-          <Ionicons name="chevron-forward" size={24} color={colors.textPrimary} />
-        </TouchableOpacity>
+        <BackButton color="dark" variant="solid" onPress={() => navigation.goBack()} accessibilityLabel="חזרה למסלול" />
         <View style={styles.headerTextWrap}>
           <AppText style={styles.headerTitle} numberOfLines={1}>{title}</AppText>
           <AppText style={styles.headerSubtitle}>
@@ -254,7 +251,7 @@ export default function RouteMapScreen({ route, navigation }) {
                     selected={selectedStop?.dayIndex === stop.dayIndex && selectedStop?.stopIndex === stop.stopIndex}
                     displayNumber={stop.stopIndex + 1}
                     displayDayNumber={selectedDay === ALL_DAYS ? stop.dayIndex + 1 : null}
-                  />
+                 />
                 </Marker>
               );
             })}

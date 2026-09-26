@@ -1,3 +1,4 @@
+import BackButton from '../../../components/BackButton';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
 	ActivityIndicator,
@@ -353,23 +354,16 @@ export default function LandingPageScreen({ navigation, route }) {
                   name="map-marker-radius-outline"
                   size={72}
                   color={colors.primary}
-                />
+               />
               </View>
             )}
             <View style={styles.heroShade} pointerEvents="none" />
             <PhotoAttribution destination={destination} placement="hero" />
-            <Pressable
+            <BackButton color="dark" variant="solid"
               accessibilityRole="button"
               accessibilityLabel="חזרה"
               onPress={() => navigation.goBack()}
-              style={({ pressed }) => [
-                styles.actionButton,
-                styles.backButton,
-                pressed && { opacity: 0.76 },
-              ]}
-            >
-              <Ionicons name="chevron-forward" size={24} color={colors.primary} />
-            </Pressable>
+              style={[styles.actionButton, styles.backButton]} />
             <FavoriteButton
               type="cities"
               id={cityId}
@@ -427,7 +421,7 @@ export default function LandingPageScreen({ navigation, route }) {
                         fact={fact}
                         styles={styles}
                         divided={index < quickFacts.length - 1}
-                      />
+                     />
                     ))}
                   </View>
                 </View>
@@ -492,7 +486,7 @@ export default function LandingPageScreen({ navigation, route }) {
                     item={item}
                     navigation={navigation}
                     styles={styles}
-                  />
+                 />
                 ))}
               </View>
             ) : (
@@ -501,7 +495,7 @@ export default function LandingPageScreen({ navigation, route }) {
                   name="chatbubble-ellipses-outline"
                   size={38}
                   color={colors.textLight}
-                />
+               />
                 <AppText style={styles.emptyTitle}>
                   עדיין אין טיפים בקטגוריה הזאת
                 </AppText>

@@ -155,7 +155,7 @@ export default function AdminDestinationsSection({ focusCountryId = '', focusCit
 
   return (
     <View testID="admin-destinations-content">
-      {onBackToCase ? <AdminAction compact label="חזרה לתיק המודרציה" onPress={onBackToCase} testID="admin-destination-back-to-case" /> : null}
+      {onBackToCase ? <AdminAction back compact label="חזרה לתיק המודרציה" onPress={onBackToCase} testID="admin-destination-back-to-case" /> : null}
       <View style={styles.sectionHeading}><AppText style={styles.sectionTitle}>מקומות</AppText><AppText style={styles.sectionDescription}>אימות נתוני עיר, ספק, תמונה ושדה תעופה. כל שינוי נשמר עם סיבה ומצב לפני/אחרי.</AppText></View>
       <AdminAsyncState loading={state.loading} error={state.error} empty={!state.loading && !state.error && !state.items.length} onRetry={() => load()} testID="admin-destinations" />
       {detailState.error ? <View style={styles.error}><AppText style={styles.errorText}>{detailState.error}</AppText></View> : null}

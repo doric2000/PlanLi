@@ -1,6 +1,6 @@
+import BackButton from '../../../components/BackButton';
 import React from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { authStyles } from '../../../styles';
 
@@ -21,15 +21,12 @@ export default function AuthLayout({
         <View style={authStyles.card}>
           {showBack ? (
             <View style={authStyles.backRow}>
-              <TouchableOpacity
-                style={authStyles.backButton}
+              <BackButton color="dark" variant="solid" style={authStyles.backButton}
                 onPress={onBack}
                 accessibilityRole="button"
                 accessibilityLabel="חזרה"
                 testID="auth-back-button"
-              >
-                <Ionicons name="chevron-forward" size={25} color="#1E3A5F" />
-              </TouchableOpacity>
+              />
             </View>
           ) : null}
           {children}

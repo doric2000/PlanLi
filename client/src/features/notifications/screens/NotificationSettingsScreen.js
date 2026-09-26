@@ -1,3 +1,4 @@
+import BackButton from '../../../components/BackButton';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -180,14 +181,11 @@ export default function NotificationSettingsScreen({
     <SafeAreaView style={styles.screen}>
       <View style={styles.header}>
         <View style={styles.headerSide}>
-          <Pressable
+          <BackButton color="dark" variant="solid"
             accessibilityRole="button"
             accessibilityLabel="חזרה"
             onPress={() => navigation.goBack()}
-            style={({ pressed }) => [styles.iconButton, pressed && styles.rowPressed]}
-          >
-            <Ionicons name="chevron-forward" size={25} color={colors.textPrimary} />
-          </Pressable>
+           />
         </View>
         <View style={styles.headerTitleWrap}>
           <AppText style={styles.headerTitle}>הגדרות התראות</AppText>

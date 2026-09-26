@@ -1,3 +1,4 @@
+import BackButton from '../../../components/BackButton';
 import React, { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, RefreshControl, ScrollView, StatusBar, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -69,7 +70,7 @@ export default function MyTripsScreen({ navigation }) {
     <SafeAreaView style={styles.fullScreen} edges={['top', 'left', 'right', 'bottom']}>
       <StatusBar barStyle="dark-content" />
       <View style={styles.pageHeader}>
-        <TouchableOpacity style={styles.iconButton} onPress={() => navigation.goBack()} accessibilityRole="button" accessibilityLabel="חזרה"><Ionicons name="arrow-forward" size={22} color={colors.primary} /></TouchableOpacity>
+        <BackButton color="dark" variant="solid" onPress={() => navigation.goBack()} accessibilityRole="button" accessibilityLabel="חזרה" />
         <AppText style={styles.pageHeaderTitle}>הטיולים שלי</AppText>
         <TouchableOpacity style={[styles.iconButton, styles.iconButtonPrimary]} onPress={create} disabled={creating} accessibilityRole="button" accessibilityLabel="טיול חדש" testID="my-trips-create"><Ionicons name="add" size={24} color={colors.primary} /></TouchableOpacity>
       </View>

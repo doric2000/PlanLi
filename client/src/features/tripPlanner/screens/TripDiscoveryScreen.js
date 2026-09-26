@@ -1,3 +1,4 @@
+import BackButton from '../../../components/BackButton';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, ScrollView, StatusBar, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -225,7 +226,7 @@ export default function TripDiscoveryScreen({ navigation, route }) {
   return (
     <SafeAreaView style={styles.fullScreen} edges={['top', 'left', 'right', 'bottom']}>
       <StatusBar barStyle="dark-content" />
-      <View style={styles.pageHeader}><TouchableOpacity style={styles.iconButton} onPress={() => navigation.goBack()} accessibilityRole="button" accessibilityLabel="חזרה"><Ionicons name="arrow-forward" size={22} color={colors.primary} /></TouchableOpacity><AppText style={styles.pageHeaderTitle}>בחירת המלצות</AppText></View>
+      <View style={styles.pageHeader}><BackButton color="dark" variant="solid" onPress={() => navigation.goBack()} accessibilityRole="button" accessibilityLabel="חזרה" /><AppText style={styles.pageHeaderTitle}>בחירת המלצות</AppText></View>
       <View style={styles.pickerTabs}>{SOURCES.map((tab) => <TouchableOpacity key={tab.id} style={[styles.pickerTab, source === tab.id && styles.pickerTabActive]} onPress={() => { setSource(tab.id); setActionError(''); }} accessibilityRole="tab" accessibilityState={{ selected: source === tab.id }} testID={`trip-source-${tab.id}`}><AppText style={[styles.pickerTabText, source === tab.id && styles.pickerTabTextActive]}>{tab.label}</AppText></TouchableOpacity>)}</View>
       {source === 'search' ? <View style={{ paddingHorizontal: 16, paddingTop: 8, backgroundColor: '#FFFFFF', gap: 8 }}>
         <View style={styles.searchBox}><Ionicons name="search" size={20} color={colors.primary} /><AppTextInput value={query} onChangeText={setQuery} returnKeyType="search" placeholder="חיפוש מקום או המלצה בכל PlanLi…" style={styles.searchInput} accessibilityLabel="חיפוש המלצות" testID="trip-search-input" /></View>

@@ -1,3 +1,4 @@
+import BackButton from '../../../components/BackButton';
 import React, { useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -47,9 +48,7 @@ export default function RouteMapScreen({ route, navigation }) {
     return (
       <View style={styles.screen} testID="route-map-unavailable">
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerIconButton} accessibilityLabel="חזרה למסלול">
-            <Ionicons name="chevron-forward" size={22} color={colors.textPrimary} />
-          </TouchableOpacity>
+          <BackButton color="dark" variant="solid" onPress={() => navigation.goBack()} accessibilityLabel="חזרה למסלול" />
           <AppText style={styles.headerTitle}>המפה אינה זמינה</AppText>
           <View style={styles.headerActionSpacer} />
         </View>
@@ -61,9 +60,7 @@ export default function RouteMapScreen({ route, navigation }) {
   return (
     <View style={styles.screen} testID="route-map-web-list">
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerIconButton} accessibilityLabel="חזרה למסלול">
-          <Ionicons name="chevron-forward" size={22} color={colors.textPrimary} />
-        </TouchableOpacity>
+        <BackButton color="dark" variant="solid" onPress={() => navigation.goBack()} accessibilityLabel="חזרה למסלול" />
         <View style={styles.headerTextWrap}>
           <AppText style={styles.headerTitle} numberOfLines={1}>{routeData?.title || routeData?.Title || 'מפת המסלול'}</AppText>
           <AppText style={styles.headerSubtitle}>{selectedDay === ALL_DAYS ? 'כל המסלול' : `יום ${selectedDay + 1}`} · {preciseStops.length === 1 ? 'נקודה מדויקת אחת' : `${preciseStops.length} נקודות מדויקות`}</AppText>

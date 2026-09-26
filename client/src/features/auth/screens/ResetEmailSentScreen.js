@@ -1,3 +1,4 @@
+import { BackLabel } from '../../../components/BackButton';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -27,7 +28,7 @@ export default function ResetEmailSentScreen({ navigation, route }) {
       <View style={authStyles.statusIcon}><Ionicons name="mail-outline" size={34} color="#F5961D" /></View>
       <AppText style={[authStyles.title, authStyles.centeredTitle]}>בדקו את תיבת הדואר</AppText>
       <AppText style={[authStyles.subtitle, authStyles.centeredText]}>אם קיים חשבון לכתובת שהוזנה, נשלח אליה קישור לאיפוס הסיסמה.</AppText>
-      <TouchableOpacity style={authStyles.primaryButton} onPress={() => navigation.reset({ index: 0, routes: [{ name: 'Login' }] })}><AppText style={authStyles.primaryButtonText}>חזרה להתחברות</AppText></TouchableOpacity>
+      <TouchableOpacity style={authStyles.primaryButton} onPress={() => navigation.reset({ index: 0, routes: [{ name: 'Login' }] })}><BackLabel style={authStyles.primaryButtonText}>חזרה להתחברות</BackLabel></TouchableOpacity>
       <TouchableOpacity style={authStyles.textButton} onPress={resend} disabled={seconds > 0 || sending} testID="resend-reset-link">
         {sending ? <ActivityIndicator color="#1E3A5F" /> : <AppText style={authStyles.textButtonText}>{seconds > 0 ? `שליחה חוזרת בעוד 00:${String(seconds).padStart(2, '0')}` : 'שליחה חוזרת'}</AppText>}
       </TouchableOpacity>

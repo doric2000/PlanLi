@@ -1,3 +1,4 @@
+import { BackLabel } from '../../components/BackButton';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AccessibilityInfo,
@@ -481,7 +482,7 @@ export default function NoyaTourOverlayHost({ measureOverlayRect, scope = 'root'
                 style={styles.secondaryButton}
                 testID="noya-tour-back"
               >
-                <AppText style={styles.secondaryText}>{canGoBack ? 'חזרה' : 'הבנתי'}</AppText>
+                {canGoBack ? <BackLabel style={styles.secondaryText}>חזרה</BackLabel> : <AppText style={styles.secondaryText}>הבנתי</AppText>}
               </TouchableOpacity>
             ) : null}
           </View>

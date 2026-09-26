@@ -1,3 +1,4 @@
+import BackButton, { BackLabel } from '../../../components/BackButton';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Modal, StatusBar, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -70,14 +71,14 @@ export default function SharedTripScreen({ navigation, route }) {
       <AppText style={styles.emptyTitle}>לא הצלחנו לפתוח את הטיול</AppText>
       <AppText style={styles.errorText}>{error}</AppText>
       <TouchableOpacity style={styles.secondaryButton} onPress={load} accessibilityRole="button"><AppText style={styles.secondaryButtonText}>ניסיון נוסף</AppText></TouchableOpacity>
-      <TouchableOpacity style={styles.secondaryButton} onPress={() => navigation.goBack()} accessibilityRole="button"><AppText style={styles.secondaryButtonText}>חזרה</AppText></TouchableOpacity>
+      <TouchableOpacity style={styles.secondaryButton} onPress={() => navigation.goBack()} accessibilityRole="button"><BackLabel style={styles.secondaryButtonText}>חזרה</BackLabel></TouchableOpacity>
     </View>
   </View>;
 
   return <View style={styles.editorScreen} testID="shared-trip-screen">
     <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
     <View style={[styles.editorHeader, { paddingTop: Math.max(insets.top, 8) }]}><View style={styles.headerRow}>
-      <TouchableOpacity style={styles.iconButton} onPress={() => navigation.goBack()} accessibilityRole="button" accessibilityLabel="חזרה"><Ionicons name="arrow-forward" size={22} color={colors.primary} /></TouchableOpacity>
+      <BackButton color="dark" variant="solid" onPress={() => navigation.goBack()} accessibilityRole="button" accessibilityLabel="חזרה" />
       <View style={styles.headerCopy}><AppText style={styles.headerTitle}>{trip.title}</AppText><AppText style={styles.headerSubtitle}>מסלול פרטי של {trip.shared?.owner?.displayName || 'מטייל/ת'}</AppText></View>
       <View style={styles.readOnlyBadge}><AppText style={styles.readOnlyText}>צפייה בלבד</AppText></View>
     </View></View>
@@ -95,7 +96,7 @@ export default function SharedTripScreen({ navigation, route }) {
       <View style={styles.mapFullScreen}>
         <View style={[styles.editorMapFullHeader, { paddingTop: Math.max(insets.top, 8) }]} testID="shared-trip-map-header">
           <View style={styles.headerRow}>
-            <TouchableOpacity style={styles.iconButton} onPress={() => setMapExpanded(false)} accessibilityRole="button" accessibilityLabel="חזרה לרשימת העצירות"><Ionicons name="close" size={22} color={colors.primary} /></TouchableOpacity>
+            <BackButton color="dark" variant="solid" onPress={() => setMapExpanded(false)} accessibilityRole="button" accessibilityLabel="חזרה לרשימת העצירות" />
             <View style={styles.headerCopy}>
               <AppText style={styles.editorMapFullTitle} numberOfLines={1}>{day?.title || 'מפת הטיול'}</AppText>
               <AppText style={styles.headerSubtitle}>{pointCount === 1 ? 'נקודה מדויקת אחת' : `${pointCount} נקודות מדויקות`}</AppText>
@@ -107,7 +108,7 @@ export default function SharedTripScreen({ navigation, route }) {
         {selectedStop ? <MapStopDetails title={selectedStop.title} number={stops.findIndex((stop) => stop.id === selectedStopId) + 1}
           dayLabel={day?.title} imageUrl={getRecommendationImageUrls(selectedStop, 'thumb')[0]}
           address={selectedStop.subtitle} description={selectedStop.note} style={{ bottom: Math.max(insets.bottom, 18) }}
-          onClose={() => setSelectedStopId('')} actionLabel="חזרה לרשימה ולפרטי העצירה" onAction={() => setMapExpanded(false)} /> : null}
+          onClose={() => setSelectedStopId('')} actionBack actionLabel="חזרה לרשימה ולפרטי העצירה" onAction={() => setMapExpanded(false)} /> : null}
       </View>
     </Modal>
   </View>;
