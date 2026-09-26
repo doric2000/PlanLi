@@ -115,7 +115,7 @@ async function main(args = process.argv.slice(2)) {
     console.log('Demo services ready for local debugging; no test result is claimed. Stop this process to clean them up.');
     await new Promise(() => {});
   }
-  await run('seed', process.execPath, ['scripts/e2e/seed.js']);
+  await run('seed', process.execPath, ['scripts/e2e/seed.js', ...(runtimeFlows?.includes('shared-auth') ? ['--shared-auth'] : [])]);
   await run('backend-smoke', process.execPath, ['scripts/e2e/backendSmoke.js']);
   if (!args.includes('--backend-only')) {
     const { nativeSmoke } = require('./native');

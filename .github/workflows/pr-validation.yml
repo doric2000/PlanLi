@@ -70,6 +70,7 @@ jobs:
             --head "$HEAD_SHA" \
             --scope tooling
           npm run test:eas-production-preflight
+          npm run test:release-ota
 
   client:
     name: Affected client checks

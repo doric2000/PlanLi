@@ -11,6 +11,18 @@ const build = { id: 'installed-build', app: { id: 'project' }, platform: 'IOS', 
   runtime: { version: '1.3.0' }, updateChannel: { name: 'production' }, fingerprint: { hash: baseline.fingerprint } };
 const check = (hash, content = 'optional import\n') => validateFingerprint({ hash, baseline, sourceRoot: '/source', readFile: () => Buffer.from(content) });
 
+test('submission-only review binds the exact native pair and config bytes', () => {
+  const content = Buffer.from('{"submit":{}}\n');
+  const reviewed = { ...baseline, reviewedSubmissionDelta: { fingerprint: 'c'.repeat(40),
+    buildFingerprint: baseline.fingerprint, easConfigSha256: normalizedHash(content), review: 'review.md' } };
+  const args = { baseline: reviewed, sourceRoot: '/source', readFile: () => content };
+  assert.equal(validateFingerprint({ ...args, hash: 'c'.repeat(40) }).status, 'reviewed-submission-metadata');
+  assert.throws(() => validateFingerprint({ ...args, hash: 'd'.repeat(40) }), /Unreviewed/);
+  assert.throws(() => validateFingerprint({ ...args, hash: 'c'.repeat(40), readFile: () => Buffer.from('changed') }), /stale/);
+  assert.throws(() => validateFingerprint({ ...args, hash: 'c'.repeat(40), baseline: { ...reviewed,
+    fingerprint: 'e'.repeat(40) } }), /Unreviewed/);
+});
+
 test('Android baseline binds version, build, profile, source and native fingerprint', () => {
   const android = { ...baseline, platform: 'android', appVersion: '1.1.0', sourceCommit: 'c'.repeat(40) };
   const androidBuild = { ...build, platform: 'ANDROID', appVersion: '1.1.0', buildProfile: 'production', distribution: 'STORE', message: 'Verified source ' + android.sourceCommit };

@@ -11,8 +11,8 @@ on:
       platform:
         description: Native platform to validate
         type: choice
-        options: [ios, android]
-        default: ios
+        options: [all, ios, android]
+        default: all
       current_production_commit:
         description: Git commit recorded by the latest production EAS Update group
         required: true
@@ -61,7 +61,7 @@ jobs:
         run: node scripts/releaseReadiness.js --kind "$RELEASE_KIND" --platform "$RELEASE_PLATFORM" --base "$RELEASE_BASE" --scope plan
 
   client:
-    name: Client and iOS export
+    name: Affected shared client checks
     needs: production-lineage
     runs-on: ubuntu-latest
     timeout-minutes: 20

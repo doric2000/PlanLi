@@ -1,4 +1,13 @@
 const test = require('node:test');
+
+test('submission-only configuration and device test flows do not export the app', () => {
+  const plan = require('./validationPlan').createPlan(['client/eas.json', 'client/.maestro/android/shared-auth.yml'],
+    undefined, { submissionOnlyEas: true });
+  require('node:assert/strict').equal(plan.client, false);
+  require('node:assert/strict').equal(plan.nativeExport, false);
+  require('node:assert/strict').equal(plan.adminExport, false);
+  require('node:assert/strict').equal(plan.validationTooling, true);
+});
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');

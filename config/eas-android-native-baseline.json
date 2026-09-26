@@ -1,31 +1,20 @@
 {
   "version": 1,
   "projectId": "04731493-708f-4c82-b417-6ea815ea912e",
-  "buildId": "b0648036-61d6-4af6-b659-442a22b603dc",
-  "buildNumber": "10",
-  "runtime": "1.3.0",
+  "platform": "android",
+  "sourceCommit": "1eae24ccf94072490d766202f2ad4f9478d2ce22",
+  "buildId": "597752db-0fd4-4861-a8d7-a530ccf85ca7",
+  "buildNumber": "12",
+  "appVersion": "1.1.0",
+  "runtime": "1.4.0",
   "channel": "production",
-  "fingerprint": "ffa38603c423e70296ac74e695750ff8d59701db",
+  "fingerprint": "64d77fc362e400f5754e05a9886052a2e88eeb45",
+  "dependencyLayout": "local-copy",
   "metadataCrlfSha1": {
     "client/.gitignore": "51c70b9fea9a53cc5bcb5838c8c31df64d04c1d4",
-    "client/eas.json": "ec959d780a56e727649ab24b2bdc8e01d9592f98",
-    "client/GoogleService-Info.plist": "9e9b779534d8bbb77d089a4c4e1dae1066df8817"
+    "client/eas.json": "413a9149c95916c51f6fd0146417137c1980345b"
   },
-  "reviewedOptionalDelta": {
-    "fingerprint": "acae1d5dac2ec822e7b09bcb8ebdac44dfe66220",
-    "module": "PlanLiTransfers",
-    "review": "docs/eas-native-compatibility.md#android-ota-compatibility",
-    "sourceCommit": "2781d29609b31878b6aab7974e87c1cae3326528",
-    "requiredSources": {
-      "client/modules/planli-transfers/index.js": "ad518ab214c8ce8a2d106175d9869ab21137ff8a19a1cc9cc0941961968cfb01",
-      "client/src/features/operations/BackgroundMediaService.js": "0c318285942355c63ac07946990722fcca97b7c9ff5423ebb780a31604b53d8d",
-      "client/src/features/operations/OperationContext.js": "6b6702fbf19bb7fffeb015adda70d369d807c64cdf124aefbac101aae0754da4",
-      "client/src/features/operations/ProfilePhotoContext.js": "2d33c44135a5eec68715907f62fe3f98fa3ea79812163692f194c02cbbefa795",
-      "client/src/features/operations/ActivityScreen.js": "8b13980d527939dfcd363c482f2f3227ab978e9e782f7c5bc17e50a8c4bb328e",
-      "client/src/features/community/publishing/RecommendationPublishContext.js": "530ef6f0b4f36b66a271de18086a0c1a4bf0463970943fbb320de89625ddbf0e"
-    }
-  },
-  "platform": "android",
-  "appVersion": "1.1.0",
-  "sourceCommit": "890d70110de37ad1814b79c7c1b2106e42b74a54"
+  "metadataLfSha1": {
+    "client/GoogleService-Info.plist": "add4349d42ce5679ab2e3801de30069757de245e"
+  }
 }

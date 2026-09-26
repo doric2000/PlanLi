@@ -24,6 +24,8 @@
     "preflight:eas-native": "node scripts/easCandidate.js",
     "release:eas-candidate": "node scripts/easCandidate.js",
     "release:eas-production": "node scripts/easProductionUpdate.js",
+    "release:ota": "node scripts/easOta.js",
+    "test:release-ota": "node --test scripts/easOta.test.js scripts/easReleasePlan.test.js scripts/validationReceipt.test.js scripts/easUpdateArtifact.test.js",
     "validate:changed": "node scripts/validationPlan.js run",
     "validate:release": "node scripts/releaseReadiness.js",
     "setup:android": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setupAndroid.ps1",

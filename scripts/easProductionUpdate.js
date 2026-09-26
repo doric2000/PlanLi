@@ -112,7 +112,7 @@ function readReleaseConfiguration(repoRoot) {
   };
 }
 
-function validateReleaseConfiguration({ app, eas }, platform = 'ios') {
+function validateReleaseConfiguration({ app, eas }, platform = 'ios', baseline) {
   releasePlatform(platform);
   if (app.owner !== EXPECTED_OWNER) fail(`Expo owner must remain ${EXPECTED_OWNER}.`);
   if (app.extra?.eas?.projectId !== EXPECTED_PROJECT_ID) {
@@ -121,9 +121,10 @@ function validateReleaseConfiguration({ app, eas }, platform = 'ios') {
   if (app.updates?.url !== `https://u.expo.dev/${EXPECTED_PROJECT_ID}`) {
     fail('The EAS Update URL does not match the reviewed project.');
   }
-  const expectedVersion = platform === 'ios' ? EXPECTED_MARKETING_VERSION : '1.1.0';
-  if ((app[platform]?.version || app.version) !== expectedVersion || (app[platform]?.runtimeVersion || app.runtimeVersion) !== EXPECTED_RUNTIME) {
-    fail(`The ${platform} release must use marketing version ${expectedVersion} and runtime ${EXPECTED_RUNTIME}.`);
+  const expectedVersion = baseline ? (baseline.iosVersion || baseline.appVersion) : platform === 'ios' ? EXPECTED_MARKETING_VERSION : '1.1.0';
+  const expectedRuntime = baseline?.runtime || EXPECTED_RUNTIME;
+  if ((app[platform]?.version || app.version) !== expectedVersion || (app[platform]?.runtimeVersion || app.runtimeVersion) !== expectedRuntime) {
+    fail(`The ${platform} release must use marketing version ${expectedVersion} and runtime ${expectedRuntime}.`);
   }
   const production = eas.build?.production || {};
   if (production.channel !== EXPECTED_CHANNEL || production.environment !== EXPECTED_ENVIRONMENT) {
@@ -151,7 +152,7 @@ function updateRuntime(update) {
   return String(update?.runtime?.version || update?.runtimeVersion || '').trim();
 }
 
-function validatePreviewUpdates({ value, groupId, head, platform = 'ios' }) {
+function validatePreviewUpdates({ value, groupId, head, platform = 'ios', runtime = EXPECTED_RUNTIME }) {
   releasePlatform(platform);
   const updates = normalizeUpdates(value);
   if (updates.length !== 1 || updates[0].platform !== platform) fail(`Preview group ${groupId} must contain exactly one ${platform} update.`);
@@ -162,8 +163,8 @@ function validatePreviewUpdates({ value, groupId, head, platform = 'ios' }) {
   if (commits.size !== 1 || !commits.has(head)) {
     fail(`Preview group ${groupId} must contain only candidate commit ${head}.`);
   }
-  if (runtimes.size !== 1 || !runtimes.has(EXPECTED_RUNTIME)) {
-    fail(`Preview group ${groupId} must contain only runtime ${EXPECTED_RUNTIME}.`);
+  if (runtimes.size !== 1 || !runtimes.has(runtime)) {
+    fail(`Preview group ${groupId} must contain only runtime ${runtime}.`);
   }
   if (branches.size !== 1 || !branches.has(EXPECTED_STAGING_BRANCH)) {
     fail(`Preview group ${groupId} must come only from the ${EXPECTED_STAGING_BRANCH} branch.`);
@@ -187,8 +188,8 @@ function extractReleaseMetadata(value, fallback = {}) {
   if (commits.length && (commits.length !== 1 || commits[0] !== fallback.head)) {
     fail('Republished update metadata does not match the candidate commit.');
   }
-  if (runtimes.length !== 1 || runtimes[0] !== EXPECTED_RUNTIME) {
-    fail(`Republished update metadata does not match runtime ${EXPECTED_RUNTIME}.`);
+  if (runtimes.length !== 1 || runtimes[0] !== (fallback.runtime || EXPECTED_RUNTIME)) {
+    fail(`Republished update metadata does not match runtime ${fallback.runtime || EXPECTED_RUNTIME}.`);
   }
   return {
     channel: EXPECTED_CHANNEL,

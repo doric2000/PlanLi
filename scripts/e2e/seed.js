@@ -8,7 +8,7 @@ const fromFunctions = createRequire(path.join(ROOT, 'functions/package.json'));
 const { ACCOUNT, recommendationFixture } = require('./fixtures');
 const { email: EMAIL, password: PASSWORD, uid: UID } = ACCOUNT;
 
-async function seed() {
+async function seed({ sharedAuth = false } = {}) {
   assertLocalEnvironment();
   for (const url of [
     `http://127.0.0.1:8080/emulator/v1/projects/${PROJECT}/databases/(default)/documents`,
@@ -61,11 +61,18 @@ async function seed() {
   const result = await saveRecommendation({ admin, auth, mediaBucket: BUCKET,
     data: { destinationRef: { countryId: 'GB', cityId }, recommendation } });
   const fixture = { uid: UID, email: EMAIL, password: PASSWORD, cityId, recommendationId: result.recommendationId, recommendation };
+  if (sharedAuth) {
+    const { createPrivateTrip, createTripShare } = fromFunctions('./tripService');
+    const trip = await createPrivateTrip({ admin, auth, data: { title: 'Local Shared Auth Trip' } });
+    const share = await createTripShare({ admin, auth, data: { tripId: trip.tripId } });
+    fixture.sharedTripId = trip.tripId;
+    fixture.sharedTripUrl = share.shareUrl;
+  }
   fs.writeFileSync(path.join(DIRECTORY, 'fixture.json'), JSON.stringify(fixture));
   console.log('Seeded one local traveler, approved destination and a real two-photo recommendation.');
   await admin.app().delete();
   return fixture;
 }
 
-if (require.main === module) seed().catch((error) => { console.error(error.message); process.exitCode = 1; });
+if (require.main === module) seed({ sharedAuth: process.argv.includes('--shared-auth') }).catch((error) => { console.error(error.message); process.exitCode = 1; });
 module.exports = { seed };

@@ -230,11 +230,12 @@ function sameNameTest(file, repoRoot = REPO_ROOT) {
   return fs.existsSync(path.join(repoRoot, candidate)) ? candidate : null;
 }
 
-function classifyChanges(files) {
+function classifyChanges(files, { submissionOnlyEas = false } = {}) {
   const changedFiles = unique(files);
   const clientFiles = changedFiles.filter((file) => file.startsWith('client/'));
   const functionsFiles = changedFiles.filter((file) => file.startsWith('functions/'));
-  const clientRuntimeFiles = clientFiles.filter((file) => !/\.md$/i.test(file));
+  const clientRuntimeFiles = clientFiles.filter((file) => !/\.md$/i.test(file)
+    && !file.startsWith('client/.maestro/') && !(submissionOnlyEas && file === 'client/eas.json'));
   const functionsRuntimeFiles = functionsFiles.filter((file) =>
     !/\.md$/i.test(file) && file !== 'functions/rules.test.js'
   );
@@ -246,7 +247,8 @@ function classifyChanges(files) {
   const clientLockfile = clientFiles.includes('client/package-lock.json');
   const functionsLockfile = functionsFiles.includes('functions/package-lock.json');
   const validationTooling = changedFiles.some((file) => VALIDATION_TOOLING_PATHS.has(file)
-    || /^scripts\/(?:eas|nativeReleaseInputs)/.test(file) || file === 'config/eas-ios-native-baseline.json'
+    || /^scripts\/(?:eas|nativeReleaseInputs)/.test(file) || /^config\/eas-(?:ios|android)-native-baseline\.json$/.test(file)
+    || file === 'client/eas.json'
     || file.startsWith('scripts/e2e/') || file.startsWith('client/.maestro/android/'));
   const securityTooling = changedFiles.some((file) => (
     SECURITY_TOOLING_PATHS.has(file) || file.startsWith('.semgrep/')
@@ -266,8 +268,8 @@ function classifyChanges(files) {
     rules,
     indexes,
     taxonomy,
-    adminExport: clientFiles.some((file) => matchesAny(file, ADMIN_INPUTS)),
-    nativeExport: clientFiles.some((file) => matchesAny(file, NATIVE_INPUTS) || isNativeReleaseInput(file)),
+    adminExport: clientRuntimeFiles.some((file) => matchesAny(file, ADMIN_INPUTS)),
+    nativeExport: clientRuntimeFiles.some((file) => matchesAny(file, NATIVE_INPUTS) || isNativeReleaseInput(file)),
     clientAudit: clientDependency,
     functionsAudit: functionsDependency,
     clientFull: clientLockfile,
@@ -275,9 +277,9 @@ function classifyChanges(files) {
   };
 }
 
-function createPlan(files, repoRoot = REPO_ROOT) {
+function createPlan(files, repoRoot = REPO_ROOT, options = {}) {
   const plan = {
-    ...classifyChanges(files),
+    ...classifyChanges(files, options),
     clientTests: [],
     clientNodeTests: [],
     clientSources: [],
@@ -737,7 +739,9 @@ function main() {
     return;
   }
   const files = changedFilesFromGit(options, REPO_ROOT);
-  const plan = createPlan(files, REPO_ROOT);
+  const plan = createPlan(files, REPO_ROOT, {
+    submissionOnlyEas: require('./easReleasePlan').submissionOnlySince(REPO_ROOT, options.base, options.includeWorktree ? null : options.head),
+  });
   if (options.githubOutput) writeGithubOutput(plan, options.githubOutput);
   if ((options.command === 'plan' || options.planOnly) && !options.githubOutput) {
     console.log(JSON.stringify(printablePlan(plan), null, 2));

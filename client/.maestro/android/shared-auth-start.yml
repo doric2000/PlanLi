@@ -1,0 +1,5 @@
+appId: com.planli.planlitravels.e2e
+---
+- runFlow: helpers/boot.yml
+- assertVisible:
+    id: home-tab-header

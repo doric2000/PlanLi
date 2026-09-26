@@ -22,7 +22,14 @@ function inputFiles(root, scope) {
   }
   const tracked = [...new Set(inventory)].filter((file) => {
     if (/\.md$|(?:^|\/)(?:\.codex_tmp|node_modules|\.expo|\.expo-validation)\//.test(file)) return false;
-    if (/^(?:scripts|shared|config|patches)\//.test(file) || !file.includes('/')) return true;
+    if (file.startsWith('scripts/')) {
+      // Release orchestration is not an input to client Jest. Keep the planner,
+      // receipt implementation and shared generators, which can alter a check.
+      if (scope === 'client') return /^scripts\/(?:validation(?:Plan|Receipt)|nativeReleaseInputs|sync(?:LegalPolicy|PublicLinks|TravelTaxonomy))\.[cm]?js$/.test(file);
+      return true;
+    }
+    if (/^config\/eas-.*-native-baseline\.json$/.test(file) && scope === 'client') return false;
+    if (/^(?:shared|config|patches)\//.test(file) || !file.includes('/')) return true;
     if (scope === 'client') return file.startsWith('client/');
     if (scope === 'functions' || scope === 'rules') return file.startsWith('functions/');
     return true;

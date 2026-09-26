@@ -2,6 +2,26 @@
 
 ## Repeatable release preparation
 
+The default entry point is `npm run release:ota -- --platform all --message "..."`.
+It prints a read-only plan; `--apply` performs an authorized release. Both mobile
+platforms are selected unless one is explicitly requested. The application-input
+digest skips an already-current platform, excluding tests, documentation and store
+submission metadata. Store track, EAS channel and runtime are checked separately.
+
+The runner unions the affected checks since each platform's actual deployed source,
+prepares each dependency/metadata layout once, then verifies native compatibility.
+It exports/publishes a candidate once per preparation group, inspects each immutable
+bundle once and automatically republishes the exact group to production. Promotion
+checks the public manifest's asset hash without downloading/exporting it again.
+There is no merge-triggered release and no additional paid service.
+
+Each apply prints an ignored release journal path. Resume with the same platform,
+message, `--apply --resume <journal>` and unchanged source/environment. Pending
+provider writes are recovered by their unique message before any retry; an unknown
+result blocks a duplicate write. Journal inputs and production lineage are checked
+again. Stage durations, EAS read counts and export counts are retained beside it.
+Historical single-platform wrappers remain available for investigation.
+
 Use the tracked wrappers and the repository-pinned EAS CLI. They set the public
 production Firebase project before CLI startup and use `--environment production`
 for fingerprinting/export. The parent environment matters in CLI 22.6 even when

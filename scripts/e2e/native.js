@@ -126,6 +126,14 @@ async function runDeviceFlows({ flows, args = [], env, run, LOGS, adbRun, output
         await runFlow('network-start');
         await withOfflineDevice({ adbRun, output, deviceNetworkReady, waitFor, emulator }, () => runFlow('network-error'));
         await runFlow('network-recovery');
+      } else if (flow === 'shared-auth') {
+        await runFlow('shared-auth-start');
+        const fixture = JSON.parse(fs.readFileSync(path.join(DIRECTORY, 'fixture.json'), 'utf8'));
+        if (!/^https:\/\/planli\.cc\/trip\/[A-Za-z0-9_-]{43}$/.test(fixture.sharedTripUrl || '')) throw new Error('Missing local shared-trip fixture.');
+        // Explicitly target the isolated development app; never open the production app/site.
+        await adbRun('shared-auth-link', ['shell', 'am', 'start', '-W', '-n', 'com.planli.planlitravels.e2e/.MainActivity',
+          '-a', 'android.intent.action.VIEW', '-d', fixture.sharedTripUrl]);
+        await runFlow('shared-auth');
       } else await runFlow(flow);
       results.push({ flow, durationMs: Date.now() - time });
     }

@@ -8,4 +8,15 @@ function isNativeReleaseInput(file) {
     || /^client\/(?:app\.json|app\.config\.[cm]?[jt]s|eas\.json|package(?:-lock)?\.json|GoogleService-Info\.plist|google-services\.json|\.gitignore|\.easignore|\.fingerprintignore|fingerprint\.config\.[cm]?js|react-native\.config\.[cm]?js)$/.test(name);
 }
 
-module.exports = { isNativeReleaseInput };
+// Store submission settings do not change the app binary. Fingerprint review
+// still binds their exact metadata bytes separately before an OTA is allowed.
+function submissionOnlyChange(before, after) {
+  try {
+    const previous = JSON.parse(before);
+    const current = JSON.parse(after);
+    const withoutSubmit = ({ submit, ...rest }) => rest;
+    return JSON.stringify(withoutSubmit(previous)) === JSON.stringify(withoutSubmit(current));
+  } catch { return false; }
+}
+
+module.exports = { isNativeReleaseInput, submissionOnlyChange };
