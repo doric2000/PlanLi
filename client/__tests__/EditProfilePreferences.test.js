@@ -38,6 +38,12 @@ function navigation() {
   };
 }
 
+function ProfileWithHeader({ navigation: nav }) {
+  const [header, setHeader] = React.useState(null);
+  nav.setOptions.mockImplementation((options) => setHeader(options.headerRight()));
+  return <><EditProfileScreen navigation={nav} />{header}</>;
+}
+
 describe('EditProfileScreen travel preferences', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -89,16 +95,17 @@ describe('EditProfileScreen travel preferences', () => {
   });
   it('keeps the header back action and cancelled discard on the current edited page', async () => {
     const nav = navigation();
-    const s = render(<EditProfileScreen navigation={nav} />);
+    const s = render(<ProfileWithHeader navigation={nav} />);
     await act(async () => {});
     await waitFor(() => expect(s.getByTestId('edit-preferences-save')).toBeTruthy());
     fireEvent.press(s.getByTestId('edit-budget-economy'));
-    act(() => nav.setOptions.mock.calls.at(-1)[0].headerRight().props.onPress());
+    fireEvent.press(s.getByRole('button', { name: 'חזרה' }));
     expect(s.getByTestId('edit-profile-unsaved-modal')).toBeTruthy();
     fireEvent.press(s.getByTestId('edit-profile-unsaved-cancel'));
     expect(nav.goBack).not.toHaveBeenCalled();
+    expect(s.queryByTestId('edit-profile-unsaved-modal')).toBeNull();
     expect(s.getByTestId('edit-budget-economy').props.accessibilityState.checked).toBe(true);
-    act(() => nav.setOptions.mock.calls.at(-1)[0].headerRight().props.onPress());
+    fireEvent.press(s.getByRole('button', { name: 'חזרה' }));
     fireEvent.press(s.getByTestId('edit-profile-unsaved-confirm'));
     expect(nav.goBack).toHaveBeenCalledTimes(1);
   });
