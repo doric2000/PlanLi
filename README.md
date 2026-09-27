@@ -25,6 +25,46 @@ The existing Text Search quota remains zero. See
 
 ## Current environment status
 
+### Security stage 3 (2026-09-27, implementation and rollout pending)
+
+Stage 3 is being prepared on `fix/security-stage3-app-check`, based on
+`02fdc659f33d28cc406bcfd2fb73995744491a04`. No stage-3 production enforcement,
+endpoint deletion or client release has been applied at this checkpoint.
+The [stage-3 runbook](docs/security-app-check-rollout.md) fixes the rollout order,
+evidence gates, notification proof and per-batch rollback procedure.
+
+The shared callable boundary now explicitly rejects a consumed App Check token
+before authorization or business execution whenever consumption is enabled.
+The installed SDK reports consumed tokens to the handler rather than rejecting
+them automatically. Existing client deletion calls already request limited-use
+tokens; guest issuance retains its existing fresh-token requirement.
+
+Prior workspace work was retained locally in separate branches without deployment:
+stage-2 evidence in `test/security-stage2-evidence` (`c6d39ef`), media metadata
+hardening in `fix/media-claim-metadata` (`8bc4c85`), and Android marker layering
+remains in its own branch/PR #453. Neither media hardening nor marker changes are
+included in this stage-3 source.
+
+Stage 2 remains closed for progression with owner-deferred validation, not fully
+verified: deep secure-storage migration/restore and remaining Android continuity,
+sign-out/link-return evidence are still pending. iPhone 16 / iOS app 1.1.3 (34)
+was owner-confirmed. Android installation from Google Play was owner-confirmed;
+the existing AAB is 1.1.0 (12), but the installed Android version/model and exact
+device OTA IDs still require confirmation. Both artifacts use runtime 1.4.0.
+Provider configuration includes the September 27 DeviceCheck key replacement;
+the earlier August entries below are historical. At the pre-rollout read-back,
+Functions enforcement and Firestore/Storage/Authentication service enforcement
+were off. Google Identity for iOS enforcement remains explicitly out of scope.
+
+Stage 3 is not closed until live smoke tests, negative controls, delivered alerts,
+all rollout acceptance receipts and the final observation window are recorded.
+Focused local validation: 44 Functions tests (including an actual local callable
+HTTP boundary with a stubbed verifier), 15 rollout/monitoring tests and six client
+tests passed under Node 22.23.1. Missing, invalid, expired and consumed-token
+requests were rejected before business dispatch; fresh tokens remained usable.
+This is boundary evidence, not live platform attestation. The monitoring dry run
+reused the three unrelated enabled policies and the existing email channel.
+
 ### Map presentation fixes OTA (2026-09-27, published)
 
 PR [#450](https://github.com/doric2000/PlanLi/pull/450) merged as
