@@ -29,7 +29,8 @@ The existing Text Search quota remains zero. See
 
 Stage 3 is being prepared on `fix/security-stage3-app-check`, based on
 `02fdc659f33d28cc406bcfd2fb73995744491a04`. Only the four-function canary is
-enforced at this checkpoint. No endpoint deletion or client release occurred.
+enforced at this checkpoint. The obsolete `moderateContent` endpoint was removed;
+no client release occurred.
 The [stage-3 runbook](docs/security-app-check-rollout.md) fixes the rollout order,
 evidence gates, notification proof and per-batch rollback procedure.
 Reviewed source checkpoint: `d7a860090441631149e653e0af33020654458428`, source
@@ -55,6 +56,9 @@ All four carry `PLANLI_ENFORCE_APP_CHECK=true` and the source SHA above. Other
 callables and Firestore/Storage/Authentication remain unenforced. Canary
 acceptance remains pending: native/Web smoke, negative controls, actual email
 receipt and at least 15 minutes of observation (not before 14:37:19Z).
+The ignored `functions/.env.planli-f0b12` now persists the enabled flag and source
+marker. Coordinate any further backend deployment with this manifest: a new
+callable deployment from that environment enables enforcement for its target.
 The existing callable rejection policy `17246188049842534170` is now enabled
 and scoped to these four services, including replay rejections. Service-level
 policy `7465525761534131574` was created disabled for the later service rollout;
@@ -63,7 +67,22 @@ flagged Google's omission of the numeric zero threshold. The operator comparison
 now treats omitted zero as equivalent while still rejecting nonzero drift;
 a subsequent read-only check matched all five policies, without reapplying them.
 Controlled missing/invalid guest-call probes at `2026-09-27T14:27:29Z` both
-returned HTTP 401. Actual alert email receipt and trace correlation are pending.
+returned HTTP 401; their traces identify MISSING/INVALID App Check on the new
+guest revision. The owner confirmed receipt of the App Check alert email.
+Web `listAdminSavedViews` returned HTTP 200 with VALID Auth/App Check on
+`listadminsavedviews-00004-faf` at `14:23:59Z`; the standard queue rendered
+successfully. At `14:28:36Z`, the bounded canary log check showed no 5xx/errors.
+Native smoke and the full observation interval remain pending. Operator-only
+read-back fixes are committed as `a742734`; the Functions/Firebase deployment
+tree is identical to `d7a8600`, and no canary redeployment was performed.
+The next read-only observation through `14:34:23Z` found no additional canary
+requests or errors; this does not substitute for the pending native smoke.
+The separately authorized `moderateContent` endpoint retirement completed during
+the observation window. A fresh seven-day check found no POST traffic, and the
+tracked callable/client surface had no consumer. Firebase CLI reported deletion
+of only that endpoint; independent Functions API, Cloud Run service and public
+URL checks all returned 404 at approximately `2026-09-27T14:31Z`. Internal
+`adminService.moderateContent` remains used by the supported moderation flow.
 
 Pre-existing launch gap discovered during Web smoke: filtered moderation cases
 (urgent/overdue) return `FAILED_PRECONDITION` for missing composite `cases`
