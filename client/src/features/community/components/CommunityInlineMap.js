@@ -1,3 +1,4 @@
+import RecommendationMapBadge from '../../../components/RecommendationMapBadge';
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, TouchableOpacity, View } from 'react-native';
 import AppText from "../../../components/AppText";
@@ -82,7 +83,7 @@ const RecommendationMarker = memo(function RecommendationMarker({
       }}
       onPress={onPress}
       stopPropagation
-      anchor={{ x: 0.5, y: 1 }}
+      anchor={{ x: 0.5, y: 0.5 }}
       tracksViewChanges={tracksViewChanges}
       zIndex={selected ? 1000 : 1}
       title={mapItem.title}
@@ -91,32 +92,8 @@ const RecommendationMarker = memo(function RecommendationMarker({
       accessibilityLabel={`המלצת PlanLi, ${mapItem.title}, ${mapItem.visual.label}`}
       testID={`recommendation-map-marker-${mapItem.id}`}
     >
-      <View style={community.mapMarkerTouchTarget} collapsable={false}>
-        <View
-          testID={`recommendation-map-badge-${mapItem.id}`}
-          style={[
-            community.mapMarkerBubble,
-            selected && community.mapMarkerBubbleSelected,
-          ]}
-        >
-          <AppText weight="semiBold" style={community.mapMarkerBrand} allowFontScaling={false}>
-            PlanLi
-          </AppText>
-          {iconFontReady && (
-            <MaterialIcons
-              name={mapItem.visual.icon}
-              size={16}
-              color={colors.white}
-            />
-          )}
-        </View>
-        <View
-          style={[
-            community.mapMarkerTail,
-            selected && community.mapMarkerTailSelected,
-          ]}
-        />
-      </View>
+      <RecommendationMapBadge visual={mapItem.visual} selected={selected} iconFontReady={iconFontReady}
+        testID={`recommendation-map-badge-${mapItem.id}`} />
     </Marker>
   );
 });

@@ -10,6 +10,9 @@ Applies to `client/**` and supplements the repository guide.
   `StyleSheet.create` definitions in `src/styles`.
 - Visible product UI is Hebrew unless intentionally English. Preserve RTL, safe
   areas, accessibility, stable test IDs, navigation route names, and 44px targets.
+- Full-screen native windows use `FullScreenModal`, which owns a local safe-area
+  provider. Keep headers in normal flow inside it; do not add parent-screen insets
+  again. This contract does not apply to transparent sheets or confirmation dialogs.
 - Reuse shared components, hooks, providers, services, and tokens before adding
   new abstractions. Never expose raw provider, Firebase, callable, or network errors.
 - The primary-tab `PageHeader` geometry is a protected visual contract. Preserve

@@ -10,8 +10,10 @@ export function createDestinationStyles(width = 390, insets = {}) {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: c.sand },
     content: { paddingBottom: getTabOverlayBottomInset(insets) + 16, alignSelf: 'center', width: '100%', maxWidth: 720 },
-    hero: { minHeight: Math.max(212, 168 + (insets.top || 0)), paddingTop: (insets.top || 0) + 8, paddingHorizontal: 16, paddingBottom: 20, justifyContent: 'space-between', backgroundColor: c.navy },
-    heroImage: { ...StyleSheet.absoluteFill, width: '100%', height: '100%' },
+    hero: { minHeight: Math.max(212, 168 + (insets.top || 0)), overflow: 'hidden', backgroundColor: c.navy },
+    heroBackground: { ...StyleSheet.absoluteFill, direction: 'ltr' },
+    heroContent: { minHeight: Math.max(212, 168 + (insets.top || 0)), paddingTop: (insets.top || 0) + 8, paddingHorizontal: 16, paddingBottom: 20, justifyContent: 'space-between' },
+    heroImage: { ...StyleSheet.absoluteFill },
     heroShade: { ...StyleSheet.absoluteFill },
     heroActions: { ...row, justifyContent: 'space-between', marginBottom: 20 },
     actionButton: { width: 44, height: 44, borderRadius: 22, padding: 0, backgroundColor: c.white, alignItems: 'center', justifyContent: 'center' },
@@ -86,8 +88,8 @@ export function createDestinationStyles(width = 390, insets = {}) {
     mapModal: { flex: 1, backgroundColor: c.sand },
     modalHeader: { ...row, padding: 16 },
     modalHeading: { flex: 1, minWidth: 0, ...label, fontSize: 20, lineHeight: 26 },
-    modalMap: { flex: 1, minHeight: 220 },
-    modalCard: { flexGrow: 0, maxHeight: '45%', padding: 12 },
+    modalMap: { flex: 1, minHeight: 100 },
+    modalCard: { flexGrow: 0, maxHeight: '35%', padding: 12 },
     mapSearchArea: { position: 'absolute', bottom: 24, alignSelf: 'center', minHeight: 44, justifyContent: 'center', paddingHorizontal: 16, borderRadius: 22, backgroundColor: c.white },
   });
 }

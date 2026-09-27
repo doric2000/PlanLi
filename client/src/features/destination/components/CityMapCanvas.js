@@ -3,7 +3,7 @@ import { View } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { MaterialIcons } from '@expo/vector-icons';
 import { tripMapCamera } from '../../tripPlanner/utils/tripMapCamera';
-import { communityPalette as c } from '../../../styles/communityDiscovery';
+import RecommendationMapBadge from '../../../components/RecommendationMapBadge';
 
 const mapStyle = [
   { featureType: 'poi', elementType: 'labels', stylers: [{ visibility: 'off' }] },
@@ -19,9 +19,7 @@ const CityMarker = memo(function CityMarker({ item, selected, onSelect, styles, 
   return <Marker coordinate={{ latitude: item.coordinates.lat, longitude: item.coordinates.lng }}
     tracksViewChanges={tracking} anchor={{ x: 0.5, y: 0.5 }} stopPropagation zIndex={selected ? 2 : 1}
     onPress={() => onSelect(item.id)} accessibilityLabel={`המלצה: ${item.title}`} testID={`city-marker-${item.id}`}>
-    <View collapsable={false} style={[styles.mapMarker, { backgroundColor: item.visual.color || c.navy }, selected && styles.mapMarkerSelected]}>
-      <MaterialIcons name={item.visual.icon} size={22} color={selected ? c.navy : c.white} />
-    </View>
+    <RecommendationMapBadge visual={item.visual} selected={selected} iconFontReady={fontReady} />
   </Marker>;
 });
 

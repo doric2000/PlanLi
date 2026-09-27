@@ -89,3 +89,38 @@ Do not reset, stash or restore unrelated files. No rollback control exists in th
 
 The OTA is authorized for both platforms; the repository release runner records its
 actual groups and prior production rollback groups in README after publication.
+
+
+## Map presentation follow-up (2026-09-27, local implementation)
+
+The city hero now uses an unpadded full-bleed background layer with centered cover
+cropping; safe-area and content padding belong only to its foreground. Use
+StyleSheet.absoluteFill (the installed React Native no longer exposes
+absoluteFillObject).
+
+City and community recommendation pins share category-colored 44px circles,
+with orange/navy selected state. Numbered itinerary stops are unchanged. The Web
+city canvas shares the same appearance tokens; community Web remains its existing
+external-map list fallback. The city category strip reads the complete recommendation
+catalog (ten categories plus All), begins at the RTL start, preserves query/other
+filters and clears subcategories when switching categories.
+
+FullScreenModal owns a local SafeAreaProvider and all-edge SafeAreaView for city,
+private/shared trip maps, exact-location previews and media gallery. Consumers
+must not add parent-screen safe-area padding again. Headers remain in normal flow;
+city selected cards scroll independently with a bounded height. Transparent sheets
+are outside this change. Close/dismiss callbacks remain separate for iOS auth flow.
+
+Validation: 287 affected tests passed on the first changed-validation pass; its
+one failing hero geometry test caught use of the removed native style alias.
+That alias was corrected and the hero/landing tests rerun. FullScreenModal has a
+contract test; existing consumer tests cover Android close and iOS dismiss sequencing.
+A local browser preview with mocked data exercised widths 320/390, full-bleed hero,
+RTL category scrolling, final-category selection, map expansion, pin selection and
+return. Browser safe-area values are fixtures, not native device evidence. Physical
+iPhone notch, rotation, font scaling and keyboard acceptance remain unverified;
+Android emulator remains waived. No OTA or native build published by this follow-up.
+
+Rollback checkpoint: Desktop/PlanLi-Figma-City/map-presentation-checkpoint.json;
+source 2aba1d9e57831345222e46e49a0e75d661e29845, production group
+7811a506-b37d-422a-b25c-04fddde45686. Preserve later/unrelated work on rollback.

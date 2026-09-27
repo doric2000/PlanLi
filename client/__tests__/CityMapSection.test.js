@@ -16,7 +16,7 @@ jest.mock('../src/features/destination/hooks/useCityDiscovery', () => ({ useCity
 jest.mock('../src/features/destination/components/CityMapCanvas', () => {
   const { View } = require('react-native'); return (props) => <View {...props} testID="canvas" />;
 });
-jest.mock('react-native-safe-area-context', () => ({ SafeAreaView: require('react-native').View }));
+jest.mock('react-native-safe-area-context', () => ({ SafeAreaView: require('react-native').View, SafeAreaProvider: ({ children }) => children }));
 jest.mock('@expo/vector-icons', () => {
   const { Text } = require('react-native'); return { Ionicons: ({ name }) => <Text>{name}</Text> };
 });
@@ -109,4 +109,17 @@ test('iOS dismisses the full map before a guest auth gate and ignores repeated a
     fireEvent(screen.UNSAFE_getByType(require('react-native').Modal), 'dismiss');
     expect(mockEnsure).toHaveBeenCalledTimes(1);
   } finally { Platform.OS = previous; }
+});
+
+test('all catalog categories preserve search and unrelated filters', () => {
+  const filters = { query: 'beach', categoryIds: ['food'], subcategoryIds: ['cafe'], needs: ['kosher'] };
+  const screen = render(<CityMapSection {...base} filters={filters} />);
+  fireEvent.press(screen.getByTestId('city-map-expand'));
+  const { RECOMMENDATION_CATEGORIES } = require('../src/constants/travelTaxonomy');
+  for (const category of RECOMMENDATION_CATEGORIES) {
+    fireEvent.press(screen.getByTestId(`city-map-category-${category.id}`));
+    expect(base.onFiltersChange).toHaveBeenLastCalledWith({ ...filters, categoryIds: [category.id], subcategoryIds: [] });
+  }
+  fireEvent.press(screen.getByTestId('city-map-category-all'));
+  expect(base.onFiltersChange).toHaveBeenLastCalledWith({ ...filters, categoryIds: [], subcategoryIds: [] });
 });

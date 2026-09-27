@@ -1,3 +1,4 @@
+jest.mock('react-native-safe-area-context', () => ({ SafeAreaProvider: ({ children }) => children, SafeAreaView: require('react-native').View }));
 import React from 'react';
 import { fireEvent, render } from '@testing-library/react-native';
 import ExactLocationMapPreview from '../src/components/ExactLocationMapPreview.web';

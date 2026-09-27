@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, StatusBar, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { ActivityIndicator, Platform, Pressable, ScrollView, StatusBar, View } from 'react-native';
+import FullScreenModal from '../../../components/FullScreenModal';
+import { RECOMMENDATION_CATEGORIES } from '../../../constants/travelTaxonomy';
 import { useIsFocused } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import AppText from '../../../components/AppText';
@@ -58,6 +59,7 @@ export default function CityMapSection({ destination, cityId, countryId, recomme
   const focused = useIsFocused();
   const { user, isActive, ensureCapability } = useAuthUser();
   const pendingAction = useRef(null);
+  const categoryStrip = useRef(null);
   const seedRegion = useMemo(() => cityMapRegion(destination, recommendations), [destination, recommendations]);
   const [region, setRegion] = useState(null);
   const [viewport, setViewport] = useState(null);
@@ -139,8 +141,7 @@ export default function CityMapSection({ destination, cityId, countryId, recomme
   return <View style={styles.section}>
     <AppText style={styles.sectionTitle}>העיר על המפה</AppText>
     {!fullscreen && <>{map}{status}{preview}</>}
-    <Modal visible={fullscreen} animationType="fade" onRequestClose={() => setFullscreen(false)} onDismiss={finishDismiss} testID="city-map-modal">
-      <SafeAreaView style={styles.mapModal} edges={['top', 'left', 'right', 'bottom']}>
+    <FullScreenModal contentStyle={styles.mapModal} visible={fullscreen} animationType="fade" onRequestClose={() => setFullscreen(false)} onDismiss={finishDismiss} testID="city-map-modal">
         <StatusBar barStyle="dark-content" />
         <View style={styles.modalHeader}>
           <BackButton color="dark" variant="solid" onPress={() => setFullscreen(false)} accessibilityLabel="חזרה לעמוד העיר" />
@@ -148,11 +149,12 @@ export default function CityMapSection({ destination, cityId, countryId, recomme
         </View>
         <View style={styles.sections}>
           <CitySearch kind="recommendations" value={filters.query} onChange={(query) => onFiltersChange({ ...filters, query })} styles={styles} />
-          <ScrollView horizontal contentContainerStyle={styles.searchRow} showsHorizontalScrollIndicator={false}>
-            {[['', 'הכול'], ['food', 'אוכל ושתייה'], ['nature', 'טבע'], ['stay', 'לינה']].map(([id, title]) => {
+          <ScrollView ref={categoryStrip} horizontal contentContainerStyle={styles.searchRow} showsHorizontalScrollIndicator={false}
+            onContentSizeChange={() => categoryStrip.current?.scrollToEnd({ animated: false })}>
+            {[['', 'הכול'], ...RECOMMENDATION_CATEGORIES.map(({ id, label }) => [id, label])].map(([id, title]) => {
               const active = id ? filters.categoryIds.includes(id) : !filters.categoryIds.length;
               return <Pressable key={id} accessibilityRole="button" accessibilityState={{ selected: active }}
-                onPress={() => onFiltersChange({ ...filters, categoryIds: id ? [id] : [], subcategoryIds: [] })} style={[styles.showMoreButton, active && styles.mapCategorySelected]}>
+                testID={`city-map-category-${id || "all"}`} onPress={() => onFiltersChange({ ...filters, categoryIds: id ? [id] : [], subcategoryIds: [] })} style={[styles.showMoreButton, active && styles.mapCategorySelected]}>
                 <AppText style={[styles.showMoreText, active && styles.mapCategoryTextSelected]}>{title}</AppText>
               </Pressable>;
             })}
@@ -161,7 +163,6 @@ export default function CityMapSection({ destination, cityId, countryId, recomme
         </View>
         {map}
         {!!preview && <ScrollView style={styles.modalCard}>{preview}</ScrollView>}
-      </SafeAreaView>
-    </Modal>
+    </FullScreenModal>
   </View>;
 }
