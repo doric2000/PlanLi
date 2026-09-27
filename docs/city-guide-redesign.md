@@ -91,7 +91,7 @@ The OTA is authorized for both platforms; the repository release runner records 
 actual groups and prior production rollback groups in README after publication.
 
 
-## Map presentation follow-up (2026-09-27, local implementation)
+## Map presentation follow-up (2026-09-27, published)
 
 The city hero now uses an unpadded full-bleed background layer with centered cover
 cropping; safe-area and content padding belong only to its foreground. Use
@@ -119,7 +119,9 @@ A local browser preview with mocked data exercised widths 320/390, full-bleed he
 RTL category scrolling, final-category selection, map expansion, pin selection and
 return. Browser safe-area values are fixtures, not native device evidence. Physical
 iPhone notch, rotation, font scaling and keyboard acceptance remain unverified;
-Android emulator remains waived. No OTA or native build published by this follow-up.
+Android emulator remains waived. PR #450 merged; production OTA `545d5795-a7e6-43ab-98ab-4534b9dd547f`
+was published for both platforms. Final release readiness passed all 288 tests
+in 28 suites. No native build; see README for delivery evidence and rollback.
 
 Rollback checkpoint: Desktop/PlanLi-Figma-City/map-presentation-checkpoint.json;
 source 2aba1d9e57831345222e46e49a0e75d661e29845, production group

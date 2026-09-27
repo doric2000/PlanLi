@@ -25,6 +25,44 @@ The existing Text Search quota remains zero. See
 
 ## Current environment status
 
+### Map presentation fixes OTA (2026-09-27, published)
+
+PR [#450](https://github.com/doric2000/PlanLi/pull/450) merged as
+`58cfbb4066d62b76140a4e1e4a214810b8362ca3` after all applicable GitHub checks
+passed. City hero photos fill their background, fullscreen map/gallery controls
+use a shared modal-local safe area, recommendation maps share category circles,
+and the city map exposes all ten catalog categories plus All in RTL order.
+
+Production group **`545d5795-a7e6-43ab-98ab-4534b9dd547f`** was published at
+`2026-09-27T09:35:14.185Z`, channel/environment `production`, runtime **1.4.0**.
+It promotes the exact inspected candidate `e503ddd3-5641-4e4d-8ee8-9a9dd7eea5fa`
+from one export. Android update `01a0e237-f909-7f93-a09a-8267a63ace54` was
+independently served at `09:35:16.12Z`; iOS update
+`01a0e237-f909-7a0e-a725-209288a6920e` at `09:35:16.336Z`, with matching asset
+hashes. Bundle sizes and SHA-256 hashes appear in the release entries below.
+
+Android remains **1.1.0 (12)**, EAS build `597752db-0fd4-4861-a8d7-a530ccf85ca7`,
+on the existing Google Play Production release. iOS remains **1.1.3 (34)**,
+EAS build `1ff27c70-6a66-4daf-b58d-bb8a3d092091`, previously owner-confirmed
+installed TestFlight binary. Existing reviewed native fingerprints matched;
+no native build, store submission, review-state change or backend deployment occurred.
+Store review state was not rechecked. Application of this OTA and physical-device
+acceptance are **unverified**; Android emulator execution remains waived.
+
+Validation: **288 tests / 28 affected client suites**, PR checks, native compatibility,
+immutable candidate inspection and public delivery passed. Mocked-data browser smoke
+covered 320/390 widths, category scrolling/selection, full-map selection and return.
+iPhone notch, keyboard, rotation and enlarged text still require device acceptance.
+
+Rollback for both platforms: **`7811a506-b37d-422a-b25c-04fddde45686`**.
+Code checkpoint: `2aba1d9e57831345222e46e49a0e75d661e29845`; local Desktop
+`PlanLi-Figma-City/map-presentation-checkpoint.json`. Release journal:
+`.codex_tmp/releases/ota-981c50d1-4630-438c-b9a2-956d1e26f481.json`.
+The unified runner performed readiness once, prepared dependencies once (265s),
+verified native fingerprints (135s/33s), exported/published once (767s) and promoted
+without re-exporting. Pinned CLI also exported Web; only two mobile bundles were
+uploaded and no hosted Web deployment occurred.
+
 ### City guide OTA (2026-09-27, published)
 
 PR [#448](https://github.com/doric2000/PlanLi/pull/448) merged as
@@ -6281,3 +6319,27 @@ part of this follow-up.
 - Installed-target versions are Android `1.1.0 (12)` and iOS `1.1.3 (34)`, runtime `1.4.0`; no build or store submission.
 - Device application and post-update security smoke tests: pending.
 - Rollback: republish verified production group `45fde4ae-12bf-40e6-bc3a-eb9efe3251d1`; never change the runtime URL or channel in-app.
+
+## Android production OTA release
+
+- Source commit: `58cfbb4066d62b76140a4e1e4a214810b8362ca3`.
+- EAS Update group: `545d5795-a7e6-43ab-98ab-4534b9dd547f`; channel `production`; runtime `1.4.0`.
+- EAS environment: `production`; published at `2026-09-27T09:35:14.185Z`.
+- Immutable Android launch bundle: update `01a0e237-f909-7f93-a09a-8267a63ace54`; 10982932 bytes; SHA-256 `2BB721BA7173EAF1026CD74588ED6308472C9C3E2BD69884B4F9DCF69C7ADCC2`.
+- Message: Fix city hero, map safe areas and category markers
+- Validation: 288 tests / 28 suites, PR checks, native compatibility, candidate inspection and public delivery passed.
+- Candidate: `e503ddd3-5641-4e4d-8ee8-9a9dd7eea5fa`; native targets Android `1.1.0 (12)` and iOS `1.1.3 (34)` unchanged.
+- Device application and post-update security smoke tests: pending.
+- Rollback: republish verified group `7811a506-b37d-422a-b25c-04fddde45686`; never change the runtime URL or channel in-app.
+
+## iOS production OTA release
+
+- Source commit: `58cfbb4066d62b76140a4e1e4a214810b8362ca3`.
+- EAS Update group: `545d5795-a7e6-43ab-98ab-4534b9dd547f`; channel `production`; runtime `1.4.0`.
+- EAS environment: `production`; published at `2026-09-27T09:35:14.185Z`.
+- Immutable iOS launch bundle: update `01a0e237-f909-7a0e-a725-209288a6920e`; 10979996 bytes; SHA-256 `6129D552CE3D752BC82CB41454E36FB5651C618B2F9B227E0F1ECA928004694D`.
+- Message: Fix city hero, map safe areas and category markers
+- Validation: 288 tests / 28 suites, PR checks, native compatibility, candidate inspection and public delivery passed.
+- Candidate: `e503ddd3-5641-4e4d-8ee8-9a9dd7eea5fa`; native targets Android `1.1.0 (12)` and iOS `1.1.3 (34)` unchanged.
+- Device application and post-update security smoke tests: pending.
+- Rollback: republish verified group `7811a506-b37d-422a-b25c-04fddde45686`; never change the runtime URL or channel in-app.
