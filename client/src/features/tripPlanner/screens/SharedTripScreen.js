@@ -97,7 +97,7 @@ export default function SharedTripScreen({ navigation, route }) {
       <View style={styles.mapFullScreen}>
         <View style={[styles.editorMapFullHeader, { paddingTop: 8 }]} testID="shared-trip-map-header">
           <View style={styles.headerRow}>
-            <BackButton color="dark" variant="solid" onPress={() => setMapExpanded(false)} accessibilityRole="button" accessibilityLabel="חזרה לרשימת העצירות" />
+            <TouchableOpacity style={styles.iconButton} onPress={() => setMapExpanded(false)} accessibilityRole="button" accessibilityLabel="סגירת המפה המוגדלת"><Ionicons name="close" size={24} color={colors.primary} /></TouchableOpacity>
             <View style={styles.headerCopy}>
               <AppText style={styles.editorMapFullTitle} numberOfLines={1}>{day?.title || 'מפת הטיול'}</AppText>
               <AppText style={styles.headerSubtitle}>{pointCount === 1 ? 'נקודה מדויקת אחת' : `${pointCount} נקודות מדויקות`}</AppText>
@@ -109,7 +109,7 @@ export default function SharedTripScreen({ navigation, route }) {
         {selectedStop ? <MapStopDetails title={selectedStop.title} number={stops.findIndex((stop) => stop.id === selectedStopId) + 1}
           dayLabel={day?.title} imageUrl={getRecommendationImageUrls(selectedStop, 'thumb')[0]}
           address={selectedStop.subtitle} description={selectedStop.note} style={{ bottom: 18 }}
-          onClose={() => setSelectedStopId('')} actionBack actionLabel="חזרה לרשימה ולפרטי העצירה" onAction={() => setMapExpanded(false)} /> : null}
+          onClose={() => setSelectedStopId('')} actionLabel="הצגת הרשימה ופרטי העצירה" onAction={() => setMapExpanded(false)} /> : null}
       </View>
     </FullScreenModal>
   </View>;

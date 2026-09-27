@@ -4715,6 +4715,7 @@ export const routeMapStyles = StyleSheet.create({
 		paddingVertical: 12,
 	},
 	primaryButtonText: {
+		flexShrink: 1,
 		color: colors.white,
 		fontSize: 14,
 		fontFamily: fontFamilies.semiBold,

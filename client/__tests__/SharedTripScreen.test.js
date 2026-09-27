@@ -1,5 +1,6 @@
 import React from 'react';
-import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import { AppState, StyleSheet } from 'react-native';
 
 const mockGetSharedTrip = jest.fn();
@@ -115,7 +116,15 @@ test('shared trips use the same full map, numbered details and unobstructed head
   act(() => mockMapProps.onMapPress());
   expect(screen.queryByTestId('map-stop-details')).toBeNull();
   act(() => mockMapProps.onSelectStop('one'));
-  fireEvent.press(screen.getByLabelText('חזרה לרשימה ולפרטי העצירה'));
+  const listAction = screen.getByRole('button', { name: 'הצגת הרשימה ופרטי העצירה' });
+  expect(within(listAction).UNSAFE_getByType(Ionicons).props.name).toBe('list-outline');
+  fireEvent.press(listAction);
+  expect(screen.getByLabelText('2, תצפית').props.accessibilityState.expanded).toBe(true);
+  fireEvent.press(screen.getByLabelText('מפה במסך מלא'));
+  const closeMap = screen.getByRole('button', { name: 'סגירת המפה המוגדלת' });
+  expect(within(closeMap).UNSAFE_getByType(Ionicons).props.name).toBe('close');
+  fireEvent.press(closeMap);
+  expect(screen.queryByTestId('trip-map-full-card')).toBeNull();
   expect(screen.getByLabelText('2, תצפית').props.accessibilityState.expanded).toBe(true);
 });
 

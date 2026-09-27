@@ -124,11 +124,19 @@ function CityPage({ navigation, cityId, countryId }) {
   useEffect(() => { markNoyaContentViewed().catch(() => {}); }, [cityId, countryId]);
   useEffect(() => { setVisibleCount(PAGE_SIZE); }, [kind, filters]);
   const destination = overview?.destination;
-  if (loading || !destination) return <SafeAreaView style={styles.loading} edges={['top', 'left', 'right', 'bottom']}>
-    <BackButton color="dark" variant="solid" onPress={() => navigation.goBack()} />
-    {loading ? <ActivityIndicator color={c.navy} size="large" /> : <Ionicons name="location-outline" size={38} color={c.muted} />}
-    <AppText style={styles.errorText}>{loading ? 'טוענים את היעד…' : error || 'היעד לא נמצא.'}</AppText>
-    {!loading && <Pressable onPress={retry} style={styles.showMoreButton} accessibilityRole="button"><AppText style={styles.showMoreText}>ניסיון נוסף</AppText></Pressable>}
+  if (loading) return <SafeAreaView style={styles.loading} edges={['top', 'left', 'right', 'bottom']}>
+    <ActivityIndicator color={c.navy} size="large" />
+    <AppText style={styles.errorText}>טוענים את היעד…</AppText>
+  </SafeAreaView>;
+  if (!destination) return <SafeAreaView style={styles.screen} edges={['top', 'left', 'right', 'bottom']}>
+    <View style={styles.modalHeader} testID="destination-error-header">
+      <BackButton color="dark" variant="solid" onPress={() => navigation.goBack()} />
+    </View>
+    <View style={styles.loading}>
+      <Ionicons name="location-outline" size={38} color={c.muted} />
+      <AppText style={styles.errorText}>{error || 'היעד לא נמצא.'}</AppText>
+      <Pressable onPress={retry} style={styles.showMoreButton} accessibilityRole="button"><AppText style={styles.showMoreText}>ניסיון נוסף</AppText></Pressable>
+    </View>
   </SafeAreaView>;
 
   const heroUrl = getDestinationImageUrl(destination, 'large');
