@@ -22,6 +22,8 @@ test('image marker badges sit outside the clipped photo head', () => {
 
   const wrapper = screen.getByTestId('route-stop-marker-head-wrap');
   const head = screen.getByTestId('route-stop-marker-head');
+  const numberBadge = screen.getByTestId('route-stop-marker-number-badge');
+  const dayBadge = screen.getByTestId('route-stop-marker-day-badge');
 
   expect(within(wrapper).getByTestId('route-stop-marker-head')).toBeTruthy();
   expect(within(wrapper).getByTestId('route-stop-marker-number-badge')).toBeTruthy();
@@ -30,6 +32,8 @@ test('image marker badges sit outside the clipped photo head', () => {
   expect(within(head).queryByTestId('route-stop-marker-day-badge')).toBeNull();
   expect(StyleSheet.flatten(wrapper.props.style)).toMatchObject({ width: 42, height: 42, overflow: 'visible' });
   expect(StyleSheet.flatten(head.props.style)).toMatchObject({ width: 42, height: 42, overflow: 'hidden' });
+  expect(StyleSheet.flatten(numberBadge.props.style).elevation).toBeGreaterThan(StyleSheet.flatten(head.props.style).elevation);
+  expect(StyleSheet.flatten(dayBadge.props.style).elevation).toBeGreaterThan(StyleSheet.flatten(head.props.style).elevation);
   expect(screen.getAllByText('12')).toHaveLength(1);
 });
 

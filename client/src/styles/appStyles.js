@@ -4258,7 +4258,7 @@ export const routeStopMarkerStyles = StyleSheet.create({
 	badge: {
 		position: 'absolute', right: -1, bottom: -1, minWidth: 18, height: 18, borderRadius: 9,
 		paddingHorizontal: 3, backgroundColor: colors.brandOrange, borderWidth: 2,
-		borderColor: colors.white, alignItems: 'center', justifyContent: 'center', zIndex: 3,
+		borderColor: colors.white, alignItems: 'center', justifyContent: 'center', zIndex: 3, elevation: 2,
 	},
 	badgeCompact: { minWidth: 15, height: 15, borderRadius: 8, borderWidth: 1 },
 	badgeText: { color: colors.white, fontSize: 9, fontFamily: fontFamilies.semiBold },
@@ -4266,7 +4266,7 @@ export const routeStopMarkerStyles = StyleSheet.create({
 	dayBadge: {
 		position: 'absolute', left: -2, top: -2, minWidth: 18, height: 18, borderRadius: 9,
 		paddingHorizontal: 3, backgroundColor: colors.brandOrange, borderWidth: 2,
-		borderColor: colors.white, alignItems: 'center', justifyContent: 'center', zIndex: 3,
+		borderColor: colors.white, alignItems: 'center', justifyContent: 'center', zIndex: 3, elevation: 2,
 	},
 	dayBadgeCompact: { minWidth: 15, height: 15, borderRadius: 8, borderWidth: 1 },
 	dayBadgeText: { color: colors.white, fontSize: 9, fontFamily: fontFamilies.semiBold },
