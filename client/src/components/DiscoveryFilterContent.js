@@ -20,7 +20,7 @@ const durations = [
   { label: '4+ ימים', value: { min: 4, max: '' } },
 ];
 
-export default function DiscoveryFilterContent({ filters, onChange, surface = 'recommendations', onUseProfile, destinationsEnabled = true }) {
+export default function DiscoveryFilterContent({ filters, onChange, surface = 'recommendations', onUseProfile, destinationsEnabled = true, showDestinations = true }) {
   const current = filters || {};
   const routes = surface === 'routes';
   const [expanded, setExpanded] = useState({});
@@ -51,7 +51,7 @@ export default function DiscoveryFilterContent({ filters, onChange, surface = 'r
   </>;
 
   return <View style={styles.content}>
-    <DiscoveryDestinationAutocomplete destinations={current.destinations || []} onChange={(destinations) => patch({ destinations })} enabled={destinationsEnabled} design="community" />
+    {showDestinations && <DiscoveryDestinationAutocomplete destinations={current.destinations || []} onChange={(destinations) => patch({ destinations })} enabled={destinationsEnabled} design="community" />}
     <DiscoveryCategorySelector filters={current} onChange={onChange} design="community" />
     {routes && <>
       <AppText style={s.filterHeading}>משך המסלול</AppText>

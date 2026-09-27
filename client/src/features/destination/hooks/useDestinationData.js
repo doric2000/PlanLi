@@ -1,23 +1,23 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
-  collection,
   doc,
   getDoc,
-  getDocs,
-  limit,
-  query,
-  where,
 } from 'firebase/firestore';
 
 import { db } from '../../../config/firebase';
-import { useSmartProfile } from '../../../hooks/useSmartProfile';
 import { getDestinationOverview } from '../../../services/DestinationService';
-import { getPersonalizedRecommendations } from '../../../services/PersonalizationService';
+import { cityCoordinate } from '../utils/cityMap';
+
+function storedCoordinates(city) {
+  const point = [city?.googleCache?.coordinates, city?.identity?.coordinates, city?.coordinates].map(cityCoordinate).find(Boolean);
+  return point ? { lat: point.latitude, lng: point.longitude } : null;
+}
 
 function legacyWeather(city) {
   const value = city?.widgets?.weather;
   if (!value?.temp && !value?.status) return null;
-  const temperatureC = Number(String(value.temp || '').replace(/[^0-9.-]/g, ''));
+  const temperatureText = String(value.temp ?? '').replace(/[^0-9.-]/g, '');
+  const temperatureC = temperatureText ? Number(temperatureText) : NaN;
   return {
     ...(Number.isFinite(temperatureC) ? { temperatureC } : {}),
     description: value.status || null,
@@ -33,7 +33,7 @@ function legacyAirport(city) {
   return {
     name: value.name || value.airportName || null,
     iataCode: value.iataCode || value.iata || value.code || null,
-    distanceKm: Number.isFinite(Number(value.distanceKm))
+    distanceKm: value.distanceKm != null && value.distanceKm !== '' && Number.isFinite(Number(value.distanceKm))
       ? Number(value.distanceKm)
       : null,
     source: value.source || 'Stored destination data',
@@ -60,6 +60,7 @@ async function loadStoredOverview(cityId, countryId) {
       name: city.googleCache?.names?.he || city.identity?.names?.he || city.name || '',
       names: city.googleCache?.names || city.identity?.names || null,
       identity: city.identity || null,
+      coordinates: storedCoordinates(city),
       countryName: country.names?.he || country.name || '',
       countryCode: country.code || null,
       description: null,
@@ -92,99 +93,37 @@ async function loadStoredOverview(cityId, countryId) {
   };
 }
 
-async function loadGenericRecommendations(countryId, cityId) {
-  const destinationQuery = query(
-    collection(db, 'recommendations'),
-    where('destination.countryId', '==', countryId),
-    where('destination.cityId', '==', cityId),
-    where('status', '==', 'active'),
-    where('publicationGate.destinationApprovalVerified', '==', true),
-    limit(30)
-  );
-  const snapshot = await getDocs(destinationQuery);
-  return snapshot.docs.map((document) => ({
-    id: document.id,
-    ...document.data(),
-  }));
-}
-
 export const useDestinationData = (cityId, countryId) => {
-  const { completed: preferencesCompleted } = useSmartProfile();
-  const [overview, setOverview] = useState(null);
-  const [recommendations, setRecommendations] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
+  const identity = `${countryId || ''}:${cityId || ''}`;
+  const [attempt, setAttempt] = useState(0);
+  const [state, setState] = useState({ identity: '', overview: null, loading: true, error: null });
   useEffect(() => {
     let cancelled = false;
+    setState({ identity, overview: null, loading: true, error: null });
     if (!cityId || !countryId) {
-      setOverview(null);
-      setRecommendations([]);
-      setError('היעד לא נמצא.');
-      setLoading(false);
+      setState({ identity, overview: null, loading: false, error: 'היעד לא נמצא.' });
       return undefined;
     }
-
-    const load = async () => {
-      setLoading(true);
-      setError(null);
-      const overviewPromise = getDestinationOverview({ cityId, countryId })
-        .catch(async (overviewError) => {
-          console.warn('Destination overview callable failed:', overviewError);
-          return loadStoredOverview(cityId, countryId);
-        });
-      const recommendationsPromise = getPersonalizedRecommendations({
-        context: { countryId, cityId },
-        sort: preferencesCompleted ? 'forYou' : 'popular',
-        limit: 30,
-      }).then((result) => Array.isArray(result?.items) ? result.items : [])
-        .catch(async (recommendationsError) => {
-          console.warn(
-            'Personalized destination recommendations failed:',
-            recommendationsError
-          );
-          try {
-            return await loadGenericRecommendations(countryId, cityId);
-          } catch (fallbackError) {
-            console.warn('Destination recommendation fallback failed:', fallbackError);
-            return [];
-          }
-        });
-
-      try {
-        const [nextOverview, nextRecommendations] = await Promise.all([
-          overviewPromise,
-          recommendationsPromise,
-        ]);
-        if (cancelled) return;
-        setOverview(nextOverview);
-        setRecommendations(nextRecommendations);
-        if (!nextOverview) setError('היעד לא נמצא.');
-      } catch (loadError) {
-        if (cancelled) return;
-        console.error('Destination load failed:', loadError);
-        setOverview(null);
-        setRecommendations([]);
-        setError('לא הצלחנו לטעון את היעד כרגע.');
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, [cityId, countryId, preferencesCompleted]);
-
-  return {
-    overview,
-    cityData: overview?.destination || null,
-    countryData: overview?.destination
-      ? { name: overview.destination.countryName }
-      : null,
-    recommendations,
-    loading,
-    error,
-  };
+    getDestinationOverview({ cityId, countryId })
+      .catch(() => loadStoredOverview(cityId, countryId))
+      .then((overview) => {
+        if (!cancelled) setState({ identity, overview, loading: false, error: overview ? null : 'היעד לא נמצא.' });
+        // Older overview responses omit the provider center. Resolve it separately
+        // so an empty city still has a map without delaying its useful information.
+        if (!cancelled && overview?.destination && !storedCoordinates(overview.destination)) {
+          getDoc(doc(db, 'countries', countryId, 'destinations', cityId)).then((snapshot) => {
+            const coordinates = snapshot.exists() ? storedCoordinates(snapshot.data()) : null;
+            if (!cancelled && coordinates) setState((current) => current.identity === identity ? {
+              ...current, overview: { ...current.overview, destination: { ...current.overview.destination, coordinates } },
+            } : current);
+          }).catch(() => {});
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setState({ identity, overview: null, loading: false, error: 'לא הצלחנו לטעון את היעד כרגע.' });
+      });
+    return () => { cancelled = true; };
+  }, [cityId, countryId, identity, attempt]);
+  const retry = useCallback(() => setAttempt((value) => value + 1), []);
+  return state.identity === identity ? { ...state, retry } : { overview: null, loading: true, error: null, retry };
 };

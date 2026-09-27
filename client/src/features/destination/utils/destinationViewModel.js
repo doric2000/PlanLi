@@ -46,11 +46,12 @@ function present(value) {
 export function buildQuickFacts(quickFacts = {}) {
   const facts = [];
   const weather = quickFacts.weather;
-  if (weather && (Number.isFinite(Number(weather.temperatureC)) || present(weather.description))) {
+  const hasTemperature = present(weather?.temperatureC) && Number.isFinite(Number(weather.temperatureC));
+  if (weather && (hasTemperature || present(weather.description))) {
     facts.push({
       id: 'weather',
       title: 'מזג אוויר',
-      value: Number.isFinite(Number(weather.temperatureC))
+      value: hasTemperature
         ? `${Math.round(Number(weather.temperatureC))}°`
         : weather.description,
       detail: weather.description || '',
@@ -65,7 +66,7 @@ export function buildQuickFacts(quickFacts = {}) {
     const distance = Number(airport.distanceKm);
     const detail = [
       present(airport.iataCode) ? airport.iataCode : null,
-      Number.isFinite(distance) ? `כ־${Math.round(distance)} ק״מ` : null,
+      present(airport.distanceKm) && Number.isFinite(distance) ? `כ־${Math.round(distance)} ק״מ` : null,
     ].filter(Boolean).join(' · ');
     facts.push({
       id: 'airport',
@@ -84,7 +85,7 @@ export function buildQuickFacts(quickFacts = {}) {
       id: 'currency',
       title: 'מטבע',
       value: [currency.code, currency.symbol].filter(present).join(' · '),
-      detail: Number.isFinite(rate) && currency.code !== 'ILS'
+      detail: present(currency.ilsRate) && Number.isFinite(rate) && rate > 0 && currency.code !== 'ILS'
         ? `1 ₪ ≈ ${rate.toFixed(rate < 1 ? 2 : 1)} ${currency.code}`
         : currency.code === 'ILS' ? 'שקל ישראלי' : '',
       icon: 'cash-multiple',
