@@ -1,3 +1,4 @@
+import FullScreenModal from '../../../components/FullScreenModal';
 import BackButton, { BackLabel } from '../../../components/BackButton';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Modal, StatusBar, TouchableOpacity, View } from 'react-native';
@@ -92,9 +93,9 @@ export default function SharedTripScreen({ navigation, route }) {
       {stops.length ? <TripStopList stops={stops} selectedStopId={selectedStopId} onSelect={(id) => setSelectedStopId((current) => current === id ? '' : id)} onOpenRecommendation={(stop) => navigation.navigate('RecommendationDetail', { postId: stop.recommendationId })} readOnly /> : <View style={[styles.empty, { flex: 1 }]}><AppText style={styles.emptyTitle}>אין עצירות ביום הזה</AppText></View>}
     </View>
     <View style={[styles.editorFooter, { paddingBottom: Math.max(insets.bottom, 12) }]}><TouchableOpacity onPress={copy} disabled={copying} style={[styles.primaryButton, { flex: 1 }]} accessibilityRole="button" testID="shared-trip-copy">{copying ? <ActivityIndicator color="#FFFFFF" /> : <Ionicons name="copy-outline" size={18} color="#FFFFFF" />}<AppText style={styles.primaryButtonText}>יצירת עותק לתכנון משלי</AppText></TouchableOpacity></View>
-    <Modal visible={mapExpanded} animationType="slide" onRequestClose={() => setMapExpanded(false)}>
+    <FullScreenModal visible={mapExpanded} animationType="slide" onRequestClose={() => setMapExpanded(false)}>
       <View style={styles.mapFullScreen}>
-        <View style={[styles.editorMapFullHeader, { paddingTop: Math.max(insets.top, 8) }]} testID="shared-trip-map-header">
+        <View style={[styles.editorMapFullHeader, { paddingTop: 8 }]} testID="shared-trip-map-header">
           <View style={styles.headerRow}>
             <BackButton color="dark" variant="solid" onPress={() => setMapExpanded(false)} accessibilityRole="button" accessibilityLabel="חזרה לרשימת העצירות" />
             <View style={styles.headerCopy}>
@@ -107,9 +108,9 @@ export default function SharedTripScreen({ navigation, route }) {
           onSelectStop={setSelectedStopId} onMapPress={() => setSelectedStopId('')} active={focused && mapExpanded} expanded /> : null}
         {selectedStop ? <MapStopDetails title={selectedStop.title} number={stops.findIndex((stop) => stop.id === selectedStopId) + 1}
           dayLabel={day?.title} imageUrl={getRecommendationImageUrls(selectedStop, 'thumb')[0]}
-          address={selectedStop.subtitle} description={selectedStop.note} style={{ bottom: Math.max(insets.bottom, 18) }}
+          address={selectedStop.subtitle} description={selectedStop.note} style={{ bottom: 18 }}
           onClose={() => setSelectedStopId('')} actionBack actionLabel="חזרה לרשימה ולפרטי העצירה" onAction={() => setMapExpanded(false)} /> : null}
       </View>
-    </Modal>
+    </FullScreenModal>
   </View>;
 }

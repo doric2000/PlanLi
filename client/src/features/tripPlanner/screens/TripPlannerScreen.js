@@ -1,3 +1,4 @@
+import FullScreenModal from '../../../components/FullScreenModal';
 import BackButton from '../../../components/BackButton';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Modal, StatusBar, TouchableOpacity, View } from 'react-native';
@@ -317,9 +318,9 @@ export default function TripPlannerScreen({ navigation, route }) {
         <TouchableOpacity style={styles.editorAction} onPress={() => openCustom()} accessibilityRole="button" accessibilityLabel="עצירה משלי" testID="trip-add-custom-stop"><Ionicons name="add-circle-outline" size={20} color="#FFFFFF" /><AppText style={styles.editorActionText}>עצירה משלי</AppText></TouchableOpacity>
       </View>
       <TripShareModal visible={shareVisible} trip={trip} onClose={() => setShareVisible(false)} onChanged={(shareActive) => absorb({ ...tripRef.current, shareActive })} />
-      <Modal visible={mapExpanded} animationType="slide" onRequestClose={closeExpandedMap}>
+      <FullScreenModal visible={mapExpanded} animationType="slide" onRequestClose={closeExpandedMap}>
         <View style={styles.mapFullScreen} testID="trip-map-full-screen">
-          <View style={[styles.editorMapFullHeader, { paddingTop: Math.max(insets.top, 8) }]} testID="trip-map-full-header">
+          <View style={[styles.editorMapFullHeader, { paddingTop: 8 }]} testID="trip-map-full-header">
             <View style={styles.headerRow}>
               <BackButton color="dark" variant="solid" onPress={closeExpandedMap} accessibilityRole="button" accessibilityLabel="חזרה לרשימת העצירות" />
               <View style={styles.headerCopy}>
@@ -331,10 +332,10 @@ export default function TripPlannerScreen({ navigation, route }) {
           {mapExpanded && locatedStops.length ? renderMap(true) : null}
           {selectedStop ? <MapStopDetails title={selectedStop.title} number={stops.findIndex((stop) => stop.id === selectedStopId) + 1}
             dayLabel={selectedDay?.title} imageUrl={getRecommendationImageUrls(selectedStop, 'thumb')[0]}
-            address={selectedStop.subtitle} description={selectedStop.note} style={{ bottom: Math.max(insets.bottom, 18) }}
+            address={selectedStop.subtitle} description={selectedStop.note} style={{ bottom: 18 }}
             onClose={() => setSelectedStopId('')} actionBack actionLabel="חזרה לרשימה ולפרטי העצירה" onAction={closeExpandedMap} /> : null}
         </View>
-      </Modal>
+      </FullScreenModal>
       <Modal transparent visible={Boolean(movingStop)} animationType="fade" onRequestClose={() => setMovingStop(null)}><TouchableOpacity activeOpacity={1} style={styles.modalBackdrop} onPress={() => setMovingStop(null)}><View style={styles.modalSheet} accessibilityViewIsModal><AppText style={styles.modalTitle}>לאיזה יום להעביר?</AppText><AppText style={styles.modalText}>{movingStop?.title}</AppText>{(trip.days || []).filter((day) => day.id !== selectedDay?.id).sort((a, b) => a.order - b.order).map((day) => <TouchableOpacity key={day.id} onPress={() => moveStop(day.id)} style={styles.tripCard} accessibilityRole="button"><AppText style={styles.tripCardTitle}>{day.kind === 'ideas' ? 'רעיונות' : day.title}</AppText><AppText style={styles.tripCardMeta}>{day.stops?.length ?? day.stopCount ?? 0} עצירות</AppText></TouchableOpacity>)}</View></TouchableOpacity></Modal>
     </View>
   );

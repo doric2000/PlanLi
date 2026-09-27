@@ -136,17 +136,21 @@ function CityPage({ navigation, cityId, countryId }) {
   const snapshotData = { name: destination.name, thumbnail_url: getDestinationImageUrl(destination, 'thumb'), destinationImage: destination.destinationImage || null, countryId };
   const header = <View>
     <View style={styles.hero}>
-      {!!heroUrl && <CachedImage source={{ uri: heroUrl }} contentFit="cover" style={styles.heroImage} priority="high" />}
-      <LinearGradient colors={['rgba(8,26,33,0.08)', 'rgba(8,26,33,0.78)']} style={styles.heroShade} pointerEvents="none" />
-      <View style={styles.heroActions}>
-        <BackButton color="dark" variant="solid" onPress={() => navigation.goBack()} />
-        <FavoriteButton type="cities" id={cityId} variant="light" style={styles.actionButton} snapshotData={snapshotData} />
+      <View pointerEvents="none" style={styles.heroBackground}>
+        {!!heroUrl && <CachedImage source={{ uri: heroUrl }} contentFit="cover" style={styles.heroImage} contentPosition="center" priority="high" />}
+        <LinearGradient colors={['rgba(8,26,33,0.08)', 'rgba(8,26,33,0.78)']} style={styles.heroShade} pointerEvents="none" />
       </View>
-      <View style={styles.heroCopy}>
-        <AppText style={styles.countryName}>{destination.countryName}</AppText>
-        <AppText style={styles.cityName}>{destination.name}</AppText>
+      <View style={styles.heroContent}>
+        <View style={styles.heroActions}>
+          <BackButton color="dark" variant="solid" onPress={() => navigation.goBack()} />
+          <FavoriteButton type="cities" id={cityId} variant="light" style={styles.actionButton} snapshotData={snapshotData} />
+        </View>
+        <View style={styles.heroCopy}>
+          <AppText style={styles.countryName}>{destination.countryName}</AppText>
+          <AppText style={styles.cityName}>{destination.name}</AppText>
+        </View>
+        <PhotoAttribution destination={destination} placement="hero" style={styles.heroCredit} />
       </View>
-      <PhotoAttribution destination={destination} placement="hero" style={styles.heroCredit} />
     </View>
     <View style={styles.sections}>
       {!!description && <AppText style={styles.description}>{description}</AppText>}

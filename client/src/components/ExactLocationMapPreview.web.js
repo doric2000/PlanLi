@@ -1,5 +1,6 @@
+import FullScreenModal from './FullScreenModal';
 import React, { useEffect, useState } from 'react';
-import { Modal, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, TouchableOpacity, View } from 'react-native';
 import AppText from './AppText';
 
 import { exactLocationPickerStyles as styles } from '../styles';
@@ -45,7 +46,7 @@ export default function ExactLocationMapPreview({
         <AppText style={styles.mapFailureRetryText}>{copy.mapExpand}</AppText>
       </TouchableOpacity>
       {expanded ? (
-        <Modal visible animationType="slide" onRequestClose={() => setExpanded(false)}>
+        <FullScreenModal visible animationType="slide" onRequestClose={() => setExpanded(false)}>
           <View style={styles.mapExpandedScreen}>
             <View style={styles.mapExpandedHeader}>
               <TouchableOpacity style={styles.mapControlButton} onPress={() => setExpanded(false)}
@@ -57,7 +58,7 @@ export default function ExactLocationMapPreview({
             <AppText style={styles.mapHelp}>{copy.mapInteract}</AppText>
             {frame(true)}
           </View>
-        </Modal>
+        </FullScreenModal>
       ) : null}
     </View>
   );

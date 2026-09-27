@@ -121,28 +121,25 @@ describe('CommunityInlineMap', () => {
     expect(map.props.poiClickEnabled).toBe(false);
   });
 
-  it('keeps branded accessible markers visible while the icon font is pending', async () => {
+  it('keeps accessible category markers visible while the icon font is pending', async () => {
     MaterialIcons.loadFont.mockImplementationOnce(() => new Promise(() => {}));
     const screen = render(<MapUnderTest recommendations={recommendations} />);
     await act(async () => {});
-    expect(screen.getAllByText('PlanLi')).toHaveLength(2);
+    expect(screen.queryByText('PlanLi')).toBeNull();
     const marker = screen.getByTestId('recommendation-map-marker-rec-1');
     expect(marker.props.accessibilityLabel).toMatch(/^המלצת PlanLi, Local restaurant,/);
     expect(marker.props.accessibilityRole).toBe('button');
-    expect(marker.props.anchor).toEqual({ x: 0.5, y: 1 });
-    expect(StyleSheet.flatten(community.mapMarkerTouchTarget)).toMatchObject({ width: 84, height: 44 });
-    expect(StyleSheet.flatten(community.mapMarkerTail)).toMatchObject({ borderTopWidth: 8 });
-    expect(StyleSheet.flatten(community.mapMarkerBrand).writingDirection).toBe('ltr');
+    expect(marker.props.anchor).toEqual({ x: 0.5, y: 0.5 });
   });
 
-  it('highlights the selected branded badge without changing its size and clears on background press', async () => {
+  it('highlights the selected category circle without changing its size and clears on background press', async () => {
     const screen = render(<MapUnderTest recommendations={recommendations} />);
     await act(async () => {});
     const badge = (id) => StyleSheet.flatten(screen.getByTestId(`recommendation-map-badge-${id}`).props.style);
-    expect(badge('rec-1')).toMatchObject({ width: 84, height: 36, backgroundColor: colors.primary, borderColor: colors.white });
-    expect(badge('rec-2').backgroundColor).toBe(colors.primary);
+    expect(badge('rec-1')).toMatchObject({ width: 44, height: 44, borderColor: colors.white });
+    expect(badge('rec-2').backgroundColor).not.toBe(badge('rec-1').backgroundColor);
     fireEvent.press(screen.getByTestId('recommendation-map-marker-rec-1'));
-    expect(badge('rec-1')).toMatchObject({ width: 84, height: 36, borderColor: colors.brandOrange });
+    expect(badge('rec-1')).toMatchObject({ width: 44, height: 44, borderColor: colors.primary, backgroundColor: '#FF9F1C' });
     expect(screen.getByTestId('recommendation-map-marker-rec-1').props.zIndex).toBe(1000);
     expect(screen.getByTestId('mock-map-preview')).toBeTruthy();
     fireEvent.press(screen.getByTestId('community-inline-map'));

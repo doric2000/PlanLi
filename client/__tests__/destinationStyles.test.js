@@ -7,6 +7,11 @@ test('city content remains inside narrow widths and clears the tab overlay', () 
   expect(styles.factCopy.minWidth).toBe(0);
   expect(styles.hero.minHeight).toBeGreaterThanOrEqual(212);
   expect(styles.hero.height).toBeUndefined();
+  expect(styles.hero.paddingHorizontal).toBeUndefined();
+  expect(styles.heroContent.paddingTop).toBe(67);
+  expect(styles.heroBackground).toEqual(expect.objectContaining({ top: 0, right: 0, bottom: 0, left: 0 }));
+  expect(styles.heroImage).toEqual(expect.objectContaining({ top: 0, right: 0, bottom: 0, left: 0 }));
+  expect(styles.heroImage.width).toBeUndefined();
   expect(styles.cityName.numberOfLines).toBeUndefined();
 });
 test('map has measurable dimensions and one accessible expansion target', () => {

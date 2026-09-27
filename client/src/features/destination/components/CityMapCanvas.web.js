@@ -1,3 +1,4 @@
+import { recommendationMarkerAppearance } from '../../../styles/recommendationMarker';
 import React, { useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -52,7 +53,8 @@ export default function CityMapCanvas({ region, items, selectedId, onSelect, onR
       el.dataset.testid = `city-marker-${item.id}`;
       el.setAttribute('aria-label', `המלצה: ${item.title}`);
       el.setAttribute('aria-pressed', String(item.id === selectedId));
-      el.style.backgroundColor = item.id === selectedId ? '#FF9F1C' : item.visual.color || '#1E3A5F';
+      const appearance = recommendationMarkerAppearance(item.visual, item.id === selectedId);
+      Object.assign(el.style, { backgroundColor: appearance.backgroundColor, color: appearance.color, borderColor: appearance.borderColor, boxSizing: 'border-box' });
       el.onclick = (event) => { event.stopPropagation(); callbacks.current.onSelect?.(item.id); };
       return new markerClass.current({ element: el }).setLngLat([item.coordinates.lng, item.coordinates.lat]).addTo(map.current);
     });

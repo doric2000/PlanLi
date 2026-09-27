@@ -25,7 +25,7 @@ jest.mock('@react-navigation/native', () => ({
     ReactModule.useEffect(callback, [callback]);
   },
 }));
-jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: mockSafeAreaTop, bottom: 0 }) }));
+jest.mock('react-native-safe-area-context', () => ({ SafeAreaProvider: ({ children }) => children, SafeAreaView: require('react-native').View, useSafeAreaInsets: () => ({ top: mockSafeAreaTop, bottom: 0 }) }));
 jest.mock('react-native-draggable-flatlist', () => {
   const ReactModule = require('react');
   const { FlatList } = require('react-native');
@@ -329,7 +329,7 @@ test.each([0, 62])('fullscreen retry stays below the header with a %s-point safe
     const header = screen.getByTestId('trip-map-full-header');
     const fullScreen = screen.getByTestId('trip-map-full-screen');
     const headerStyle = StyleSheet.flatten(header.props.style);
-    expect(headerStyle.paddingTop).toBe(Math.max(safeAreaTop, 8));
+    expect(headerStyle.paddingTop).toBe(8);
     expect(headerStyle.position).not.toBe('absolute');
     expect(fullScreen.children[0].props.testID).toBe('trip-map-full-header');
     expect(StyleSheet.flatten(screen.getByTestId('trip-map-full-card').props.style).flex).toBe(1);

@@ -9,7 +9,7 @@ let mockFocused = true;
 let mockInsets = { top: 0, bottom: 0, left: 0, right: 0 };
 
 jest.mock('@react-navigation/native', () => ({ useIsFocused: () => mockFocused }));
-jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => mockInsets }));
+jest.mock('react-native-safe-area-context', () => ({ SafeAreaProvider: ({ children }) => children, SafeAreaView: require('react-native').View, useSafeAreaInsets: () => mockInsets }));
 jest.mock('react-native-draggable-flatlist', () => () => null);
 jest.mock('firebase/functions', () => ({ httpsCallable: jest.fn() }));
 jest.mock('../src/config/firebase', () => ({ cloudFunctions: {} }));
