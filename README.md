@@ -25,7 +25,7 @@ The existing Text Search quota remains zero. See
 
 ## Current environment status
 
-### Security stage 3 (2026-09-27, 71 callables enforced; upload recovery verified)
+### Security stage 3 (2026-09-27, 91 callables enforced; upload recovery verified)
 
 Stage 3 is in progress on `fix/security-stage3-app-check`, based on
 `02fdc659f33d28cc406bcfd2fb73995744491a04`. The four-function canary, seven
@@ -45,8 +45,19 @@ IDs. The focused fix below is deployed and the owner confirmed successful iPhone
 route-photo update. Read-only recovery verification at `2026-09-27T16:05:15.807Z`
 found the new operation successful, the route active and the uploaded asset
 attached to the published revision. Ten worker requests on the fixed revision
-returned 204 with no worker errors. Expansion may resume; background-upload
-confirmation and Android/ Web upload evidence remain separate Storage gates.
+returned 204 with no worker errors. The owner subsequently confirmed photo uploads
+from both iPhone and Android, including 20 seconds on the home screen. The same
+route has further successful operations. Storage metrics since `15:59Z` show
+VALID/ALLOW for iOS (4) and Android (2) at the `16:14:40Z` read-back. A synthetic
+JPEG uploaded from the production Web origin using the dedicated fixture account
+returned 200 for resumable-session creation, upload completion and `prepareMedia`;
+the browser decoded the resulting image at 480 x 480. This controlled API probe
+does not establish hosted upload-form behavior; that manual Web check is pending.
+The fixture's missing `moderation.status` was set to `active` with an update-time
+precondition for this test only; its media is reserved for account-deletion cleanup.
+The remaining-8 monitoring update initially received a Google API 500. A guarded
+retry and independent read-back confirmed the enabled policy covers all 91
+enforced callables before continuing to remaining-9.
 The fix is isolated on `fix/route-background-media-identity`, commit
 `4d906c00e63b8e67bbb7416117d7ca624725f934`: attachment now compares canonical
 day/stop IDs while retaining stale-slot rejection. All 39 focused background
@@ -130,7 +141,7 @@ Firestore/Storage/Authentication service enforcement remains off.
 | `getSharedTrip` | `getsharedtrip-00002-koj` |
 
 <!-- stage3-batch-status:start -->
-Current verified serving inventory: **71/103 callables enforced**.
+Current verified serving inventory: **91/103 callables enforced**.
 
 | Group | Targets | Applied (UTC) | Gate | Post-state SHA-256 |
 | --- | --- | --- | --- | --- |
@@ -142,6 +153,8 @@ Current verified serving inventory: **71/103 callables enforced**.
 | remaining-4 | 10 | 2026-09-27T15:25:26.179Z | accepted | `d31d14ac66ba114b5df29aecc41ef1092e21222a346a9309eec30647dcd5f4a5` |
 | remaining-5 | 10 | 2026-09-27T15:30:47.429Z | accepted | `6dc030e6bb8b2ca22e06fd7699cbed812ef87ac2f1c301ce61cd1b488151d44e` |
 | remaining-6 | 10 | 2026-09-27T15:36:02.873Z | accepted | `9ecf017c89b744552f1f37123d898d38fafa7edb88df6cc9d94be6b711028209` |
+| remaining-7 | 10 | 2026-09-27T16:09:09.474Z | accepted | `c853c9d2971dad61ae42a364896f23735a0463c456accb23b64e9db0484386e9` |
+| remaining-8 | 10 | 2026-09-27T16:14:49.875Z | applied | `26080eee520f97eca85189d4fe211733e82a00dfcd645f7459bcf094ff81186a` |
 
 Remaining-group receipts pair valid attestation/no Auth (SIGN_IN_REQUIRED) and
 missing-attestation rejection on each target, correlated against serving-revision
