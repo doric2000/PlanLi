@@ -2,6 +2,7 @@ import React from 'react';
 import { fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import { FlatList, StyleSheet } from 'react-native';
 
+import CommunityHeader from '../src/features/community/components/CommunityHeader';
 import CommunityScreen from '../src/features/community/screens/CommunityScreen';
 import { communityScreenStyles } from '../src/styles';
 
@@ -186,7 +187,7 @@ describe('CommunityScreen map mode', () => {
     fireEvent.press(screen.getByTestId('community-map-toggle'));
 
     expect(screen.queryByTestId('community-sort-button')).toBeNull();
-    expect(screen.getByLabelText('חזרה לרשימת המלצות')).toBeTruthy();
+    expect(within(screen.getByRole('button', { name: 'הצגת רשימת המלצות' })).getByText('icon:list-outline')).toBeTruthy();
 
     expect(screen.getByTestId('mock-community-map')).toBeTruthy();
   });
@@ -316,4 +317,25 @@ describe('CommunityScreen map mode', () => {
     );
     expect(navigation.setParams).toHaveBeenCalledTimes(1);
   });
+});
+
+
+test.each([['Community', 'המלצות'], ['Routes', 'מסלולים']])('%s uses view icons and keeps its measured toggle when switching modes', (mode, label) => {
+  const onMapToggle = jest.fn();
+  const onLayout = jest.fn();
+  const navigation = { goBack: jest.fn(), navigate: jest.fn() };
+  const props = { mode, navigation, filters: { query: '', destinations: [] }, targets: { map: { onLayout } }, onMapToggle };
+  const screen = render(<CommunityHeader {...props} mapOpen={false} />);
+  expect(within(screen.getByRole('button', { name: `הצגת מפת ${label}` })).getByText('icon:map-outline')).toBeTruthy();
+  fireEvent.press(screen.getByTestId('community-map-toggle'));
+  screen.rerender(<CommunityHeader {...props} mapOpen />);
+  const toggle = screen.getByRole('button', { name: `הצגת רשימת ${label}` });
+  expect(within(toggle).getByText('icon:list-outline')).toBeTruthy();
+  expect(StyleSheet.flatten(toggle.props.style)).toMatchObject({ width: 44, minHeight: 44 });
+  fireEvent(toggle, 'layout', { nativeEvent: { layout: { x: 0, y: 0, width: 44, height: 44 } } });
+  expect(onLayout).toHaveBeenCalledTimes(1);
+  fireEvent.press(toggle);
+  expect(onMapToggle).toHaveBeenCalledTimes(2);
+  expect(navigation.goBack).not.toHaveBeenCalled();
+  expect(navigation.navigate).not.toHaveBeenCalled();
 });

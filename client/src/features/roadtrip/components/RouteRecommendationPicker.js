@@ -1,6 +1,7 @@
 import { BackLabel } from '../../../components/BackButton';
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Keyboard, ScrollView, TouchableOpacity, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import AppText from '../../../components/AppText';
 import AppTextInput from '../../../components/AppTextInput';
 import CachedImage from '../../../components/CachedImage';
@@ -59,12 +60,17 @@ export default function RouteRecommendationPicker({ routeDestination, onSelect, 
     <View style={styles.screen} testID="route-recommendation-picker">
       <View style={styles.modeHeader}>
         <View style={styles.sectionHeader}>
-          <AppText style={styles.sectionTitle}>בחירה מהמלצות PlanLi</AppText>
           <TouchableOpacity style={styles.textButton} onPress={() => { Keyboard.dismiss(); onCancel(); }} accessibilityRole="button" testID="route-recommendations-cancel"><BackLabel style={styles.retryText}>חזרה לעצירה</BackLabel></TouchableOpacity>
+          <AppText style={styles.sectionTitle}>בחירה מהמלצות PlanLi</AppText>
         </View>
         <AppTextInput accessibilityLabel="חיפוש המלצות" placeholder="חיפוש מקום או המלצה" value={query} onChangeText={setQuery} maxLength={120} style={styles.searchInput} returnKeyType="search" onSubmitEditing={Keyboard.dismiss} testID="route-recommendations-search" />
-        <TouchableOpacity style={styles.detailsToggle} onPress={() => { Keyboard.dismiss(); setFiltersOpen((open) => !open); }} accessibilityRole="button" accessibilityState={{ expanded: filtersOpen }} testID="route-recommendations-filters">
-          <AppText style={styles.body}>{scopeName}{categoryId || budget ? ' · סינון פעיל' : ''}</AppText>{filtersOpen ? <BackLabel style={styles.retryText}>חזרה לתוצאות</BackLabel> : <AppText style={styles.retryText}>שינוי וסינון</AppText>}
+        <TouchableOpacity style={styles.detailsToggle} onPress={() => { Keyboard.dismiss(); setFiltersOpen((open) => !open); }} accessibilityRole="button"
+          accessibilityLabel={`${filtersOpen ? 'הצגת תוצאות' : 'שינוי וסינון'}: ${scopeName}${categoryId || budget ? ', סינון פעיל' : ''}`}
+          accessibilityState={{ expanded: filtersOpen }} testID="route-recommendations-filters">
+          <AppText style={styles.body}>{scopeName}{categoryId || budget ? ' · סינון פעיל' : ''}</AppText>{filtersOpen ? <View style={styles.textButton}>
+            <Ionicons name="list-outline" size={20} color={colors.primary} />
+            <AppText style={styles.retryText}>הצגת תוצאות</AppText>
+          </View> : <AppText style={styles.retryText}>שינוי וסינון</AppText>}
         </TouchableOpacity>
       </View>
       {filtersOpen ? <ScrollView style={styles.modeList} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">

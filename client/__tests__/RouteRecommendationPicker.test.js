@@ -1,5 +1,6 @@
 import React from 'react';
-import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import RouteRecommendationPicker from '../src/features/roadtrip/components/RouteRecommendationPicker';
 import { getPersonalizedRecommendations } from '../src/services/PersonalizationService';
 jest.mock('../src/services/PersonalizationService', () => ({ getPersonalizedRecommendations: jest.fn() }));
@@ -67,5 +68,28 @@ it('retains the selected scope on empty/error responses, retries and cancels', a
   fireEvent.changeText(screen.getByTestId('route-recommendations-search'), 'market');
   await waitFor(() => expect(getPersonalizedRecommendations).toHaveBeenLastCalledWith(expect.objectContaining({ query: 'market' }), { retryFailed: false }));
   fireEvent.press(screen.getByTestId('route-recommendations-cancel'));
+  expect(onCancel).toHaveBeenCalledTimes(1);
+});
+
+
+it('shows results with a list action while preserving the selected query and filters', async () => {
+  const onCancel = jest.fn();
+  const screen = render(<RouteRecommendationPicker routeDestination={area} onSelect={jest.fn()} onCancel={onCancel} />);
+  fireEvent.changeText(screen.getByTestId('route-recommendations-search'), 'market');
+  await waitFor(() => expect(getPersonalizedRecommendations).toHaveBeenLastCalledWith(expect.objectContaining({ query: 'market' }), { retryFailed: false }));
+  fireEvent.press(screen.getByTestId('route-recommendations-filters'));
+  fireEvent.press(screen.getByTestId('choose-another-city'));
+  fireEvent.press(screen.getByTestId('route-recommendations-category-0'));
+  const toggle = screen.getByTestId('route-recommendations-filters');
+  expect(screen.getByRole('button', { name: 'הצגת תוצאות: רומא, סינון פעיל' })).toBeTruthy();
+  expect(within(toggle).UNSAFE_getByType(Ionicons).props.name).toBe('list-outline');
+  fireEvent.press(screen.getByText('הצגת תוצאות'));
+  expect(screen.getByTestId('route-recommendations-list')).toBeTruthy();
+  expect(screen.getByTestId('route-recommendations-search').props.value).toBe('market');
+  await waitFor(() => expect(getPersonalizedRecommendations).toHaveBeenLastCalledWith(expect.objectContaining({
+    context: { countryId: 'IT', cityId: 'rome' }, query: 'market', filters: { categoryIds: [expect.any(String)], budgetLevels: [] },
+  }), { retryFailed: false }));
+  expect(onCancel).not.toHaveBeenCalled();
+  fireEvent.press(screen.getByText('חזרה לעצירה'));
   expect(onCancel).toHaveBeenCalledTimes(1);
 });

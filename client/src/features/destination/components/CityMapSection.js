@@ -5,7 +5,6 @@ import { RECOMMENDATION_CATEGORIES } from '../../../constants/travelTaxonomy';
 import { useIsFocused } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import AppText from '../../../components/AppText';
-import BackButton from '../../../components/BackButton';
 import CachedImage from '../../../components/CachedImage';
 import FavoriteButton from '../../../components/FavoriteButton';
 import ActionBar from '../../../components/ActionBar';
@@ -144,7 +143,9 @@ export default function CityMapSection({ destination, cityId, countryId, recomme
     <FullScreenModal contentStyle={styles.mapModal} visible={fullscreen} animationType="fade" onRequestClose={() => setFullscreen(false)} onDismiss={finishDismiss} testID="city-map-modal">
         <StatusBar barStyle="dark-content" />
         <View style={styles.modalHeader}>
-          <BackButton color="dark" variant="solid" onPress={() => setFullscreen(false)} accessibilityLabel="חזרה לעמוד העיר" />
+          <Pressable style={styles.actionButton} onPress={() => setFullscreen(false)} accessibilityRole="button" accessibilityLabel="סגירת המפה המוגדלת">
+            <Ionicons name="close" size={24} color={c.navy} />
+          </Pressable>
           <AppText style={styles.modalHeading} numberOfLines={2}>{destination.name}</AppText>
         </View>
         <View style={styles.sections}>

@@ -1,5 +1,6 @@
 import React from 'react';
-import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import { StyleSheet } from 'react-native';
 
 const mockGetPrivateTrip = jest.fn();
@@ -340,7 +341,7 @@ test.each([0, 62])('fullscreen retry stays below the header with a %s-point safe
     fireEvent.press(screen.getByTestId('trip-map-full-retry'));
     expect(screen.queryByTestId('trip-map-full-error')).toBeNull();
     expect(screen.getByTestId('trip-map-full-loading')).toBeTruthy();
-    fireEvent.press(screen.getByLabelText('חזרה לרשימת העצירות'));
+    fireEvent.press(screen.getByLabelText('סגירת המפה המוגדלת'));
     expect(screen.queryByTestId('trip-map-full-card')).toBeNull();
     expect(screen.getByTestId('trip-map-card')).toBeTruthy();
   } finally { timeoutSpy.mockRestore(); }
@@ -382,7 +383,9 @@ test('map selection shows the same numbered detail card as Roadtrip and keeps th
   expect(screen.queryByTestId('map-stop-details')).toBeNull();
   expect(screen.getByTestId('trip-map-full-card')).toBeTruthy();
   act(() => mockMapProps.onSelectStop('hotel'));
-  fireEvent.press(screen.getByLabelText('חזרה לרשימה ולפרטי העצירה'));
+  const listAction = screen.getByRole('button', { name: 'הצגת הרשימה ופרטי העצירה' });
+  expect(within(listAction).UNSAFE_getByType(Ionicons).props.name).toBe('list-outline');
+  fireEvent.press(listAction);
   expect(screen.queryByTestId('trip-map-full-card')).toBeNull();
   expect(screen.getByLabelText('2, מלון לירו').props.accessibilityState.expanded).toBe(true);
 });

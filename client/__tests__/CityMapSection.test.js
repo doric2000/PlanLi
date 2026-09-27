@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, fireEvent, render } from '@testing-library/react-native';
+import { act, fireEvent, render, within } from '@testing-library/react-native';
 import { Platform } from 'react-native';
 import CityMapSection from '../src/features/destination/components/CityMapSection';
 import { createDestinationStyles } from '../src/features/destination/components/destinationStyles';
@@ -42,9 +42,12 @@ test('has exactly one expansion control; selection stays inline and survives ope
   fireEvent.press(screen.getByLabelText('הגדלת מפת העיר'));
   expect(screen.queryByLabelText('הגדלת מפת העיר')).toBeNull();
   expect(screen.getByTestId('canvas').props.interactive).toBe(true);
-  fireEvent.press(screen.getByLabelText('חזרה לעמוד העיר'));
+  const closeMap = screen.getByRole('button', { name: 'סגירת המפה המוגדלת' });
+  expect(within(closeMap).getByText('close')).toBeTruthy();
+  fireEvent.press(closeMap);
   expect(screen.getAllByLabelText('הגדלת מפת העיר')).toHaveLength(1);
   expect(screen.getByText('מסעדת חוף')).toBeTruthy();
+  expect(base.navigation.navigate).not.toHaveBeenCalled();
 });
 
 test('a tile timeout can be retried independently of the recommendation query', () => {
@@ -72,7 +75,7 @@ test('searching the moved map retains the searched region when returning inline'
   const moved = { latitude: 6.85, longitude: 81.82, latitudeDelta: 0.03, longitudeDelta: 0.03 };
   fireEvent(screen.getByTestId('canvas'), 'regionChange', moved);
   fireEvent.press(screen.getByText('חיפוש באזור המוצג'));
-  fireEvent.press(screen.getByLabelText('חזרה לעמוד העיר'));
+  fireEvent.press(screen.getByLabelText('סגירת המפה המוגדלת'));
   expect(screen.getByTestId('canvas').props.region).toEqual(moved);
   expect(mockDiscovery.mock.calls.at(-1)[0].viewport.north).toBeCloseTo(6.865);
 });

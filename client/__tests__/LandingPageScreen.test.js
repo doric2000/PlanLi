@@ -1,6 +1,6 @@
 import React from 'react';
 import { Alert, Linking, StyleSheet } from 'react-native';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, waitFor, within } from '@testing-library/react-native';
 
 import LandingPageScreen from '../src/features/destination/screens/LandingPageScreen';
 
@@ -232,4 +232,34 @@ test('back control uses the RTL-facing action on the leading edge', () => {
   );
   fireEvent.press(screen.getByLabelText('חזרה'));
   expect(goBack).toHaveBeenCalledTimes(1);
+});
+
+
+test.each(['לא ניתן לטעון את היעד כרגע.', null])('loading has no back button and %s errors keep retry and header navigation', (error) => {
+  const navigation = { goBack: jest.fn() };
+  const retry = jest.fn();
+  const view = () => <LandingPageScreen navigation={navigation} route={{ params: { countryId: 'gr', cityId: 'mykonos' } }} />;
+  mockUseDestinationData.mockReturnValue({ loading: true, overview: null, retry });
+  const screen = render(view());
+  expect(screen.getByText('טוענים את היעד…')).toBeTruthy();
+  expect(screen.queryAllByRole('button')).toHaveLength(0);
+
+  mockUseDestinationData.mockReturnValue({ loading: false, overview: null, error, retry });
+  screen.rerender(view());
+  expect(screen.getByText(error || 'היעד לא נמצא.')).toBeTruthy();
+  expect(screen.queryByText('טוענים את היעד…')).toBeNull();
+  const headerBack = within(screen.getByTestId('destination-error-header')).getByRole('button', { name: 'חזרה' });
+  fireEvent.press(headerBack);
+  expect(navigation.goBack).toHaveBeenCalledTimes(1);
+  fireEvent.press(screen.getByRole('button', { name: 'ניסיון נוסף' }));
+  expect(retry).toHaveBeenCalledTimes(1);
+
+  mockUseDestinationData.mockReturnValue({ loading: true, overview: null, retry });
+  screen.rerender(view());
+  expect(screen.queryAllByRole('button')).toHaveLength(0);
+  mockUseDestinationData.mockReturnValue({ loading: false, overview, retry });
+  screen.rerender(view());
+  expect(screen.getByText('מיקונוס')).toBeTruthy();
+  fireEvent.press(screen.getByRole('button', { name: 'חזרה' }));
+  expect(navigation.goBack).toHaveBeenCalledTimes(2);
 });
