@@ -58,12 +58,19 @@ were off. Google Identity for iOS enforcement remains explicitly out of scope.
 
 Stage 3 is not closed until live smoke tests, negative controls, delivered alerts,
 all rollout acceptance receipts and the final observation window are recorded.
-Focused local validation: 44 Functions tests (including an actual local callable
-HTTP boundary with a stubbed verifier), 15 rollout/monitoring tests and six client
+Focused local validation: 56 Functions tests (including an actual local callable
+HTTP boundary with a stubbed verifier), 19 rollout/monitoring tests and six client
 tests passed under Node 22.23.1. Missing, invalid, expired and consumed-token
 requests were rejected before business dispatch; fresh tokens remained usable.
 This is boundary evidence, not live platform attestation. The monitoring dry run
 reused the three unrelated enabled policies and the existing email channel.
+The immutable candidate `66a2b43` received independent security and CLI reviews.
+Review fixes cover interrupted/uncertain rollback recovery, previously accepted
+traffic drift, and resolving the serving revision in a fresh post-rollback
+baseline. Execution tests exercise these failure paths. Cloud Run v2 rejected
+traffic-only validation for a managed revision; the official v1 replacement API
+passed `dryRun=all` for all four canary services while retaining each exact
+revision template. Production rollback itself has not been exercised.
 
 ### Map presentation fixes OTA (2026-09-27, published)
 

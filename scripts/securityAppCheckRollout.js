@@ -81,7 +81,7 @@ async function inventory(token) {
 function safeInventory(state) {
   return {
     functions: state.functions.map((fn) => ({ name: fn.name.split('/').pop(), state: fn.state,
-      revision: fn.serviceConfig?.revision, service: fn.serviceConfig?.service,
+      revision: fn.serviceConfig?.revision, configuredRevision: fn.serviceConfig?.revision, service: fn.serviceConfig?.service,
       enforced: fn.serviceConfig?.environmentVariables?.PLANLI_ENFORCE_APP_CHECK === 'true',
       sourceMarker: fn.serviceConfig?.environmentVariables?.PLANLI_APP_CHECK_ROLLOUT_SOURCE || null,
       deploymentHash: fn.labels?.['firebase-functions-hash'] || null,
@@ -118,10 +118,42 @@ function trafficServesRevision(service, revision) {
 }
 async function assertServing(batch, state, token) {
   if (batch.kind !== 'functions') return;
-  for (const fn of batchState(batch, state)) {
-    const service = await api(`https://run.googleapis.com/v2/${fn.service}`, token);
-    if (!trafficServesRevision(service, fn.revision)) throw new Error(`Traffic is not fully serving the expected revision of ${fn.name}.`);
+  const functions = batchState(batch, state);
+  for (let offset = 0; offset < functions.length; offset += 5) {
+    await Promise.all(functions.slice(offset, offset + 5).map(async (fn) => {
+      const service = await api(`https://run.googleapis.com/v2/${fn.service}`, token);
+      if (!trafficServesRevision(service, fn.revision)) throw new Error(`Traffic is not fully serving the expected revision of ${fn.name}.`);
+    }));
   }
+}
+async function resolveServing(state, token, targets) {
+  const functions = state.functions.filter((fn) => targets.includes(fn.name));
+  for (let offset = 0; offset < functions.length; offset += 5) {
+    await Promise.all(functions.slice(offset, offset + 5).map(async (fn) => {
+      const service = await api(`https://run.googleapis.com/v2/${fn.service}`, token);
+      const revision = service.trafficStatuses?.find((target) => Number(target.percent) === 100)?.revision?.split('/').pop();
+      if (!revision || !trafficServesRevision(service, revision)) throw new Error(`Unstable serving revision of ${fn.name}.`);
+      // Functions metadata can still name the newer revision after traffic rollback.
+      if (revision !== fn.configuredRevision) {
+        const runtime = await api(`https://run.googleapis.com/v2/${fn.service}/revisions/${revision}`, token);
+        const env = runtime.containers?.[0]?.env || [];
+        fn.enforced = env.find((item) => item.name === 'PLANLI_ENFORCE_APP_CHECK')?.value === 'true';
+        fn.sourceMarker = env.find((item) => item.name === 'PLANLI_APP_CHECK_ROLLOUT_SOURCE')?.value || null;
+      }
+      fn.revision = revision;
+    }));
+  }
+  return state;
+}
+async function restoreTraffic(previous, token, dryRun = false) {
+  // The v2 PATCH endpoint rejects traffic-only changes on some managed Functions
+  // revisions (409). v1 preserves the exact template and guards resourceVersion.
+  const url = `https://${REGION}-run.googleapis.com/apis/serving.knative.dev/v1/namespaces/${PROJECT}/services/${previous.name.toLowerCase()}`;
+  const service = await api(url, token);
+  if (!service.metadata?.resourceVersion || !service.spec?.template) throw new Error('Missing rollback concurrency/template evidence.');
+  return api(`${url}${dryRun ? '?dryRun=all' : ''}`, token, 'PUT', {
+    ...service, spec: { ...service.spec, traffic: [{ revisionName: previous.revision, percent: 100 }] },
+  });
 }
 function writeJson(file, value) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -180,6 +212,7 @@ async function execute(options) {
     if (options.apply || options.manifest) throw new Error('Snapshot is a separate read-only operation.');
     const batches = batchesFor(fs.readFileSync(path.join(ROOT, 'functions/index.js'), 'utf8'));
     assertInventory(batches, live);
+    await resolveServing(live, token, batches.filter((batch) => batch.kind === 'functions').flatMap((batch) => batch.targets));
     const body = { schemaVersion: 1, project: PROJECT, region: REGION, createdAt: new Date().toISOString(), source, batches, baseline: live };
     const manifest = { ...body, manifestSha256: hash(body) };
     const file = path.resolve(options.snapshot);
@@ -199,12 +232,21 @@ async function execute(options) {
     : { manifestSha256: manifest.manifestSha256, batches: {} };
   if (journal.manifestSha256 !== manifest.manifestSha256) throw new Error('Journal belongs to a different rollout.');
   const entry = journal.batches[batch.id];
+  if (!options.rollback && !['rolling-back', 'rollback-pending-verification'].includes(entry?.status)) {
+    await resolveServing(live, token, manifest.batches.slice(0, manifest.batches.indexOf(batch) + 1)
+      .filter((item) => item.kind === 'functions').flatMap((item) => item.targets));
+  }
   if (!options.apply && !options.verify) return { mode: 'dry-run', batch, operation: options.rollback ? 'rollback' : options.accept ? 'accept' : 'enforce', current: batchState(batch, live), priorStatus: entry?.status || 'not-started' };
   const lock = `${journalFile}.lock`;
   const descriptor = fs.openSync(lock, 'wx');
   fs.closeSync(descriptor);
   try {
     if (options.accept) {
+      requirePrevious(manifest, journal, batch);
+      for (const previous of manifest.batches.slice(0, manifest.batches.indexOf(batch))) {
+        if (hash(batchState(previous, live)) !== hash(journal.batches[previous.id].postState)) throw new Error(`Previously accepted batch changed: ${previous.id}.`);
+        await assertServing(previous, live, token);
+      }
       const evidence = JSON.parse(fs.readFileSync(path.resolve(options.evidence || ''), 'utf8'));
       assertEvidence(batch, evidence, entry);
       if (hash(batchState(batch, live)) !== hash(entry.postState)) throw new Error('Deployment changed after the smoke evidence.');
@@ -235,22 +277,37 @@ async function execute(options) {
       return { mode: 'verified', batch: batch.id, postStateSha256: hash(entry.postState), appliedAt: entry.appliedAt };
     }
     if (options.rollback) {
-      if (!entry || !['deploying', 'applied', 'accepted'].includes(entry.status)) throw new Error('No applied batch to roll back.');
+      if (!entry || !['deploying', 'applied', 'accepted', 'rolling-back', 'rollback-pending-verification'].includes(entry.status)) throw new Error('No applied batch to roll back.');
       // Restore the exact previous Cloud Run revision, including code and env.
       // Keep evidence and the new revision for diagnosis; never delete revisions.
-      entry.status = 'rolling-back'; writeJson(journalFile, journal);
+      entry.status = 'rolling-back'; entry.rollbackTargets ||= {}; writeJson(journalFile, journal);
       if (batch.kind === 'functions') {
         for (const previous of entry.before) {
           const url = `https://run.googleapis.com/v2/${previous.service}`;
           const service = await api(url, token);
-          await api(`${url}?updateMask=traffic`, token, 'PATCH', { name: previous.service, etag: service.etag,
-            traffic: [{ type: 'TRAFFIC_TARGET_ALLOCATION_TYPE_REVISION', revision: previous.revision, percent: 100 }] });
+          if (trafficServesRevision(service, previous.revision)) {
+            entry.rollbackTargets[previous.name] = { status: 'verified' };
+            writeJson(journalFile, journal); continue;
+          }
+          if (service.reconciling) throw new Error(`Rollback still reconciling ${previous.name}; inspect/read back before retry.`);
+          entry.rollbackTargets[previous.name] = { status: 'requesting', observedEtag: service.etag };
+          writeJson(journalFile, journal);
+          const restored = await restoreTraffic(previous, token);
+          entry.rollbackTargets[previous.name] = { status: 'requested', resourceVersion: restored.metadata?.resourceVersion || null };
+          writeJson(journalFile, journal);
         }
       } else {
         for (const previous of entry.before) {
           const url = `https://firebaseappcheck.googleapis.com/v1beta/${previous.name}`;
           const current = await api(url, token);
+          if (current.enforcementMode === previous.enforcementMode) {
+            entry.rollbackTargets[previous.name] = { status: 'verified' };
+            writeJson(journalFile, journal); continue;
+          }
+          entry.rollbackTargets[previous.name] = { status: 'requesting', observedEtag: current.etag };
+          writeJson(journalFile, journal);
           await api(`${url}?updateMask=enforcementMode`, token, 'PATCH', { ...current, enforcementMode: previous.enforcementMode });
+          entry.rollbackTargets[previous.name] = { status: 'requested' }; writeJson(journalFile, journal);
         }
       }
       entry.status = 'rollback-pending-verification'; writeJson(journalFile, journal);
@@ -259,6 +316,7 @@ async function execute(options) {
     requirePrevious(manifest, journal, batch);
     for (const previous of manifest.batches.slice(0, manifest.batches.indexOf(batch))) {
       if (hash(batchState(previous, live)) !== hash(journal.batches[previous.id].postState)) throw new Error(`Previously accepted batch changed: ${previous.id}.`);
+      await assertServing(previous, live, token);
     }
     if (entry) throw new Error(`Batch already recorded as ${entry.status}; verify/accept/rollback instead of redeploying.`);
     const before = batchState(batch, live);
@@ -289,6 +347,7 @@ async function execute(options) {
         'PATCH', { ...previous, enforcementMode: 'ENFORCED' });
     }
     const post = safeInventory(await inventory(token));
+    if (batch.kind === 'functions') await resolveServing(post, token, batch.targets);
     if (!verifyEnabled(batch, post, manifest.source.sha256)) throw new Error('Read-back did not confirm enforcement/source. Use --verify after checking provider state.');
     await assertServing(batch, post, token);
     const applied = journal.batches[batch.id];
@@ -303,3 +362,6 @@ if (require.main === module) execute(parseArgs(process.argv.slice(2))).then((res
 module.exports = { batchesFor, setEnforcementEnv, safeInventory, assertInventory, batchState, verifyEnabled,
   assertEvidence, requirePrevious, parseArgs, validateManifest, hash, CONFIRM, execute };
 module.exports.trafficServesRevision = trafficServesRevision;
+module.exports.assertServing = assertServing;
+module.exports.resolveServing = resolveServing;
+module.exports.restoreTraffic = restoreTraffic;

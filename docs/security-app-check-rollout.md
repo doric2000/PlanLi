@@ -94,6 +94,12 @@ preserving their code and environment; revisions are not deleted. Service
 rollback restores the pre-batch enforcement mode. Read-back and an independent
 client recovery test are required. Cloud Functions metadata may still describe
 the newer revision after traffic rollback; actual traffic is authoritative.
+The runner resolves the serving revision when recording a fresh baseline. It
+uses Cloud Run v1 with the current `resourceVersion` and unchanged revision
+template for traffic restoration; the v2 traffic PATCH returned a 409 in
+preflight. Per-target journal entries let an interrupted rollback resume after
+read-back, without repeating already completed requests. `--verify` also works
+after interruption. Reconciling services must settle before retrying rollback.
 Do not redeploy from the still-enabled local environment until the cause is fixed
 and a fresh rollout is reviewed. Refresh alert scope against actual traffic after
 rollback, and keep the journal for diagnosis.
