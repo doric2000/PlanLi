@@ -168,9 +168,9 @@ export const MAIN_TOUR_STEPS = Object.freeze([
 export const CREATOR_GUIDE_STEPS = Object.freeze({
   [NOYA_TOUR_IDS.recommendation]: [
     {
-      targetId: NOYA_CREATOR_TARGETS.recommendationPhotos,
+      targetId: NOYA_CREATOR_TARGETS.recommendationLocation,
       title: 'הכול בעמוד אחד',
-      message: 'אפשר להתחיל מתמונות, ממיקום או מהתיאור. הטיוטה נשמרת ברקע, ובפרסום נציג רק מה עוד חסר.',
+      message: 'מתחילים בבחירת המקום, ממשיכים בפרטים ובסוף מוסיפים תמונות. הטיוטה נשמרת ברקע, ובפרסום נציג רק מה עוד חסר.',
     },
   ],
   [NOYA_TOUR_IDS.route]: [
