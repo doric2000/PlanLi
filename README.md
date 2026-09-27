@@ -25,7 +25,7 @@ The existing Text Search quota remains zero. See
 
 ## Current environment status
 
-### Security stage 3 (2026-09-27, 71 callables enforced; expansion stopped on upload smoke)
+### Security stage 3 (2026-09-27, 71 callables enforced; upload recovery verified)
 
 Stage 3 is in progress on `fix/security-stage3-app-check`, based on
 `02fdc659f33d28cc406bcfd2fb73995744491a04`. The four-function canary, seven
@@ -41,7 +41,35 @@ rejection. Native requests and upload events succeeded, the image was prepared,
 then the worker returned `OPERATION_DRAFT_CONFLICT`. The canonical saved route
 draft exposes day/stop `id`, while its media-attachment helper compared only
 `draftId`. Read-only inspection confirmed the media slot matches the canonical
-IDs. A separate focused fix and live upload recheck are required before continuing.
+IDs. The focused fix below is deployed and the owner confirmed successful iPhone
+route-photo update. Read-only recovery verification at `2026-09-27T16:05:15.807Z`
+found the new operation successful, the route active and the uploaded asset
+attached to the published revision. Ten worker requests on the fixed revision
+returned 204 with no worker errors. Expansion may resume; background-upload
+confirmation and Android/ Web upload evidence remain separate Storage gates.
+The fix is isolated on `fix/route-background-media-identity`, commit
+`4d906c00e63b8e67bbb7416117d7ca624725f934`: attachment now compares canonical
+day/stop IDs while retaining stale-slot rejection. All 39 focused background
+operation and route-draft tests passed under Node 22.23.1; the regression failed
+before the fix. After explicit owner approval, only
+`onBackgroundOperationWritten` was deployed from clean source commit
+`3777a61ab3170fd937418697f64f7cbcb68ecc31`, which adds documentation only to the
+reviewed fix. The deployment completed at `2026-09-27T15:59:08.923800656Z`
+(18:59 Israel). Independent read-back at `2026-09-27T15:59:35.364Z` confirmed
+ACTIVE / Node 22 and revision `onbackgroundoperationwritten-00003-qur` serving
+100% of traffic. Trigger, service account, limits and secret references match
+the baseline. The deployed source archive's `backgroundOperationService.js`
+SHA-256 matches local source exactly:
+`c0fa1b2b2b0de9621a93effb43228ca9a55bfa9be3e7e426f0a3a1f9ba65051e`.
+The previous revision `onbackgroundoperationwritten-00002-piw` and configuration
+are retained in the ignored rollback receipt captured at `2026-09-27T15:56:19.293Z`.
+The first post-update log query returned no entries; it does not prove an upload
+completed; the subsequent operation/data verification above establishes recovery.
+No other function, service enforcement, client binary or OTA changed in this
+deployment. The final read-only review
+of `4d906c0` against `670d292` found no actionable regressions and reused the
+39-pass receipt without repeating tests. The fix and release record are local;
+no push, PR or merge has been performed for this branch.
 Storage, Firestore and Authentication enforcement remain off. Stage 3 is not closed.
 Reviewed source checkpoint: `d7a860090441631149e653e0af33020654458428`, source
 SHA-256 `5feea6f8cdc34669b22138da6643734f668a5c3491a64fa59dd8fb3f46772d33`.
