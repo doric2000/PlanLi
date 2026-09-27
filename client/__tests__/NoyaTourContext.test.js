@@ -144,7 +144,7 @@ function CreatorHarness({ stage = 0, suspended = false }) {
     return () => setTourSuspended('test-media', false);
   }, [setTourSuspended, suspended]);
   const targetId = stage === 0
-    ? NOYA_CREATOR_TARGETS.recommendationPhotos
+    ? NOYA_CREATOR_TARGETS.recommendationLocation
     : stage === 1
       ? NOYA_CREATOR_TARGETS.recommendationLocation
       : NOYA_CREATOR_TARGETS.recommendationTaxonomy;
@@ -188,7 +188,7 @@ function CreatorMediaHarness() {
   }, [mediaOpen, setTourSuspended]);
   return (
     <>
-      <DirectTourTarget targetId={NOYA_CREATOR_TARGETS.recommendationPhotos}>
+      <DirectTourTarget targetId={NOYA_CREATOR_TARGETS.recommendationLocation}>
         <Text>תמונות</Text>
       </DirectTourTarget>
       {mediaOpen ? (
@@ -214,7 +214,7 @@ describe('NoyaTourProvider', () => {
     const guide = CREATOR_GUIDE_STEPS[NOYA_TOUR_IDS.recommendation];
     expect(guide).toHaveLength(1);
     expect(guide[0]).toEqual(expect.objectContaining({
-      targetId: NOYA_CREATOR_TARGETS.recommendationPhotos,
+      targetId: NOYA_CREATOR_TARGETS.recommendationLocation,
       title: 'הכול בעמוד אחד',
     }));
     expect(guide[0].message).toContain('הטיוטה נשמרת ברקע');

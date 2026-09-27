@@ -361,7 +361,7 @@ describe('AddRecommendationScreen Integration Test', () => {
     expect(screen.getByTestId('recommendation-composer-scroll').props.scrollEnabled).toBe(true);
   });
 
-  it('shows the whole composer while final publish points to the first missing section', async () => {
+  it('orders the composer from location to photos and validates in that order', async () => {
     const navigationMock = {
       goBack: jest.fn(), setOptions: jest.fn(), navigate: jest.fn(), dispatch: jest.fn(),
       addListener: jest.fn(() => jest.fn()),
@@ -377,16 +377,35 @@ describe('AddRecommendationScreen Integration Test', () => {
     }));
     expect(screen.getByTestId('recommendation-category-food')).toBeTruthy();
     expect(screen.getByTestId('recommendation-title-input')).toBeTruthy();
-    fireEvent.press(screen.getByTestId('recommendation-next'));
-    expect(screen.getByText('כדאי לבחור לפחות תמונה אחת כדי להמשיך.')).toBeTruthy();
+    const collectTestIDs = (node) => {
+      if (!node || typeof node !== 'object') return [];
+      return [
+        node.props?.testID,
+        ...(Array.isArray(node.children) ? node.children.flatMap(collectTestIDs) : []),
+      ].filter(Boolean);
+    };
+    expect(collectTestIDs(screen.toJSON())
+      .filter((testID) => testID.startsWith('recommendation-section-')))
+      .toEqual([
+        'recommendation-section-location',
+        'recommendation-section-story',
+        'recommendation-section-taxonomy',
+        'recommendation-section-photos',
+      ]);
 
-    fireEvent.press(screen.getByTestId('recommendation-image-picker'));
-    await waitFor(() => expect(mockPersistRecommendationDraftMedia).toHaveBeenCalled());
     fireEvent.press(screen.getByTestId('recommendation-next'));
     expect(screen.getByText('כדאי לבחור תוצאה מדויקת מהחיפוש.')).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId('google-result-select'));
+    await waitFor(() => expect(screen.getByTestId('recommendation-confirmed-location')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('recommendation-title-input').props.value).toBe('Pizza Hut'));
+    fireEvent.changeText(screen.getByTestId('recommendation-description-input'), 'תיאור קצר וברור של המקום.');
+    fireEvent.press(screen.getByTestId('recommendation-budget-2'));
+    fireEvent.press(screen.getByTestId('recommendation-next'));
+    expect(screen.getByText('כדאי לבחור לפחות תמונה אחת כדי להמשיך.')).toBeTruthy();
   }, 15000);
 
-  it('restores drafts at the earliest incomplete photo-first stage', () => {
+  it('preserves the existing draft compatibility steps', () => {
     const mediaItems = [{ uri: 'file:///photo.jpg' }];
     const validLocation = {
       locationMode: 'exact',

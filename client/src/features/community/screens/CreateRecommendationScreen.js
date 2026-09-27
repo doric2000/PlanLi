@@ -1235,8 +1235,6 @@ export default function CreateRecommendationScreen({ navigation, route }) {
   ]);
 
   const firstValidationIssue = useCallback(() => {
-    const photoMessage = validateStep(1);
-    if (photoMessage) return { message: photoMessage, section: 'photos' };
     const locationMessage = validateStep(2);
     if (locationMessage) return { message: locationMessage, section: 'location' };
     if (!title.trim()) return { message: 'כדאי להוסיף שם קצר וברור.', section: 'story' };
@@ -1250,6 +1248,8 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     if (categoryId === 'events' && !eventSchedule.trim()) {
       return { message: 'באירוע כדאי לציין מתי הוא מתקיים.', section: 'optional' };
     }
+    const photoMessage = validateStep(1);
+    if (photoMessage) return { message: photoMessage, section: 'photos' };
     return null;
   }, [budget, categoryId, description, details.externalUrl, eventSchedule, title, validateStep]);
 
@@ -1832,7 +1832,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
       <NoyaTourTarget targetId={NOYA_CREATOR_TARGETS.recommendationFallback}>
       <View style={styles.header} testID="recommendation-composer-header">
         <AppText style={styles.headerTitle}>{isEdit ? 'עריכת המלצה' : 'המלצה חדשה'}</AppText>
-        <AppText style={styles.headerSubtitle}>הכול בעמוד אחד. אפשר להתחיל מכל חלק ולפרסם כשמוכנים.</AppText>
+        <AppText style={styles.headerSubtitle}>הכול בעמוד אחד. מתחילים במקום ובפרטים, ובסוף מוסיפים תמונות.</AppText>
         <View style={styles.saveStatusRow} accessibilityLiveRegion="polite">
           {['saving', 'discarding'].includes(saveStatus) ? <ActivityIndicator size="small" color={colors.white} /> : null}
           <AppText style={styles.saveStatusText}>{saveStatus === 'discarding' ? 'מוותרים על השינויים…' : saveStatus === 'saving' ? 'שומר…' : saveStatus === 'error' ? 'לא הצלחנו לשמור' : draftId ? 'נשמר' : ''}</AppText>
@@ -1861,36 +1861,36 @@ export default function CreateRecommendationScreen({ navigation, route }) {
           keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
           testID="recommendation-composer-scroll"
         >
-          {missingLocalMediaCount > 0 ? (
-            <View style={styles.missingMediaNotice} testID="recommendation-missing-local-media">
-              <AppText style={styles.missingMediaText}>חלק מהתמונות נשמרו רק במכשיר שבו נבחרו ולא זמינות כאן. אפשר לבחור אותן שוב לפני הפרסום.</AppText>
-            </View>
-          ) : null}
-          <View style={styles.sectionCard} onLayout={(event) => { sectionOffsetsRef.current.photos = event.nativeEvent.layout.y; }}>
-            <View style={styles.sectionHeader}>
-              <AppText style={styles.sectionTitle}>תמונות</AppText>
-              <AppText style={styles.sectionRequired}>חובה</AppText>
-            </View>
-            {renderPhotoStep()}
-          </View>
-          <View style={styles.sectionCard} onLayout={(event) => { sectionOffsetsRef.current.location = event.nativeEvent.layout.y; }}>
+          <View
+            style={styles.sectionCard}
+            onLayout={(event) => { sectionOffsetsRef.current.location = event.nativeEvent.layout.y; }}
+            testID="recommendation-section-location"
+          >
             <View style={styles.sectionHeader}>
               <AppText style={styles.sectionTitle}>איפה המקום?</AppText>
               <AppText style={styles.sectionRequired}>חובה</AppText>
             </View>
             {renderLocationStep()}
           </View>
-          <View style={styles.sectionCard} onLayout={(event) => { sectionOffsetsRef.current.story = event.nativeEvent.layout.y; }}>
+          <View
+            style={styles.sectionCard}
+            onLayout={(event) => { sectionOffsetsRef.current.story = event.nativeEvent.layout.y; }}
+            testID="recommendation-section-story"
+          >
             <View style={styles.sectionHeader}>
               <AppText style={styles.sectionTitle}>שם ותיאור</AppText>
               <AppText style={styles.sectionRequired}>חובה</AppText>
             </View>
             {renderDetailsStep()}
           </View>
-          <View style={styles.sectionCard} onLayout={(event) => {
-            sectionOffsetsRef.current.taxonomy = event.nativeEvent.layout.y;
-            sectionOffsetsRef.current.optional = event.nativeEvent.layout.y;
-          }}>
+          <View
+            style={styles.sectionCard}
+            onLayout={(event) => {
+              sectionOffsetsRef.current.taxonomy = event.nativeEvent.layout.y;
+              sectionOffsetsRef.current.optional = event.nativeEvent.layout.y;
+            }}
+            testID="recommendation-section-taxonomy"
+          >
             <View style={styles.sectionHeader}>
               <AppText style={styles.sectionTitle}>קטגוריה ומחיר</AppText>
               <AppText style={styles.sectionRequired}>חובה</AppText>
@@ -1898,6 +1898,22 @@ export default function CreateRecommendationScreen({ navigation, route }) {
             {renderTaxonomyStep()}
             <View style={styles.sectionDivider} />
             {renderReviewStep()}
+          </View>
+          {missingLocalMediaCount > 0 ? (
+            <View style={styles.missingMediaNotice} testID="recommendation-missing-local-media">
+              <AppText style={styles.missingMediaText}>חלק מהתמונות נשמרו רק במכשיר שבו נבחרו ולא זמינות כאן. אפשר לבחור אותן שוב לפני הפרסום.</AppText>
+            </View>
+          ) : null}
+          <View
+            style={styles.sectionCard}
+            onLayout={(event) => { sectionOffsetsRef.current.photos = event.nativeEvent.layout.y; }}
+            testID="recommendation-section-photos"
+          >
+            <View style={styles.sectionHeader}>
+              <AppText style={styles.sectionTitle}>תמונות</AppText>
+              <AppText style={styles.sectionRequired}>חובה</AppText>
+            </View>
+            {renderPhotoStep()}
           </View>
           {saveError ? (
             <AppText style={styles.fieldError} accessibilityRole="alert" testID="recommendation-media-save-error">
