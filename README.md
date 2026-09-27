@@ -25,6 +25,53 @@ The existing Text Search quota remains zero. See
 
 ## Current environment status
 
+### City guide OTA (2026-09-27, published)
+
+PR [#448](https://github.com/doric2000/PlanLi/pull/448) merged as
+`e4337bd23d9486a2c4037a34159c8a4a79579762` after all applicable GitHub checks
+passed. City pages now show quick facts and useful information inline, followed
+by a recommendation map with one expand control, selection and city-scoped
+search. Recommendations and routes retain separate filters. The release review's
+map/auth presentation, blocked-author filtering, deletion-cache and camera
+findings were corrected before publication.
+
+Production OTA group **`7811a506-b37d-422a-b25c-04fddde45686`** was published at
+`2026-09-27T08:09:18.663Z` on channel/environment `production`, runtime **1.4.0**.
+It promotes the exact candidate `852e4612-68d9-45e0-aaaf-ee446e6631e4`, exported
+once for both mobile platforms. The public endpoint independently served Android
+update `01a0e1e9-4e47-7e6e-aa1f-21a1e751ad64` at `08:09:19.937Z` and iOS update
+`01a0e1e9-4e47-7ce2-91da-987c1d02d2f6` at `08:09:20.168Z`, with the inspected
+candidate asset hashes. Bundle sizes and SHA-256 hashes appear in the release
+entries below.
+
+Android remains **1.1.0 (12)**, EAS build
+`597752db-0fd4-4861-a8d7-a530ccf85ca7`, targeting the existing Google Play
+Production release. iOS remains **1.1.3 (34)**, EAS build
+`1ff27c70-6a66-4daf-b58d-bb8a3d092091`, the owner-confirmed installed TestFlight
+binary. Both compatibility checks matched the existing submission-metadata review
+in `docs/eas-native-compatibility.md`; no new native exception was introduced.
+No native build, store submission or backend deployment occurred. Store review
+status was not rechecked by this OTA and is not changed by it.
+
+Validation: **325 tests / 36 affected client suites**, focused Web rendering and
+map navigation with mocked data, candidate inspection and public delivery checks
+passed. Physical-device application of this OTA and live city/map acceptance
+remain **unverified** on both platforms; Android emulator execution remains waived.
+
+Rollback for both platforms: **`45fde4ae-12bf-40e6-bc3a-eb9efe3251d1`**.
+The code checkpoint before this design is `3076b0f36ab9588399442bb275a569bbabad7cfb`;
+see [city guide implementation](docs/city-guide-redesign.md). Journal and timings:
+`.codex_tmp/releases/ota-dc32f3a6-58a8-4845-8295-1b63597a586e{,-metrics}.json`.
+
+Release timing note: one dependency preparation took 250s, native checks 133s/33s,
+the single candidate export/publication 740s and exact-asset promotion 43s. The
+pinned CLI also exported Web during `--platform all`; only the two mobile bundles
+were uploaded. An earlier standalone readiness pass was repeated after checkout
+changed file bytes through line-ending normalization. Use the unified runner as
+the single release-readiness entry point for this workflow; do not add another
+pre-export or independent readiness run. These measurements describe this release,
+not a reason to skip compatibility or provider-result verification.
+
 ### Notification timestamp and held-review rollout (2026-09-27, deployed)
 
 Under explicit production authorization, the notification backend from merged PR
@@ -6208,3 +6255,29 @@ part of this follow-up.
 - Validation: 99 affected client suites, PR validation/security checks, native compatibility, immutable candidate inspection and production delivery verification passed.
 - Device application and post-update security smoke tests: pending.
 - Rollback: republish verified production group `5a6a57cf-79d3-41ca-b609-354a57cfb4af`; never change the runtime URL or channel in-app.
+
+## Android production OTA release
+
+- Source commit: `e4337bd23d9486a2c4037a34159c8a4a79579762`.
+- EAS Update group: `7811a506-b37d-422a-b25c-04fddde45686`; channel `production`; runtime `1.4.0`.
+- EAS environment: `production`; published at `2026-09-27T08:09:18.663Z`.
+- Immutable Android launch bundle: update `01a0e1e9-4e47-7e6e-aa1f-21a1e751ad64`; 10981240 bytes; SHA-256 `905B4777E8ED4D18200BCE70A964D04DD98896357F692A70B7E781311E99040E`.
+- Message: Redesign city guide with inline facts and recommendation map
+- Validation: 325 affected client tests, PR checks, native compatibility, immutable candidate inspection and public delivery checks passed.
+- Verified candidate: `852e4612-68d9-45e0-aaaf-ee446e6631e4`; promoted without a second export.
+- Installed-target versions are Android `1.1.0 (12)` and iOS `1.1.3 (34)`, runtime `1.4.0`; no build or store submission.
+- Device application and post-update security smoke tests: pending.
+- Rollback: republish verified production group `45fde4ae-12bf-40e6-bc3a-eb9efe3251d1`; never change the runtime URL or channel in-app.
+
+## iOS production OTA release
+
+- Source commit: `e4337bd23d9486a2c4037a34159c8a4a79579762`.
+- EAS Update group: `7811a506-b37d-422a-b25c-04fddde45686`; channel `production`; runtime `1.4.0`.
+- EAS environment: `production`; published at `2026-09-27T08:09:18.663Z`.
+- Immutable iOS launch bundle: update `01a0e1e9-4e47-7ce2-91da-987c1d02d2f6`; 10971220 bytes; SHA-256 `5750BB19CBDD65D7A2CB654F2EB5FB11E0C64A1C1072DC2952946A0D2529DD83`.
+- Message: Redesign city guide with inline facts and recommendation map
+- Validation: 325 affected client tests, PR checks, native compatibility, immutable candidate inspection and public delivery checks passed.
+- Verified candidate: `852e4612-68d9-45e0-aaaf-ee446e6631e4`; promoted without a second export.
+- Installed-target versions are Android `1.1.0 (12)` and iOS `1.1.3 (34)`, runtime `1.4.0`; no build or store submission.
+- Device application and post-update security smoke tests: pending.
+- Rollback: republish verified production group `45fde4ae-12bf-40e6-bc3a-eb9efe3251d1`; never change the runtime URL or channel in-app.
