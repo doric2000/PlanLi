@@ -63,3 +63,11 @@ test('source rows remain compact and omit empty source entries', () => {
     },
   ]);
 });
+
+test('missing values never turn into a zero temperature, exchange rate or airport distance', () => {
+  const facts = buildQuickFacts({ weather: { temperatureC: null }, currency: { code: 'EUR', ilsRate: null }, closestAirport: { name: 'Airport', distanceKm: null } });
+  expect(facts.find((fact) => fact.id === 'weather')).toBeUndefined();
+  expect(facts.find((fact) => fact.id === 'currency').detail).toBe('');
+  expect(facts.find((fact) => fact.id === 'airport').detail).toBe('');
+  expect(buildQuickFacts({ weather: { temperatureC: 0 } })[0].value).toBe('0°');
+});

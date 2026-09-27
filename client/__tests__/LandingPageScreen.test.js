@@ -5,6 +5,20 @@ import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import LandingPageScreen from '../src/features/destination/screens/LandingPageScreen';
 
 const mockUseDestinationData = jest.fn();
+const mockUseCityDiscovery = jest.fn();
+jest.mock('../src/features/destination/hooks/useCityDiscovery', () => ({ useCityDiscovery: (...args) => mockUseCityDiscovery(...args) }));
+jest.mock('../src/features/destination/components/CityMapSection', () => {
+  const { Text, View } = require('react-native');
+  return (props) => <View testID="city-map-section" {...props}><Text>העיר על המפה</Text></View>;
+});
+jest.mock('../src/features/destination/components/CityFilterModal', () => {
+  const { View } = require('react-native'); return (props) => <View testID="city-filter" {...props} />;
+});
+jest.mock('../src/features/roadtrip/components/RouteCard', () => {
+  const { Text, Pressable } = require('react-native'); return { RouteCard: ({ item, onPress }) => <Pressable onPress={onPress}><Text>{item.title}</Text></Pressable> };
+});
+jest.mock('../src/components/CommentsModal', () => ({ CommentsModal: () => null }));
+jest.mock('expo-linear-gradient', () => ({ LinearGradient: require('react-native').View }));
 
 jest.mock('../src/features/destination/hooks/useDestinationData', () => ({
   useDestinationData: (...args) => mockUseDestinationData(...args),
@@ -91,6 +105,7 @@ const recommendations = [
 ];
 
 beforeEach(() => {
+  mockUseCityDiscovery.mockImplementation(({ kind }) => ({ items: kind === 'routes' ? [{ id: 'route1', title: 'יום בעיר' }] : recommendations, loading: false, error: null, retry: jest.fn(), removeItem: jest.fn() }));
   mockUseDestinationData.mockReturnValue({
     overview,
     recommendations,
@@ -99,7 +114,7 @@ beforeEach(() => {
   });
 });
 
-test('renders the approved neutral destination hierarchy without unsupported placeholders', () => {
+test('renders the open facts, wide airport row and city map without unsupported data', () => {
   const screen = render(
     <LandingPageScreen
       navigation={{ goBack: jest.fn() }}
@@ -109,7 +124,8 @@ test('renders the approved neutral destination hierarchy without unsupported pla
   expect(screen.getByText('מיקונוס')).toBeTruthy();
   expect(screen.getByText('במבט מהיר')).toBeTruthy();
   expect(screen.getByText('מידע שימושי')).toBeTruthy();
-  expect(screen.getByText('טיפים מהקהילה')).toBeTruthy();
+  expect(screen.getByText('מהמטיילים, בשבילכם')).toBeTruthy();
+  expect(screen.getByText('העיר על המפה')).toBeTruthy();
   expect(screen.queryByText('לא זמין')).toBeNull();
   expect(screen.queryByText('מלון מומלץ')).toBeNull();
   expect(screen.queryByText('נהג מומלץ')).toBeNull();
@@ -117,29 +133,38 @@ test('renders the approved neutral destination hierarchy without unsupported pla
   expect(screen.getByTestId('report-destination').props.target).toEqual({
     type: 'destination', id: 'mykonos', cityId: 'mykonos', countryId: 'gr',
   });
-  const weatherFact = StyleSheet.flatten(screen.getByTestId('quick-fact-weather').props.style);
-  const airportFact = StyleSheet.flatten(screen.getByTestId('quick-fact-airport').props.style);
-  expect(weatherFact.backgroundColor).toBeUndefined();
-  expect(weatherFact.borderRadius).toBeUndefined();
-  expect(weatherFact.shadowOpacity).toBeUndefined();
-  expect(weatherFact.borderLeftWidth).toBeGreaterThan(0);
-  expect(airportFact.borderLeftWidth).toBeGreaterThan(0);
+  expect(screen.getByText('24°')).toBeTruthy();
+  expect(screen.getByText('Mykonos Airport')).toBeTruthy();
+  expect(screen.getByText('יוונית')).toBeTruthy();
+
 });
 
-test('community filters work in place and source details are progressively disclosed', () => {
-  const screen = render(
-    <LandingPageScreen
-      navigation={{ goBack: jest.fn() }}
-      route={{ params: { countryId: 'gr', cityId: 'mykonos' } }}
-    />
-  );
-  fireEvent.press(screen.getByTestId('destination-filter-transportation'));
-  expect(screen.getByText('המלצת אוטובוס')).toBeTruthy();
-  expect(screen.queryByText('מסעדה מקומית')).toBeNull();
+test('keeps independent city search and filter state across tabs and opens canonical routes', () => {
+  const navigate = jest.fn();
+  const screen = render(<LandingPageScreen navigation={{ goBack: jest.fn(), navigate }} route={{ params: { countryId: 'gr', cityId: 'mykonos' } }} />);
+  fireEvent.changeText(screen.getByLabelText('חיפוש המלצה בעיר'), 'דגים');
+  fireEvent.press(screen.getByRole('tab', { name: 'מסלולים' }));
+  expect(screen.getByLabelText('חיפוש מסלול בעיר').props.value).toBe('');
+  fireEvent.changeText(screen.getByLabelText('חיפוש מסלול בעיר'), 'יום');
+  fireEvent.press(screen.getByText('יום בעיר'));
+  expect(navigate).toHaveBeenCalledWith('RouteDetail', { routeId: 'route1' });
+  fireEvent.press(screen.getByRole('tab', { name: 'המלצות' }));
+  expect(screen.getByLabelText('חיפוש המלצה בעיר').props.value).toBe('דגים');
+  fireEvent.press(screen.getByLabelText('סינון המלצות בעיר'));
+  const filter = screen.getByTestId('city-filter');
+  expect(filter.props.visible).toBe(true);
+  fireEvent(filter, 'apply', { query: 'דגים', needIds: ['kosher', 'wheelchair_accessible'] });
+  expect(mockUseCityDiscovery).toHaveBeenCalledWith(expect.objectContaining({ cityId: 'mykonos', countryId: 'gr', filters: expect.objectContaining({ needIds: ['kosher', 'wheelchair_accessible'] }) }));
+});
 
-  expect(screen.queryByText('OpenWeather')).toBeNull();
-  fireEvent.press(screen.getByLabelText('מקורות ועדכון'));
-  expect(screen.getByText(/OpenWeather/)).toBeTruthy();
+test('keeps destination facts available when the community request fails', () => {
+  const retry = jest.fn();
+  mockUseCityDiscovery.mockReturnValue({ items: [], loading: false, error: 'offline', retry });
+  const screen = render(<LandingPageScreen navigation={{ goBack: jest.fn() }} route={{ params: { countryId: 'gr', cityId: 'mykonos' } }} />);
+  expect(screen.getByText('מידע שימושי')).toBeTruthy();
+  expect(screen.getByText('Mykonos Airport')).toBeTruthy();
+  fireEvent.press(screen.getByText('ניסיון נוסף'));
+  expect(retry).toHaveBeenCalledTimes(1);
 });
 
 test('handles an unavailable external source without an unhandled rejection', async () => {

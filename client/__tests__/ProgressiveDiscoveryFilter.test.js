@@ -30,13 +30,14 @@ jest.mock('../src/utils/recentDiscoveryDestinations', () => ({
   reconcileStoredRecentDiscoveryDestinations: () => Promise.resolve([]),
 }));
 
-function Harness({ surface = 'recommendations', withProfile = false }) {
+function Harness({ surface = 'recommendations', withProfile = false, showDestinations = true }) {
   const [filters, setFilters] = useState(createEmptyDiscoveryFilters);
   return (
     <DiscoveryFilterContent
       filters={filters}
       onChange={setFilters}
       surface={surface}
+      showDestinations={showDestinations}
       onUseProfile={withProfile ? () => setFilters((current) => ({
         ...current,
         audienceIds: ['couple'],
@@ -47,6 +48,15 @@ function Harness({ surface = 'recommendations', withProfile = false }) {
 }
 
 describe('progressive discovery filter UI', () => {
+  it('keeps city scope fixed while retaining kosher and accessibility filters', () => {
+    const screen = render(<Harness showDestinations={false} />);
+    expect(screen.queryByTestId('discovery-destination-search')).toBeNull();
+    expect(screen.queryByText('לאן?')).toBeNull();
+    fireEvent.press(screen.getByLabelText('כשר'));
+    fireEvent.press(screen.getByLabelText('נגישות לכיסא גלגלים'));
+    expect(screen.getByLabelText('כשר').props.accessibilityState.checked).toBe(true);
+    expect(screen.getByLabelText('נגישות לכיסא גלגלים').props.accessibilityState.checked).toBe(true);
+  });
   it('keeps punctuation-only destination input in the idle suggestion state', () => {
     const screen = render(<Harness />);
     fireEvent.changeText(screen.getByTestId('discovery-destination-search'), " !–' ");
