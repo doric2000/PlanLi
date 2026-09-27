@@ -25,14 +25,24 @@ The existing Text Search quota remains zero. See
 
 ## Current environment status
 
-### Security stage 3 (2026-09-27, first enforcement group live; acceptance pending)
+### Security stage 3 (2026-09-27, 71 callables enforced; expansion stopped on upload smoke)
 
-Stage 3 is being prepared on `fix/security-stage3-app-check`, based on
-`02fdc659f33d28cc406bcfd2fb73995744491a04`. Only the four-function canary is
-enforced at this checkpoint. The obsolete `moderateContent` endpoint was removed;
+Stage 3 is in progress on `fix/security-stage3-app-check`, based on
+`02fdc659f33d28cc406bcfd2fb73995744491a04`. The four-function canary, seven
+public callables and the remaining groups listed below are enforced at this checkpoint.
+The obsolete `moderateContent` endpoint was removed;
 no client release occurred.
 The [stage-3 runbook](docs/security-app-check-rollout.md) fixes the rollout order,
 evidence gates, notification proof and per-batch rollback procedure.
+At `2026-09-27T15:39Z`, the owner reported iPhone route-photo update failure.
+Expansion stopped before `remaining-7`; no rollback was applied because the
+diagnosis identified a separate existing worker contract defect, not an App Check
+rejection. Native requests and upload events succeeded, the image was prepared,
+then the worker returned `OPERATION_DRAFT_CONFLICT`. The canonical saved route
+draft exposes day/stop `id`, while its media-attachment helper compared only
+`draftId`. Read-only inspection confirmed the media slot matches the canonical
+IDs. A separate focused fix and live upload recheck are required before continuing.
+Storage, Firestore and Authentication enforcement remain off. Stage 3 is not closed.
 Reviewed source checkpoint: `d7a860090441631149e653e0af33020654458428`, source
 SHA-256 `5feea6f8cdc34669b22138da6643734f668a5c3491a64fa59dd8fb3f46772d33`.
 The first canary deployment stopped before mutation when Firebase CLI could not
@@ -52,15 +62,95 @@ runtime environment/source and 100% serving-traffic verification at
 | `setFavorite` | `setfavorite-00031-fup` |
 | `listAdminSavedViews` | `listadminsavedviews-00004-faf` |
 
-All four carry `PLANLI_ENFORCE_APP_CHECK=true` and the source SHA above. Other
-callables and Firestore/Storage/Authentication remain unenforced. Canary
-acceptance remains pending: native/Web smoke, negative controls, actual email
-receipt and at least 15 minutes of observation (not before 14:37:19Z).
+All four carry `PLANLI_ENFORCE_APP_CHECK=true` and the source SHA above.
+Canary acceptance passed on September 27 after the owner confirmed the requested
+iOS/Android guest, sign-in, favorite add/remove and shared-link smoke. The
+`14:53:40Z` log read correlated VALID App Check with HTTP 200 for 14 iOS, 12
+Android and one Web request on the new revisions. Android guest issuance was
+included. More than 31 minutes of observation showed no canary 5xx/errors and
+only the two deliberate missing/invalid probes. Email delivery was confirmed.
+The immutable receipt is `security-stage3/canary-evidence.json`; the journal now
+marks canary accepted. The seven public callables completed deployment and
+independent source/environment/serving-traffic verification at
+`2026-09-27T14:57:25.274Z`. Their post-state hash is
+`81ba8211fb6298c4f305a3cce6f0b8ffb2891b9d3b0a33c7ba0f30a8609d810f`.
+All seven controlled calls without App Check returned HTTP 401 after deployment.
+The owner confirmed the requested guest browsing/link smoke on both phones after
+this deployment. The `15:01:46Z` log read found VALID App Check / missing Auth
+with HTTP 200 on both native platforms and no server errors; all seven controlled
+negative traces correlated with MISSING App Check. Individual `getSharedTrip`
+positive traffic was not independently observed in that bounded window; shared
+link behavior is owner-confirmed. Public acceptance completed at `15:03:15Z`.
+`remaining-1` completed source/environment/100% traffic read-back at `15:10:34Z`.
+All ten endpoints passed paired valid-App-Check/no-Auth and missing-App-Check
+probes: the former reached `SIGN_IN_REQUIRED` with App VALID/Auth MISSING; the
+latter stopped at the SDK boundary. This verifies the changed security boundary,
+not every business operation. No user business data was mutated by these probes.
+All 20 traces correlated; the `15:12:05Z` read found no server errors.
+The current group ledger below supersedes this intermediate checkpoint.
+Both deletion callables remain pending.
+Firestore/Storage/Authentication service enforcement remains off.
+
+| Public callable | Serving revision |
+| --- | --- |
+| `getPersonalizedRecommendations` | `getpersonalizedrecommendations-00030-req` |
+| `getMapRecommendations` | `getmaprecommendations-00020-pew` |
+| `getPersonalizedRoutes` | `getpersonalizedroutes-00030-cek` |
+| `loadRouteDetails` | `loadroutedetails-00029-rus` |
+| `getDestinationOverview` | `getdestinationoverview-00025-gov` |
+| `searchDestinations` | `searchdestinations-00025-yep` |
+| `getSharedTrip` | `getsharedtrip-00002-koj` |
+
+<!-- stage3-batch-status:start -->
+Current verified serving inventory: **71/103 callables enforced**.
+
+| Group | Targets | Applied (UTC) | Gate | Post-state SHA-256 |
+| --- | --- | --- | --- | --- |
+| canary | 4 | 2026-09-27T14:22:19.314Z | accepted | `f6069068bf1d72015b87e9203360b5ac77c739bc9b0bcaad0b1ea42a5c076da3` |
+| public | 7 | 2026-09-27T14:57:25.274Z | accepted | `81ba8211fb6298c4f305a3cce6f0b8ffb2891b9d3b0a33c7ba0f30a8609d810f` |
+| remaining-1 | 10 | 2026-09-27T15:10:34.930Z | accepted | `c9caf1a03247522b532c49b732094178fcb46289c391c68b627130a012e76c26` |
+| remaining-2 | 10 | 2026-09-27T15:16:00.007Z | accepted | `9f63fe1cbf601e8291c07ad0f269aba1d25d5725ef41c9ef2af06ce095233484` |
+| remaining-3 | 10 | 2026-09-27T15:20:44.168Z | accepted | `b57c51e24f8169e9443fec62b1f7a7445e958faac25e7bdf3e2b9fe4d11dfce1` |
+| remaining-4 | 10 | 2026-09-27T15:25:26.179Z | accepted | `d31d14ac66ba114b5df29aecc41ef1092e21222a346a9309eec30647dcd5f4a5` |
+| remaining-5 | 10 | 2026-09-27T15:30:47.429Z | accepted | `6dc030e6bb8b2ca22e06fd7699cbed812ef87ac2f1c301ce61cd1b488151d44e` |
+| remaining-6 | 10 | 2026-09-27T15:36:02.873Z | accepted | `9ecf017c89b744552f1f37123d898d38fafa7edb88df6cc9d94be6b711028209` |
+
+Remaining-group receipts pair valid attestation/no Auth (SIGN_IN_REQUIRED) and
+missing-attestation rejection on each target, correlated against serving-revision
+logs. These receipts validate the changed boundary; final full platform smoke is
+still required. Exact per-function revisions and prior rollback state remain in
+the ignored rollout journal. No service-level enforcement or deletion-group
+acceptance is implied by these callable checkpoints.
+<!-- stage3-batch-status:end -->
+
+Additional live proof at `15:25:59Z` / `15:26:00Z`: two private empty trips were
+created successfully through the enforced callable in a dedicated disposable
+account, with VALID Auth/App Check and HTTP 200. They are reserved for the
+authorized deletion/cascade tests; their identifiers and temporary credentials
+remain only in ignored local fixtures. Cleanup has not yet been verified.
+At `15:27:49Z`, a fresh limited-use token obtained through the existing Web
+provider succeeded at `issueGuestSession` (HTTP 200), and its immediate replay
+returned HTTP 403 / `APP_CHECK_REPLAYED`; both traces were verified on the exact
+serving revision. Receipt: `additional-positive-replay-observation.json`.
+The broad `15:29:38Z` health read found no server errors after each target's
+enforcement time. It retained the already documented pre-enforcement missing-index
+error separately rather than classifying that old revision as a new regression.
+At `15:35:30Z`, live read-only controls with valid App Check preserved admin
+authorization (`admin_required`) and trip ownership (`TRIP_NOT_OWNED`), while the
+fixture owner read succeeded (HTTP 200). At `15:36:05Z`, an actually expired token
+was rejected at the SDK boundary (HTTP 401). The first `remaining-6` operator
+probe also retained that old token in its browser helper; all ten SDK logs
+explicitly reported token expiry. Those receipts were preserved. Supplying the
+refreshed token explicitly, with an expiry precheck, passed all 20 paired probes
+at `15:38:03Z`; no production code change or redeployment was needed.
+
+The App Check rejection alert is expanded after each verified group; exact
+policy read-back passed, retaining the existing email channel and other controls.
 The ignored `functions/.env.planli-f0b12` now persists the enabled flag and source
 marker. Coordinate any further backend deployment with this manifest: a new
 callable deployment from that environment enables enforcement for its target.
 The existing callable rejection policy `17246188049842534170` is now enabled
-and scoped to these four services, including replay rejections. Service-level
+and scoped to the enforced services, including replay rejections. Service-level
 policy `7465525761534131574` was created disabled for the later service rollout;
 the other three policies and email channel were retained. Initial read-back
 flagged Google's omission of the numeric zero threshold. The operator comparison
@@ -72,11 +162,12 @@ guest revision. The owner confirmed receipt of the App Check alert email.
 Web `listAdminSavedViews` returned HTTP 200 with VALID Auth/App Check on
 `listadminsavedviews-00004-faf` at `14:23:59Z`; the standard queue rendered
 successfully. At `14:28:36Z`, the bounded canary log check showed no 5xx/errors.
-Native smoke and the full observation interval remain pending. Operator-only
+The subsequent native smoke and observation results above supersede this early
+checkpoint. Operator-only
 read-back fixes are committed as `a742734`; the Functions/Firebase deployment
 tree is identical to `d7a8600`, and no canary redeployment was performed.
-The next read-only observation through `14:34:23Z` found no additional canary
-requests or errors; this does not substitute for the pending native smoke.
+The early read-only observation through `14:34:23Z` found no additional canary
+requests or errors; the later accepted native smoke is recorded above.
 The separately authorized `moderateContent` endpoint retirement completed during
 the observation window. A fresh seven-day check found no POST traffic, and the
 tracked callable/client surface had no consumer. Firebase CLI reported deletion
@@ -103,8 +194,9 @@ remains in its own branch/PR #453. Neither media hardening nor marker changes ar
 included in this stage-3 source.
 
 Stage 2 remains closed for progression with owner-deferred validation, not fully
-verified: deep secure-storage migration/restore and remaining Android continuity,
-sign-out/link-return evidence are still pending. iPhone 16 / iOS app 1.1.3 (34)
+verified: deep secure-storage migration/restore and remaining Android continuity
+are still pending. Sign-out/link-return smoke on both devices was owner-confirmed
+during stage-3 canary acceptance. iPhone 16 / iOS app 1.1.3 (34)
 was owner-confirmed. Android installation from Google Play was owner-confirmed;
 the existing AAB is 1.1.0 (12), but the installed Android version/model and exact
 device OTA IDs still require confirmation. Both artifacts use runtime 1.4.0.
