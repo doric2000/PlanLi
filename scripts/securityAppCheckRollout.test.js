@@ -2,9 +2,19 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const { batchesFor, setEnforcementEnv, verifyEnabled, assertEvidence, requirePrevious,
-  parseArgs, hash, CONFIRM, trafficServesRevision } = require('./securityAppCheckRollout');
+  parseArgs, hash, CONFIRM, trafficServesRevision, assertSourceCompatible } = require('./securityAppCheckRollout');
 
 const batches = batchesFor(fs.readFileSync(require.resolve('../functions/index'), 'utf8'));
+test('committed operator-only corrections preserve the pinned deployment source', () => {
+  const before = { revision: 'a', branch: 'fix/stage3', sha256: 'first' };
+  const after = { revision: 'b', branch: 'fix/stage3', sha256: 'second' };
+  assert.doesNotThrow(() => assertSourceCompatible(before, after, ['scripts/securityMonitoringPlan.js', 'README.md']));
+  for (const file of ['functions/index.js', 'functions/.env.planli-f0b12', 'firebase.json', '.firebaserc', 'package.json']) {
+    assert.throws(() => assertSourceCompatible(before, after, [file]), /deployment source changed/);
+  }
+  assert.throws(() => assertSourceCompatible(before, { ...after, revision: 'a' }, []), /changed/);
+  assert.throws(() => assertSourceCompatible(before, { ...after, branch: 'other' }, ['README.md']), /changed/);
+});
 test('all 103 callables are covered exactly once, in bounded batches; services are ordered', () => {
   const functions = batches.filter((batch) => batch.kind === 'functions');
   assert.equal(new Set(functions.flatMap((batch) => batch.targets)).size, 103);

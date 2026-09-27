@@ -85,6 +85,16 @@ test('service rejection metric becomes enabled only with an in-scope enforced se
   assert.equal(plan.policies.find((p) => p.userLabels.planli_control === 'app-check-rejected').enabled, false);
 });
 
+test('provider omission of zero threshold is equivalent but nonzero drift remains blocked', () => {
+  const plan = appCheckRolloutPlan(loadPlan(), [], []);
+  const channel = { ...plan.channel, name: 'channels/test' };
+  const policies = plan.policies.map((policy) => structuredClone(policyBody(policy, channel.name)));
+  delete policies.at(-1).conditions[0].conditionThreshold.thresholdValue;
+  assert(buildActions(plan, [channel], policies).actions.every((action) => action.action.startsWith('reuse-')));
+  policies.at(-1).conditions[0].conditionThreshold.thresholdValue = 1;
+  assert.throws(() => buildActions(plan, [channel], policies), /differs/);
+});
+
 test('only reviewed App Check fields may update; unrelated drift remains blocked', () => {
   const base = loadPlan();
   const channel = { ...base.channel, name: 'projects/planli-f0b12/notificationChannels/test' };

@@ -80,6 +80,13 @@ also covers email, Google, Apple, admin TOTP and password reset.
 
 ## Stop and rollback
 
+Committed corrections restricted to the two root operator scripts, their tests,
+this runbook and README may continue an existing manifest. The runner checks
+the exact Git path delta and records `operatorRevision`; any change to Functions,
+Firebase deployment configuration or other paths requires a new rollout. The
+original deployment source and runtime marker stay pinned, so an operator-only
+read-back correction does not redeploy already verified Functions.
+
 Stop on a reproducible legitimate-client rejection, new unexplained backend
 errors, or failed alert delivery. Do not disable Auth, Rules, ownership or the
 existing guest fresh-token check. Use the same manifest and exact affected batch:

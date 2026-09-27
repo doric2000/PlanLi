@@ -38,6 +38,19 @@ function sourceIdentity() {
     'scripts/securityMonitoringPlan.js', 'config/security-monitoring.json', 'firebase.json', '.firebaserc']).split('\n').filter(Boolean).sort();
   return { revision, branch, sha256: hash(files.map((file) => [file, sha(fs.readFileSync(path.join(ROOT, file)))])) };
 }
+function assertSourceCompatible(expected, actual, changedPaths) {
+  if (hash(expected) === hash(actual)) return;
+  const operationsOnly = new Set(['README.md', 'docs/security-app-check-rollout.md',
+    'scripts/securityAppCheckRollout.js', 'scripts/securityAppCheckRollout.test.js',
+    'scripts/securityAppCheckRolloutExecution.test.js', 'scripts/securityMonitoringPlan.js',
+    'scripts/securityMonitoringPlan.test.js']);
+  if (actual.branch !== expected.branch || expected.revision === actual.revision
+    || !changedPaths.length || changedPaths.some((file) => !operationsOnly.has(file))) {
+    throw new Error('Rollout deployment source changed; do not mix source versions.');
+  }
+  // These root-level operator files are not uploaded from functions/. Keep the
+  // immutable deployment source marker and record the new operator commit.
+}
 function batchesFor(source) {
   const targets = [...source.matchAll(/exports\.(\w+)\s*=\s*callable\(/g)].map((match) => match[1]);
   if (new Set(targets).size !== targets.length || targets.length !== 103) throw new Error('Callable inventory changed; review the rollout manifest definition.');
@@ -224,7 +237,9 @@ async function execute(options) {
   const file = path.resolve(options.manifest);
   const manifest = JSON.parse(fs.readFileSync(file, 'utf8'));
   validateManifest(manifest);
-  if (hash(source) !== hash(manifest.source)) throw new Error('Rollout source changed; do not mix source versions.');
+  const changedPaths = hash(source) === hash(manifest.source) ? []
+    : command('git', ['diff', '--name-only', manifest.source.revision, source.revision]).split('\n').filter(Boolean);
+  assertSourceCompatible(manifest.source, source, changedPaths);
   const batch = manifest.batches.find((entry) => entry.id === options.batch);
   if (!batch) throw new Error('Choose an exact manifest --batch.');
   const journalFile = `${file}.journal.json`;
@@ -241,6 +256,7 @@ async function execute(options) {
   const descriptor = fs.openSync(lock, 'wx');
   fs.closeSync(descriptor);
   try {
+    journal.operatorRevision = source.revision;
     if (options.accept) {
       requirePrevious(manifest, journal, batch);
       for (const previous of manifest.batches.slice(0, manifest.batches.indexOf(batch))) {
@@ -365,3 +381,4 @@ module.exports.trafficServesRevision = trafficServesRevision;
 module.exports.assertServing = assertServing;
 module.exports.resolveServing = resolveServing;
 module.exports.restoreTraffic = restoreTraffic;
+module.exports.assertSourceCompatible = assertSourceCompatible;

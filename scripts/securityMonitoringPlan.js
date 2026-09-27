@@ -134,7 +134,12 @@ function comparablePolicy(policy) {
   const keys = ['displayName', 'documentation', 'userLabels', 'conditions', 'combiner',
     'enabled', 'notificationChannels', 'alertStrategy', 'severity'];
   const comparable = Object.fromEntries(keys.map((key) => [key, policy[key]]));
-  comparable.conditions = (comparable.conditions || []).map(({ name, ...condition }) => condition);
+  comparable.conditions = (comparable.conditions || []).map(({ name, ...condition }) => condition.conditionThreshold
+    ? { ...condition, conditionThreshold: { ...condition.conditionThreshold,
+      // Proto JSON omits a numeric zero on read-back. It is the same threshold,
+      // not drift; retain comparisons for every nonzero value and other field.
+      thresholdValue: condition.conditionThreshold.thresholdValue ?? 0 } }
+    : condition);
   return comparable;
 }
 

@@ -25,13 +25,51 @@ The existing Text Search quota remains zero. See
 
 ## Current environment status
 
-### Security stage 3 (2026-09-27, implementation and rollout pending)
+### Security stage 3 (2026-09-27, first enforcement group live; acceptance pending)
 
 Stage 3 is being prepared on `fix/security-stage3-app-check`, based on
-`02fdc659f33d28cc406bcfd2fb73995744491a04`. No stage-3 production enforcement,
-endpoint deletion or client release has been applied at this checkpoint.
+`02fdc659f33d28cc406bcfd2fb73995744491a04`. Only the four-function canary is
+enforced at this checkpoint. No endpoint deletion or client release occurred.
 The [stage-3 runbook](docs/security-app-check-rollout.md) fixes the rollout order,
 evidence gates, notification proof and per-batch rollback procedure.
+Reviewed source checkpoint: `d7a860090441631149e653e0af33020654458428`, source
+SHA-256 `5feea6f8cdc34669b22138da6643734f668a5c3491a64fa59dd8fb3f46772d33`.
+The first canary deployment stopped before mutation when Firebase CLI could not
+list Functions. Independent read-back matched all four baseline revisions and
+configuration exactly; rollback reconciliation skipped all mutations and closed
+that attempt at `2026-09-27T14:19:01Z`. A subsequent read-only CLI inventory
+succeeded. The single retry uses the unchanged reviewed source and manifest
+`62f067dee98442776d4925b94a7bc8c0affbdf88a99ba6bfc6349ff97d8a05f7`
+in ignored `security-stage3/rollout-retry1.json`. It completed with independent
+runtime environment/source and 100% serving-traffic verification at
+`2026-09-27T14:22:19.314Z` (17:22 Israel). Deployed revisions:
+
+| Callable | Serving revision |
+| --- | --- |
+| `issueGuestSession` | `issueguestsession-00002-tev` |
+| `getReactionState` | `getreactionstate-00029-guv` |
+| `setFavorite` | `setfavorite-00031-fup` |
+| `listAdminSavedViews` | `listadminsavedviews-00004-faf` |
+
+All four carry `PLANLI_ENFORCE_APP_CHECK=true` and the source SHA above. Other
+callables and Firestore/Storage/Authentication remain unenforced. Canary
+acceptance remains pending: native/Web smoke, negative controls, actual email
+receipt and at least 15 minutes of observation (not before 14:37:19Z).
+The existing callable rejection policy `17246188049842534170` is now enabled
+and scoped to these four services, including replay rejections. Service-level
+policy `7465525761534131574` was created disabled for the later service rollout;
+the other three policies and email channel were retained. Initial read-back
+flagged Google's omission of the numeric zero threshold. The operator comparison
+now treats omitted zero as equivalent while still rejecting nonzero drift;
+a subsequent read-only check matched all five policies, without reapplying them.
+Controlled missing/invalid guest-call probes at `2026-09-27T14:27:29Z` both
+returned HTTP 401. Actual alert email receipt and trace correlation are pending.
+
+Pre-existing launch gap discovered during Web smoke: filtered moderation cases
+(urgent/overdue) return `FAILED_PRECONDITION` for missing composite `cases`
+indexes. This occurred before canary enforcement. Dashboard and saved-view
+reads returned HTTP 200. The missing-index error is not an App Check rejection
+and remains a separate unresolved operational defect.
 
 The shared callable boundary now explicitly rejects a consumed App Check token
 before authorization or business execution whenever consumption is enabled.
@@ -59,7 +97,7 @@ were off. Google Identity for iOS enforcement remains explicitly out of scope.
 Stage 3 is not closed until live smoke tests, negative controls, delivered alerts,
 all rollout acceptance receipts and the final observation window are recorded.
 Focused local validation: 56 Functions tests (including an actual local callable
-HTTP boundary with a stubbed verifier), 19 rollout/monitoring tests and six client
+HTTP boundary with a stubbed verifier), 21 rollout/monitoring tests and six client
 tests passed under Node 22.23.1. Missing, invalid, expired and consumed-token
 requests were rejected before business dispatch; fresh tokens remained usable.
 This is boundary evidence, not live platform attestation. The monitoring dry run
