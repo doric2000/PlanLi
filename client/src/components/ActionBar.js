@@ -36,13 +36,14 @@ import { useContentShare } from '../hooks/useContentShare';
  *   collectionName="routes"
  * />
  */
-const ActionBar = ({ item, onCommentPress, collectionName = 'recommendations', compact = false }) => {
+const ActionBar = ({ item, onCommentPress, collectionName = 'recommendations', compact = false, onBeforeProtectedAction }) => {
 	const [showLikesModal, setShowLikesModal] = useState(false);
 	const [showAddToTrip, setShowAddToTrip] = useState(false);
 	const { ensureCapability } = useAuthUser();
 	const shareKind = collectionName === 'routes' ? 'route' : collectionName === 'recommendations' ? 'recommendation' : null;
 	const handleShare = useContentShare({ kind: shareKind, id: item.id, title: item.title, status: item.status });
 	const handleAddToTrip = async () => {
+		if (onBeforeProtectedAction?.() === false) return;
 		if (await ensureCapability(CAPABILITIES.ACTIVE, { name: 'TripPlanner' })) setShowAddToTrip(true);
 	};
 
@@ -72,7 +73,7 @@ const ActionBar = ({ item, onCommentPress, collectionName = 'recommendations', c
 				likeCount={likeCount}
 				commentsCount={commentsCount}
 				onCommentPress={handleCommentPress}
-				onLikePress={toggleLike}
+				onLikePress={() => { if (onBeforeProtectedAction?.() !== false) toggleLike(); }}
 				onLikesListPress={() => setShowLikesModal(true)}
 				contentLabel={contentLabel}
 				compact={compact}

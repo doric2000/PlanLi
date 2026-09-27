@@ -31,9 +31,12 @@ export default function CityMapCanvas({ region, items, selectedId, onSelect, onR
   const nativeSize = useRef(null);
   const loaded = useRef(false);
   const applied = useRef('');
+  // The supplied region is the initial fit. A search of the user's current
+  // viewport updates the query, never fits those already-visible bounds again.
+  const initialRegion = useRef(region);
   const [layout, setLayout] = useState(null);
   const [fontReady, setFontReady] = useState(false);
-  const camera = useMemo(() => layout ? tripMapCamera(region, layout) : null, [region, layout]);
+  const camera = useMemo(() => layout ? tripMapCamera(initialRegion.current, layout) : null, [layout]);
   const cameraKey = JSON.stringify(camera);
   const latest = useRef({ camera, cameraKey, onReady, layout });
   latest.current = { camera, cameraKey, onReady, layout };

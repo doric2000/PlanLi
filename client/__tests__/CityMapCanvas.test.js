@@ -28,5 +28,8 @@ test('waits for positive layout and native readiness before applying a finite ca
   fireEvent(map, 'mapLoaded');
   expect(onReady).toHaveBeenCalled();
   expect(map.props.showsUserLocation).toBeUndefined();
+  screen.rerender(<CityMapCanvas region={{ latitude: 7, longitude: 82, latitudeDelta: 0.01, longitudeDelta: 0.01 }} items={[]}
+    styles={createDestinationStyles()} onReady={onReady} interactive />);
+  expect(mockSetCamera).toHaveBeenCalledTimes(1);
   await act(async () => {});
 });

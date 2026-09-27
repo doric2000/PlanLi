@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, ScrollView, StatusBar, View } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, StatusBar, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useIsFocused } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,6 +9,8 @@ import CachedImage from '../../../components/CachedImage';
 import FavoriteButton from '../../../components/FavoriteButton';
 import ActionBar from '../../../components/ActionBar';
 import { useRecommendationById } from '../../../hooks/useRecommendationById';
+import { useAuthUser } from '../../../hooks/useAuthUser';
+import { CAPABILITIES } from '../../../constants/authPolicy';
 import { useBlockedUsers } from '../../moderation/BlockedUsersContext';
 import { getRecommendationImageUrls } from '../../../utils/mediaAssets';
 import { communityPalette as c } from '../../../styles/communityDiscovery';
@@ -17,12 +19,13 @@ import { useCityDiscovery } from '../hooks/useCityDiscovery';
 import CityMapCanvas from './CityMapCanvas';
 import { CitySearch } from './CitySearch';
 
-function SelectedRecommendation({ item: summary, onClose, onOpen, onComments, styles }) {
+function SelectedRecommendation({ item: summary, onClose, onOpen, onComments, onBeforeProtectedAction, styles }) {
   const { data, loading, error, resolved, refresh } = useRecommendationById(summary.id);
   const { isBlocked } = useBlockedUsers();
   const available = resolved && data?.id === summary.id && data.status === 'active' && !isBlocked(data.ownerId);
   const item = available ? data : summary;
   const image = getRecommendationImageUrls(item, 'thumb')[0];
+  if (resolved && data?.id === summary.id && isBlocked(data.ownerId)) return null;
   return <View style={styles.selectedCard} testID="city-map-selected" accessibilityLiveRegion="polite">
     <View style={styles.selectedRow}>
       {!!image && <CachedImage source={{ uri: image }} contentFit="cover" style={styles.selectedPhoto} />}
@@ -39,9 +42,10 @@ function SelectedRecommendation({ item: summary, onClose, onOpen, onComments, st
         <AppText style={styles.showMoreText}>לפרטי ההמלצה</AppText>
       </Pressable>
       <FavoriteButton type="recommendations" id={item.id} variant="light" style={styles.iconButton}
+        onBeforeProtectedAction={onBeforeProtectedAction}
         snapshotData={{ name: item.title, thumbnail_url: image }} />
     </View>
-    <ActionBar item={item} compact onCommentPress={onComments} /></> : <View style={styles.sections}>
+    <ActionBar item={item} compact onCommentPress={onComments} onBeforeProtectedAction={onBeforeProtectedAction} /></> : <View style={styles.sections}>
       {loading ? <ActivityIndicator color={c.navy} /> : <AppText style={styles.stateText}>{error ? 'פרטי ההמלצה לא נטענו כרגע.' : 'ההמלצה אינה זמינה כרגע.'}</AppText>}
       {!loading && !!error && <Pressable onPress={refresh} style={styles.showMoreButton} accessibilityRole="button" accessibilityLabel="ניסיון נוסף לטעינת ההמלצה שנבחרה">
         <AppText style={styles.showMoreText}>ניסיון נוסף</AppText>
@@ -52,6 +56,8 @@ function SelectedRecommendation({ item: summary, onClose, onOpen, onComments, st
 
 export default function CityMapSection({ destination, cityId, countryId, recommendations, seedLoading, filters, onFiltersChange, navigation, onComments, styles }) {
   const focused = useIsFocused();
+  const { user, isActive, ensureCapability } = useAuthUser();
+  const pendingAction = useRef(null);
   const seedRegion = useMemo(() => cityMapRegion(destination, recommendations), [destination, recommendations]);
   const [region, setRegion] = useState(null);
   const [viewport, setViewport] = useState(null);
@@ -60,6 +66,24 @@ export default function CityMapSection({ destination, cityId, countryId, recomme
   const [selectedId, setSelectedId] = useState(null);
   const [attempt, setAttempt] = useState(0);
   const [mapStatus, setMapStatus] = useState('loading');
+  const finishDismiss = () => {
+    const action = pendingAction.current;
+    pendingAction.current = null;
+    action?.();
+  };
+  const afterMapCloses = (action) => {
+    if (pendingAction.current) return;
+    if (!fullscreen) { action(); return; }
+    pendingAction.current = action;
+    setFullscreen(false);
+  };
+  useEffect(() => () => { pendingAction.current = null; }, [user?.uid, focused]);
+  useEffect(() => { if (!fullscreen && Platform.OS !== 'ios') finishDismiss(); }, [fullscreen]);
+  const beforeProtectedAction = () => {
+    if (!fullscreen || isActive) return true;
+    afterMapCloses(() => ensureCapability(CAPABILITIES.ACTIVE));
+    return false;
+  };
   useEffect(() => {
     if (!region && seedRegion) { setRegion(seedRegion); setViewport(cityMapViewport(seedRegion)); }
   }, [seedRegion, region]);
@@ -76,11 +100,11 @@ export default function CityMapSection({ destination, cityId, countryId, recomme
   useEffect(() => { if (!focused) setFullscreen(false); }, [focused]);
   const retryMap = () => { setMapStatus('loading'); setAttempt((value) => value + 1); };
   const openSelected = (item) => {
-    setFullscreen(false);
-    navigation.navigate('RecommendationDetail', { postId: item.id, item });
+    afterMapCloses(() => navigation.navigate('RecommendationDetail', { postId: item.id, item }));
   };
   const preview = selected ? <SelectedRecommendation item={selected} styles={styles} onClose={() => setSelectedId(null)}
-    onOpen={openSelected} onComments={(id) => { setFullscreen(false); onComments(id); }} /> : null;
+    onOpen={openSelected} onComments={(id) => afterMapCloses(() => onComments(id))}
+    onBeforeProtectedAction={beforeProtectedAction} /> : null;
   const map = <View style={fullscreen ? styles.modalMap : styles.mapFrame} testID="city-map-frame">
     {region && focused && <CityMapCanvas key={`${fullscreen}:${attempt}`} region={region} items={items} styles={styles}
       selectedId={selectedId} onSelect={setSelectedId} interactive={fullscreen}
@@ -115,7 +139,7 @@ export default function CityMapSection({ destination, cityId, countryId, recomme
   return <View style={styles.section}>
     <AppText style={styles.sectionTitle}>העיר על המפה</AppText>
     {!fullscreen && <>{map}{status}{preview}</>}
-    {fullscreen && <Modal visible animationType="fade" onRequestClose={() => setFullscreen(false)}>
+    <Modal visible={fullscreen} animationType="fade" onRequestClose={() => setFullscreen(false)} onDismiss={finishDismiss} testID="city-map-modal">
       <SafeAreaView style={styles.mapModal} edges={['top', 'left', 'right', 'bottom']}>
         <StatusBar barStyle="dark-content" />
         <View style={styles.modalHeader}>
@@ -138,6 +162,6 @@ export default function CityMapSection({ destination, cityId, countryId, recomme
         {map}
         {!!preview && <ScrollView style={styles.modalCard}>{preview}</ScrollView>}
       </SafeAreaView>
-    </Modal>}
+    </Modal>
   </View>;
 }

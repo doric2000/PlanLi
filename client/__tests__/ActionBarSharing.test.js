@@ -54,3 +54,15 @@ it('does not expose public sharing or add-to-trip for private trips', () => {
   expect(screen.queryByTestId('recommendation-action-share')).toBeNull();
   expect(screen.queryByTestId('recommendation-action-add-to-trip')).toBeNull();
 });
+
+it('lets the map dismiss before protected actions without blocking public sharing', async () => {
+  const guard = jest.fn(() => false);
+  const screen = render(<ActionBar item={{ id: 'one', title: 'מקום', status: 'active' }} onBeforeProtectedAction={guard} />);
+  fireEvent.press(screen.getByLabelText('הוספת לייק'));
+  fireEvent.press(screen.getByLabelText('הוספת ההמלצה לטיול'));
+  expect(guard).toHaveBeenCalledTimes(2);
+  expect(mockToggleLike).not.toHaveBeenCalled();
+  expect(mockEnsureCapability).not.toHaveBeenCalled();
+  fireEvent.press(screen.getByLabelText('שיתוף ההמלצה'));
+  await waitFor(() => expect(Share.share).toHaveBeenCalled());
+});

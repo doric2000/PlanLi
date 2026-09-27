@@ -21,6 +21,7 @@ const FavoriteButton = ({
   style,
   snapshotData = {},
   accessibilityLabel,
+  onBeforeProtectedAction,
 }) => {
   const { isFavorite, toggleFavorite, loading: saving } = useFavorite(type, id, snapshotData);
 
@@ -43,7 +44,7 @@ const FavoriteButton = ({
   return (
     <TouchableOpacity
       style={getButtonStyle()}
-      onPress={toggleFavorite}
+      onPress={() => { if (onBeforeProtectedAction?.() !== false) toggleFavorite(); }}
       disabled={saving}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel || (isFavorite ? 'הסרה מהמועדפים' : 'שמירה במועדפים')}

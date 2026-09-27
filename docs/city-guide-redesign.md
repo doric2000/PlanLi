@@ -53,6 +53,13 @@ Focused Jest coverage and relevant consumers passed:
 - The validation planner's additional consumers: app/community navigation, map mode,
   main tabs, preference bootstrap, drawer presentation and route authentication.
 
+Final release review identified and corrected five edge cases: iOS guest actions
+wait for the full-map dismissal before opening the shared authentication gate;
+blocked map authors are resolved through bounded public reads; deletion invalidates
+discovery/profile caches; searching the visible native map no longer refits its
+camera; Web maps fit both latitude and longitude bounds. Focused regressions cover
+these paths, Web map loading/cleanup and the optional action presentation guards.
+
 Local React Native Web preview exercised the actual city components, navigation,
 shared cards, filters and action rows at widths 390 and 320, including a long city name,
 map selection/expansion/return, route-specific filtering, empty results and map-query
@@ -66,8 +73,8 @@ Logs and the preview harness are ignored under `.codex_tmp/validation/city-guide
 Screenshots and the rollback manifest are under the local Desktop folder
 `PlanLi-Figma-City`. The desktop screenshots contain synthetic example facts.
 
-Android emulator execution remains waived. Before release, physical device checks
-should cover map tiles and pins, fast city changes, modal back/Android hardware back,
+Android emulator execution remains waived. Physical acceptance after the authorized
+OTA should cover map tiles and pins, fast city changes, modal back/Android hardware back,
 keyboard/search, full-map share/add-to-trip/comment dialogs, font scaling, photo credits
 and safe areas. Live city and map queries still require production read verification.
 
@@ -80,5 +87,5 @@ rollback request, inspect later work first, restore only this task's tracked cha
 from that base and remove only its listed new files if they contain no later work.
 Do not reset, stash or restore unrelated files. No rollback control exists in the app UI.
 
-An eventual OTA is a separately authorized workflow; use the repository release runner
-and update README release records only once actual release state changes.
+The OTA is authorized for both platforms; the repository release runner records its
+actual groups and prior production rollback groups in README after publication.

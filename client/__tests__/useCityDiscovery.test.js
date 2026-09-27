@@ -2,6 +2,9 @@ import { act, renderHook } from '@testing-library/react-native';
 import { useCityDiscovery } from '../src/features/destination/hooks/useCityDiscovery';
 
 const mockLoad = jest.fn(); const mockClear = jest.fn();
+const mockResolveOwners = jest.fn(); const mockInvalidate = jest.fn();
+jest.mock('../src/features/destination/utils/resolveCityMapOwners', () => ({ resolveCityMapOwners: (...args) => mockResolveOwners(...args) }));
+jest.mock('../src/utils/profileResourceInvalidation', () => ({ invalidateProfileResources: (...args) => mockInvalidate(...args) }));
 let mockPrincipal = 'alice';
 jest.mock('../src/services/PersonalizationService', () => ({
   requestPersonalizedRecommendations: (...args) => mockLoad(...args),
@@ -10,7 +13,7 @@ jest.mock('../src/services/PersonalizationService', () => ({
   clearPersonalizationDiscoveryCache: (...args) => mockClear(...args),
 }));
 jest.mock('../src/hooks/useAuthUser', () => ({ useAuthUser: () => ({ user: { uid: mockPrincipal } }) }));
-jest.mock('../src/features/moderation/BlockedUsersContext', () => ({ useBlockedUsers: () => ({ isBlocked: (id) => id === 'blocked' }) }));
+jest.mock('../src/features/moderation/BlockedUsersContext', () => ({ useBlockedUsers: () => ({ blockedUserIds: new Set(['blocked']), isBlocked: (id) => id === 'blocked' }) }));
 jest.mock('../src/features/profile/context/PersonalizationFeedbackContext', () => ({ usePersonalizationFeedback: () => ({ isHidden: ({ id }) => id === 'hidden' }) }));
 const context = { cityId: 'city-a', countryId: 'country', filters: {} };
 const tick = async () => { await act(async () => { jest.advanceTimersByTime(301); }); };
@@ -61,4 +64,26 @@ test('disabled surfaces and an unmounted pending debounce do not fetch', async (
   await tick(); expect(mockLoad).not.toHaveBeenCalled(); unmount();
   const pending = renderHook(() => useCityDiscovery(context)); pending.unmount();
   await tick(); expect(mockLoad).not.toHaveBeenCalled();
+});
+
+test('resolves omitted map owners before exposing any pins and hides blocked authors', async () => {
+  let resolveOwners;
+  mockLoad.mockReturnValue({ promise: Promise.resolve({ items: [{ id: 'bad' }, { id: 'ok' }] }) });
+  mockResolveOwners.mockReturnValue(new Promise((resolve) => { resolveOwners = resolve; }));
+  const { result } = renderHook(() => useCityDiscovery({ ...context, kind: 'map', viewport: { north: 7, south: 6, east: 82, west: 81, zoom: 10 } }));
+  await tick();
+  expect(result.current.loading).toBe(true);
+  expect(result.current.items).toEqual([]);
+  await act(async () => resolveOwners([{ id: 'bad', ownerId: 'blocked' }, { id: 'ok', ownerId: 'other' }]));
+  expect(result.current.items.map((entry) => entry.id)).toEqual(['ok']);
+});
+
+test('deletion invalidates discovery and the owner profile, while keeping other results', async () => {
+  mockLoad.mockReturnValue({ promise: Promise.resolve({ items: [{ id: 'delete' }, { id: 'keep' }] }) });
+  const { result } = renderHook(() => useCityDiscovery(context));
+  await tick();
+  act(() => result.current.removeItem('delete'));
+  expect(mockClear).toHaveBeenCalledWith('recommendations');
+  expect(mockInvalidate).toHaveBeenCalledWith('alice');
+  expect(result.current.items.map((entry) => entry.id)).toEqual(['keep']);
 });

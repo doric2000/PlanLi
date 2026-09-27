@@ -4,6 +4,8 @@ import { useBlockedUsers } from '../../moderation/BlockedUsersContext';
 import { usePersonalizationFeedback } from '../../profile/context/PersonalizationFeedbackContext';
 import { clearPersonalizationDiscoveryCache, requestPersonalizedRecommendations, requestPersonalizedRoutes, requestPersonalizedMapRecommendations } from '../../../services/PersonalizationService';
 import { discoveryRequestFromFilters } from '../../../utils/discoveryFilters';
+import { invalidateProfileResources } from '../../../utils/profileResourceInvalidation';
+import { resolveCityMapOwners } from '../utils/resolveCityMapOwners';
 
 const loaders = { recommendations: requestPersonalizedRecommendations, routes: requestPersonalizedRoutes, map: requestPersonalizedMapRecommendations };
 
@@ -11,7 +13,7 @@ const loaders = { recommendations: requestPersonalizedRecommendations, routes: r
 // a global region or a destination accidentally left in filters cannot move it.
 export function useCityDiscovery({ cityId, countryId, kind = 'recommendations', filters, viewport, enabled = true }) {
   const { user } = useAuthUser();
-  const { isBlocked } = useBlockedUsers();
+  const { isBlocked, blockedUserIds } = useBlockedUsers();
   const { isHidden } = usePersonalizationFeedback();
   const principal = user?.uid || 'guest';
   const payloadKey = JSON.stringify({
@@ -19,7 +21,8 @@ export function useCityDiscovery({ cityId, countryId, kind = 'recommendations', 
     destinations: [], context: { cityId, countryId }, sort: 'popular',
     ...(kind === 'map' ? { viewport } : { limit: 30 }),
   });
-  const identity = `${principal}:${kind}:${payloadKey}`;
+  const blockedKey = kind === 'map' ? JSON.stringify([...(blockedUserIds || [])].sort()) : '';
+  const identity = `${principal}:${kind}:${payloadKey}:${blockedKey}`;
   const currentIdentity = useRef(identity);
   currentIdentity.current = identity;
   const serial = useRef(0);
@@ -41,7 +44,10 @@ export function useCityDiscovery({ cityId, countryId, kind = 'recommendations', 
         const result = loaders[kind](payload, { forceRefresh: retry });
         const response = await result.promise;
         if (cancelled || serial.current !== request || currentIdentity.current !== identity) return;
-        setState({ identity, items: Array.isArray(response?.items) ? response.items : [], loading: false, error: null,
+        let nextItems = Array.isArray(response?.items) ? response.items : [];
+        if (kind === 'map' && blockedKey !== '[]') nextItems = await resolveCityMapOwners(nextItems);
+        if (cancelled || serial.current !== request || currentIdentity.current !== identity) return;
+        setState({ identity, items: nextItems, loading: false, error: null,
           truncated: !!response?.truncated, zoomInRequired: !!response?.zoomInRequired });
       } catch {
         if (cancelled || serial.current !== request || currentIdentity.current !== identity) return;
@@ -49,7 +55,7 @@ export function useCityDiscovery({ cityId, countryId, kind = 'recommendations', 
       }
     }, retry ? 0 : 300);
     return () => { cancelled = true; clearTimeout(timer); serial.current += 1; };
-  }, [available, identity, payloadKey, kind, attempt]);
+  }, [available, identity, payloadKey, kind, attempt, blockedKey]);
 
   const items = useMemo(() => state.identity !== identity || !available ? [] : state.items.filter((item) =>
     item?.id && (!item.status || item.status === 'active') && !isBlocked(item.ownerId)
@@ -60,7 +66,12 @@ export function useCityDiscovery({ cityId, countryId, kind = 'recommendations', 
     retryRequested.current = true;
     setAttempt((value) => value + 1);
   }, [kind]);
-  const removeItem = useCallback((id) => setState((previous) => ({ ...previous, items: previous.items.filter((item) => item.id !== id) })), []);
+  const removeItem = useCallback((id) => {
+    serial.current += 1;
+    clearPersonalizationDiscoveryCache(kind);
+    if (user?.uid) invalidateProfileResources(user.uid);
+    setState((previous) => ({ ...previous, loading: false, items: previous.items.filter((item) => item.id !== id) }));
+  }, [kind, user?.uid]);
   return { items, loading: available && (state.identity !== identity || state.loading),
     error: state.identity === identity ? state.error : null,
     truncated: state.identity === identity && state.truncated,

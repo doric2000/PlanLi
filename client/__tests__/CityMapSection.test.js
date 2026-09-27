@@ -1,10 +1,14 @@
 import React from 'react';
 import { act, fireEvent, render } from '@testing-library/react-native';
+import { Platform } from 'react-native';
 import CityMapSection from '../src/features/destination/components/CityMapSection';
 import { createDestinationStyles } from '../src/features/destination/components/destinationStyles';
 
 const mockDiscovery = jest.fn();
 const mockSelected = jest.fn();
+let mockActive = true;
+const mockEnsure = jest.fn();
+jest.mock('../src/hooks/useAuthUser', () => ({ useAuthUser: () => ({ user: mockActive ? { uid: 'alice' } : null, isActive: mockActive, ensureCapability: mockEnsure }) }));
 jest.mock('../src/hooks/useRecommendationById', () => ({ useRecommendationById: (...args) => mockSelected(...args) }));
 jest.mock('../src/features/moderation/BlockedUsersContext', () => ({ useBlockedUsers: () => ({ isBlocked: (id) => id === 'blocked' }) }));
 jest.mock('@react-navigation/native', () => ({ useIsFocused: () => true }));
@@ -24,7 +28,7 @@ jest.mock('../src/components/ActionBar', () => {
 const item = { id: 'one', title: 'מסעדת חוף', status: 'active', place: { coordinates: { lat: 6.8, lng: 81.8 } } };
 const base = { destination: { name: 'ארוגם באי', identity: { coordinates: { lat: 6.8, lng: 81.8 } } }, cityId: 'bay', countryId: 'lk',
   recommendations: [item], filters: { query: '', categoryIds: [] }, onFiltersChange: jest.fn(), navigation: { navigate: jest.fn() }, onComments: jest.fn(), styles: createDestinationStyles() };
-beforeEach(() => { jest.clearAllMocks(); jest.useFakeTimers(); mockDiscovery.mockReturnValue({ items: [item], loading: false, error: null, retry: jest.fn() }); mockSelected.mockReturnValue({ data: item, loading: false, resolved: true }); });
+beforeEach(() => { jest.clearAllMocks(); jest.useFakeTimers(); mockActive = true; mockDiscovery.mockReturnValue({ items: [item], loading: false, error: null, retry: jest.fn() }); mockSelected.mockReturnValue({ data: item, loading: false, resolved: true }); });
 afterEach(() => jest.useRealTimers());
 
 test('has exactly one expansion control; selection stays inline and survives opening/closing the map', () => {
@@ -89,4 +93,20 @@ test('map summaries cannot enable actions before their active canonical content 
   screen.rerender(<CityMapSection {...base} />);
   fireEvent.press(screen.getByLabelText('ניסיון נוסף לטעינת ההמלצה שנבחרה'));
   expect(refresh).toHaveBeenCalledTimes(1);
+});
+
+test('iOS dismisses the full map before a guest auth gate and ignores repeated actions', () => {
+  const previous = Platform.OS; Platform.OS = 'ios'; mockActive = false;
+  try {
+    const screen = render(<CityMapSection {...base} />);
+    fireEvent.press(screen.getByLabelText('הגדלת מפת העיר'));
+    fireEvent(screen.getByTestId('canvas'), 'select', 'one');
+    const guard = screen.getByTestId('selected-actions').props.onBeforeProtectedAction;
+    act(() => { expect(guard()).toBe(false); expect(guard()).toBe(false); });
+    expect(mockEnsure).not.toHaveBeenCalled();
+    fireEvent(screen.UNSAFE_getByType(require('react-native').Modal), 'dismiss');
+    expect(mockEnsure).toHaveBeenCalledTimes(1);
+    fireEvent(screen.UNSAFE_getByType(require('react-native').Modal), 'dismiss');
+    expect(mockEnsure).toHaveBeenCalledTimes(1);
+  } finally { Platform.OS = previous; }
 });

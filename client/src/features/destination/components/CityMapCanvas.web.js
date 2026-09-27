@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { getMapTilerStyleUrl } from '../../../config/mapConfig';
+import { loadCityMapRuntime } from '../utils/cityMapRuntime.web';
 
 // Same installed MapLibre runtime and worker as the existing place picker.
 const css = `.planli-city-map{position:absolute;inset:0;overflow:hidden;font:12px sans-serif}.planli-city-map canvas{position:absolute;inset:0}.planli-city-map .maplibregl-marker{position:absolute;left:0;top:0}.planli-city-map .maplibregl-ctrl-bottom-right{position:absolute;right:0;bottom:0}.planli-city-map .maplibregl-ctrl-attrib{background:#ffffffed;padding:2px 6px;font-size:10px}.planli-city-map .maplibregl-ctrl-attrib a{color:#1e3a5f}.planli-city-marker{width:44px;height:44px;border:3px solid white;border-radius:50%;color:white;font-weight:bold;cursor:pointer;box-shadow:0 2px 6px #0003}`;
@@ -15,14 +16,16 @@ export default function CityMapCanvas({ region, items, selectedId, onSelect, onR
     let cancelled = false; let instance; let resize;
     const style = getMapTilerStyleUrl();
     if (!style) { callbacks.current.onError?.(); return undefined; }
-    import('maplibre-gl').then((module) => {
+    loadCityMapRuntime().then((module) => {
       if (cancelled) return;
       const api = module.Map ? module : module.default;
       api.setWorkerUrl(new URL('/maplibre/6.4.1/maplibre-gl-worker.mjs', window.location.origin).href);
       markerClass.current = api.Marker;
       MaterialIcons.loadFont().catch(() => {});
-      instance = new api.Map({ container: host.current, style, center: [region.longitude, region.latitude],
-        zoom: Math.max(2, Math.min(16, Math.log2(360 / region.longitudeDelta))), interactive,
+      instance = new api.Map({ container: host.current, style,
+        bounds: [[region.longitude - region.longitudeDelta / 2, region.latitude - region.latitudeDelta / 2],
+          [region.longitude + region.longitudeDelta / 2, region.latitude + region.latitudeDelta / 2]],
+        fitBoundsOptions: { padding: 24, maxZoom: 16 }, interactive,
         attributionControl: { compact: false } });
       map.current = instance;
       instance.on('load', () => { if (!cancelled) { instance.resize(); setReady(true); callbacks.current.onReady?.(); } });
