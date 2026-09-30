@@ -129,7 +129,22 @@ loads were blocked by CSP and the client reported `normalizeImageUri failed` /
 `Error picking image`. No Storage upload or final destination-image write occurred.
 A temporary browser-only block on `setDestinationUploadedImage` protected public
 content during the test and was removed afterward. This is a failed Web preflight,
-not successful upload evidence; a separate focused Hosting CSP correction remains.
+not successful upload evidence. Under separate owner approval, the focused Hosting
+CSP correction was released at `2026-09-30T11:56:00.981Z` from
+`fix/web-upload-blob-csp`, commit `6e9430d7bdd75f23647b521fcf95d71f79abb87a`.
+It adds `blob:` only to global `img-src`; script, connection, frame and isolated
+link/account-deletion policies are unchanged. Three focused header tests passed;
+an actual local browser reproduced the old failure and decoded/normalized a
+480x480 JPEG under the corrected policy while continuing to block a blob script.
+The immutable final review found no actionable issues.
+
+Hosting version `c1e1c462b8af800d`, release
+`sites/planli-f0b12/channels/live/releases/1790769360981000`, independently matches
+the intended configuration and live `planli.cc/admin/` CSP. All 66 application
+files and both Firebase-reserved init files are hash-identical to prior version
+`06c2d958f2e664af`; no client bundle, Functions, Rules, OTA or native build changed.
+`hosting-csp-readback.json` records verification. The post-release actual-form
+upload check is in progress and must pass before Storage enforcement.
 
 Stage 3 is in progress on `fix/security-stage3-app-check`, based on
 `02fdc659f33d28cc406bcfd2fb73995744491a04`. The four-function canary, seven
