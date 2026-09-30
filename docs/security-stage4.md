@@ -1,7 +1,7 @@
 # Stage 4: controlled launch operations
 
-Status: implementation candidate; **not deployed and not closed**. Owner: Doric.
-Source branch: `fix/security-stage4-operations`, based on `55af33c`.
+Status: deployed; **final verification pending, not closed**. Owner: Doric.
+Source: merged PR #455, `9290939390ea3502e3307bf65904da37cfa46aac`.
 No alternate operator is designated until their infrastructure access is verified.
 
 ## Acceptance and blockers
@@ -15,7 +15,8 @@ No alternate operator is designated until their infrastructure access is verifie
   Expo/Apple membership scope is owner-attested, not independently inventoried.
 - The five existing monitoring controls and 22 production quotas were read back.
   Stage 3 App Check email-delivery evidence remains valid for those two paths.
-  Four new provider-usage alerts are prepared, not applied or delivery-tested.
+  Four new provider-usage alerts are enabled; a tagged 80% incident opened at
+  2026-09-30T16:25:07Z and the owner confirmed email receipt.
 - The billing account contains two additional active projects. The owner
   explicitly requested no changes to them. Their future Maps consumption is not
   bounded by PlanLi's counter. Read-only quota inspection found each allows
@@ -27,8 +28,9 @@ No alternate operator is designated until their infrastructure access is verifie
   The tool supports `free-plus-paid-ils` and retains `full-price-ils` for stress
   testing. Zero free usage is not the expected billing assumption or launch plan.
   Sibling costs and settings remain outside this PlanLi-only budget and unchanged.
-- Remaining release gates: Git publication/merge for the clean-main OTA runner, allocation evidence,
-  live read-back, new alert delivery, platform smokes and 30-minute observation.
+- Remaining release gates: mobile provider/draft/save smokes, live counter increments,
+  Places quota expansion/read-back and a final 30-minute observation. See the live
+  deployment checkpoint below; implementation/forecast sections retain their context.
 
 ## Provider admission contract
 
@@ -354,3 +356,97 @@ alert delivery and observation times in README before closing this stage.
 
 Stage 5 remains open: backup/restore drill, deep SecureStore migration/restore,
 admin sign-out control, acknowledgement burst/backoff and final launch gate.
+
+## Live deployment checkpoint — 2026-09-30
+
+PR #455 was merged as `9290939390ea3502e3307bf65904da37cfa46aac`. Hosting and
+both mobile platforms were released before the provider Functions. This checkpoint
+supersedes earlier candidate/not-deployed descriptions; final smoke, quota and
+observation gates below remain open.
+
+Hosting release `1790785071371000`, version `a05d7c90c6acf93e`, became live at
+16:17:51Z. The public HTML matched the reviewed export, HTTP 200 and 32 asset
+references passed. The owner completed fresh admin/TOTP login; overview,
+destinations, content search and route details rendered successfully. The hosted
+admin entry does not expose the mobile Places search flow, so that live provider
+smoke is performed on mobile. No admin content mutation was used as a test.
+
+OTA candidate `a351fe63-9056-4967-a9c3-f32bc54b2642` was inspected, then those
+exact assets were promoted as production group
+`84716ba6-7100-4277-bb6e-87f29fcabc1e` at 16:58:18Z. Both public delivery hashes
+were independently verified. Runtime/channel are `1.4.0` / `production`, with
+unchanged Android 1.1.0 build 12 and iOS 1.1.3 build 34. Device application remains
+unverified until the owner completes the post-update smoke. The previous verified
+group is `545d5795-a7e6-43ab-98ab-4534b9dd547f`; no new native build was made.
+
+All nine Functions were independently ACTIVE at 17:05:57Z. Node 22, callable
+App Check environment enforcement and capacity settings remain
+unchanged. Eight callables retain maxInstances 1/concurrency 4; the background
+worker retains 3/1. The other 137 deployed Functions kept their revisions.
+
+| Target | Verified serving revision |
+| --- | --- |
+| searchPlaces | `searchplaces-00032-goj` |
+| resolvePlaceSelection | `resolveplaceselection-00040-fod` |
+| resolveRecommendationDestination | `resolverecommendationdestination-00056-gen` |
+| saveRecommendation | `saverecommendation-00064-yot` |
+| publishRecommendationDraft | `publishrecommendationdraft-00030-fip` |
+| saveRoute | `saveroute-00060-fiv` |
+| publishRouteDraft | `publishroutedraft-00026-qoq` |
+| computePrivateTripRoute | `computeprivatetriproute-00003-wal` |
+| onBackgroundOperationWritten | `onbackgroundoperationwritten-00004-wob` |
+
+### Reviewed allocations and accounting evidence
+
+Current/next-month records were created atomically and independently read back.
+September manifest SHA256 is
+`1c3010fd1695e4520619c762294539b4eb38988f67d64c20a6ccb9b723056c8b`;
+October is `85b0ac39818a10e93b13b1aff7cee21d578a42e21e19dfdfadf5b16c7606f043`.
+Telemetry was refreshed at 16:30:58Z for all three billing-account projects.
+Its documented 1,800-second ingest delay no longer overlapped the old unlimited
+Routes quota. September includes every observed attempt (even failures), counts
+all GetPlace calls against every possible Details SKU, and adds one full unchanged
+daily project quota for delayed reporting plus rollout. Prior usage was not zeroed.
+
+| SKU | September baseline including rollout reserve | Monthly limit |
+| --- | ---: | ---: |
+| Autocomplete | 535 | 10,850 |
+| Details Essentials | 378 | 9,000 |
+| Details Pro | 378 | 4,500 |
+| Details Atmosphere | 378 | 1,030 |
+| Geocoding | 328 | 9,000 |
+| Routes Essentials | 340 | 9,000 |
+| Routes Pro | 340 | 4,500 |
+
+October had not started; its zero prior-use baseline is bounded by the manifest's
+September 30 20:00Z rollout deadline, before October 1 07:00Z Pacific midnight.
+The same monthly limits apply. Future sibling usage remains a forecast with 10%
+shared free headroom, not an enforced account-wide bound. Both sibling projects
+remain unchanged. Before November 1 07:00Z, Doric must review fresh prices, account
+usage and forecasts and explicitly prepare November; missing records fail closed.
+
+The allocation CLI originally constructed a custom access-token credential that
+Firebase Admin's Firestore client does not support. It now reuses the repository's
+Application Default Credentials initializer. The active ADC identity was verified
+as the authorized operator; no credential was created, copied or printed. Seven
+focused tests and live read-only reuse for both allocations passed. Dry-run/apply
+hash gates and counter preservation are unchanged. The reviewed creation used the
+same exported allocation executor with that initializer, and verified all records.
+
+### Delivered monitoring and remaining gates
+
+The five previous alert policies were preserved and four provider policies enabled.
+The initial synthetic log produced no proven incident. A second tagged synthetic
+event against an existing revision opened incident `0.od8nmlr4isfn` at 16:25:07Z
+under policy `12940691982399578384`; the owner confirmed the email arrived.
+This verifies the new operational delivery path without creating real exhaustion,
+a server failure or service-account key. It does not prove a billing-alert email.
+The ILS 75 project-filtered Cloud budget and existing thresholds were read back.
+
+No Functions WARNING-or-higher logs were found from 16:58:30Z through the first
+post-deploy check at 17:05:57Z. This alone does not prove a successful provider call.
+Mobile search/selection, draft recovery and existing-item save results, counter
+increments and routing smoke remain pending. Places expansion is still held at
+the old daily/minute values until guarded positive-call evidence is available.
+After expansion, verify all 24 quota controls and observe for 30 minutes before
+closing. The synthetic alert must be excluded from incident assessment.

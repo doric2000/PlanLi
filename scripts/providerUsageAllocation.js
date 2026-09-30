@@ -90,8 +90,8 @@ if (require.main === module) (async () => {
   const manifest = JSON.parse(fs.readFileSync(options.manifest, 'utf8'));
   allocationRecords(manifest); // Validate before even obtaining credentials.
   const admin = require('../functions/node_modules/firebase-admin');
-  const { gcloudAccessToken } = require('../functions/scripts/localCredentials');
-  const app = admin.initializeApp({ projectId: PROJECT, credential: { getAccessToken: async () => gcloudAccessToken() } });
+  const { initializeAdmin } = require('../functions/scripts/localCredentials');
+  const app = initializeAdmin(admin, { projectId: PROJECT });
   try { process.stdout.write(`${JSON.stringify(await execute({ ...options, manifest, db: app.firestore() }), null, 2)}\n`); }
   finally { await app.delete(); }
 })().catch((error) => { process.stderr.write(`${error.message}\n`); process.exitCode = 1; });
