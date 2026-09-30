@@ -74,6 +74,8 @@ test('rollout alert scopes only enforced active callables and includes explicit 
   assert.match(alert.conditions[0].conditionMatchedLog.filter, /setfavorite/);
   assert.doesNotMatch(alert.conditions[0].conditionMatchedLog.filter, /notenforced/);
   assert.match(alert.conditions[0].conditionMatchedLog.filter, /APP_CHECK_REPLAYED/);
+  assert.match(alert.conditions[0].conditionMatchedLog.filter, /APP_CHECK_REQUIRED/);
+  assert.match(alert.conditions[0].conditionMatchedLog.filter, /APP_CHECK_VERIFICATION_UNAVAILABLE/);
   assert.equal(plan.policies.at(-1).enabled, false);
 });
 

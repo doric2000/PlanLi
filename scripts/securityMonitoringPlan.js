@@ -201,7 +201,7 @@ function appCheckRolloutPlan(base, functions, services) {
   callablePolicy.enabled = targets.length > 0;
   callablePolicy.documentation.content = 'An enforced callable rejected an App Check token. Correlate intentional probes and known-good client failures before rolling back the affected rollout batch.';
   const servicesFilter = targets.length ? targets.map((name) => `"${name}"`).join(' OR ') : '"no-enforced-planli-callable"';
-  callablePolicy.conditions[0].conditionMatchedLog.filter = `resource.type="cloud_run_revision" AND resource.labels.service_name=(${servicesFilter}) AND ((labels."firebase-log-type"="callable-request-verification" AND (jsonPayload.verifications.app=("MISSING" OR "INVALID") OR jsonPayload.verifications.appCheck=("MISSING" OR "INVALID"))) OR (jsonPayload.message="app_check_rejected" AND jsonPayload.reason="APP_CHECK_REPLAYED"))`;
+  callablePolicy.conditions[0].conditionMatchedLog.filter = `resource.type="cloud_run_revision" AND resource.labels.service_name=(${servicesFilter}) AND ((labels."firebase-log-type"="callable-request-verification" AND (jsonPayload.verifications.app=("MISSING" OR "INVALID") OR jsonPayload.verifications.appCheck=("MISSING" OR "INVALID"))) OR (jsonPayload.message="app_check_rejected" AND jsonPayload.reason=("APP_CHECK_REPLAYED" OR "APP_CHECK_REQUIRED" OR "APP_CHECK_VERIFICATION_UNAVAILABLE")))`;
   plan.policies.push({
     displayName: 'PlanLi Error - App Check service rejected request',
     documentation: { content: 'App Check denied a Firestore, Storage or Authentication request. Compare platform smoke results and deliberate probes; a rejection alone does not identify a legitimate client.', mimeType: 'text/markdown' },
