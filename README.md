@@ -25,7 +25,52 @@ The existing Text Search quota remains zero. See
 
 ## Current environment status
 
-### Security stage 3 (atomic replay verified; Firestore enforcement under observation)
+### Security stage 3 — completed (2026-09-30)
+
+September 30 current checkpoint: all 103 callable Functions and Firestore,
+Storage and Firebase Authentication are enforced, and all 15 rollout groups
+have accepted runtime evidence. The final live inventory matches every journal
+post-state (`final-inventory-verification.json`). The old `moderateContent`
+endpoint is absent. Google Identity for iOS (`oauth2.googleapis.com`) remains
+explicitly excluded and UNENFORCED.
+
+The owner confirmed post-propagation email/password and Google sign-in on both
+devices and Apple on iPhone. Web TOTP sign-in and continued admin operation were
+verified. The final isolated Auth controls rejected missing, invalid and expired
+App Check tokens (401) while valid sign-in succeeded (200). A generated reset link
+was verified and used to change only the disposable fixture password, followed
+by successful fresh sign-in; reset-email delivery was not tested. The disposable
+account, private/public profiles and children, six synthetic variants and both
+staging paths were independently verified absent after self-deletion. Its
+credentials/reset link were removed locally. Real admin-form synthetic assets
+were also cleaned without changing the public destination.
+
+Closure was recorded on `fix/web-upload-blob-csp` against source checkpoint
+`555b9b4`. Hosting is the reviewed `c725a59` header-only release, and the three
+atomic replay callables retain their reviewed `f61c5a1` source; the other 100
+callables retain the prior rollout source. No new native build, OTA, store
+submission, IAM grant or Rules change accompanied the service activations.
+The final observation ran from `13:10:27Z` through `13:41:09Z` (over 30 minutes).
+The project-wide Cloud Run query, including callable and background services,
+found no ERROR/5xx events in that window. Service metrics contained only the five
+deliberate Authentication denials (two missing, two invalid and one expired token)
+alongside successful requests from all three platforms. The earlier recovered
+`13:00:52Z` allocation incident is retained in the history below, outside this
+final clean window. Atomic-ledger TTL remains ACTIVE with its index exemption.
+Stage 3 is closed; this does not approve the separate final launch gate.
+Receipts: `stage3-closure.json`, `final-inventory-verification.json`,
+`final-all-backend-health.json`, `authentication-acceptance-v2.json`,
+`service-fixture-cleanup.json`, and `final-ledger-ttl.json`.
+
+Open launch-review items are separate from App Check enforcement: deep secure
+storage migration/restore and backup/restore validation deferred from stage 2;
+operational readiness/cost limits; the missing standalone-admin sign-out control;
+and bounded retry/backoff for the acknowledgement burst described below. Exact
+installed Android version/model and device OTA IDs remain unverified. Functional
+Android continuity was exercised across the rollout with reads, favorites,
+background uploads and fresh sign-ins.
+
+#### Rollout history (earlier checkpoints superseded by the current status above)
 
 Rollout expansion stopped on September 27 after the deletion replay control failed.
 The deletion group was applied at `2026-09-27T16:41:12.201Z` and initially **not accepted**:
@@ -181,14 +226,131 @@ imports the accepted unchanged groups and the new correction receipts; it does
 not pretend that all Functions were redeployed from this operator source.
 
 Firestore App Check was set to ENFORCED at `2026-09-30T12:15:26.209Z` with its
-previous mode/etag retained for focused rollback. It is **applied, not accepted**.
+previous mode/etag retained for focused rollback. Its post-window evidence was
+accepted on September 30 after the owner confirmed both-device checks.
 The minimum observation window ends at `12:30:26Z` (15:30:26 Israel); the owner
 was asked to run both-device read/favorite/update checks after 15:31. An early
 paired anonymous GET of the same public active destination returned 200 with a
 valid App Check token and 403 for missing/invalid tokens. The denial message is
-generic; final acceptance still requires service metrics and post-window platform
-evidence. Storage, Authentication and excluded Google Identity iOS enforcement
-remain UNENFORCED. Stage 3 and the final launch gate remain open.
+generic; acceptance used the service metrics and post-window platform evidence
+below. Firebase Authentication is now ENFORCED as recorded below; excluded
+Google Identity iOS enforcement remains UNENFORCED. Stage 3 and the final launch
+gate remain open.
+
+After the propagation window, the `12:30:36Z` paired control again returned
+200/403/403. Explicit INVALID/DENY and MISSING_UNKNOWN_ORIGIN/DENY metric counts
+each increased by one after that probe, proving the App Check boundary despite
+the generic error text. The hosted admin reloaded successfully with live
+Firestore listener and dashboard responses. A `12:30:45Z` query over all 103
+callables found no ERROR/5xx since the service change. The owner separately
+confirmed the post-15:31 two-device read/favorite/update check; the earlier
+guest/sign-in confirmation was not substituted for this later check. Receipts:
+`firestore-final-boundary-verdict.json`, `firestore-web-final.json`, and
+`firestore-callable-health.json`.
+
+Storage App Check was set to ENFORCED at `2026-09-30T12:40:20.903Z` using the
+same service-continuation manifest and prior-state safeguards. Its read-back
+state SHA-256 is `62226a8f178e7c02b0c4266e4a4c961f7afce8a61c3ffc5f6d44be456a239c09`.
+It was accepted at `2026-09-30T13:09:20.245Z`. The 15-minute propagation window ended at
+`12:55:20Z`; the owner was asked to test fresh uploads and 20-second background
+continuity on both devices after 15:56 Israel. Pre-enforcement receipts include
+the native September 27 upload tests, the September 30 hosted form proof, and
+the disposable fixture upload/display control. No Functions, Rules, Hosting or
+client release accompanied this service-setting change.
+
+The monitoring read-back required no additional change: the existing enabled
+service-denial policy already covers Storage (`monitor-storage-plan.json`). At
+`12:43:38Z`, the post-activation callable error query was empty. The first hosted
+form attempt stopped locally at the existing recent-admin-auth check, before any
+Storage upload; the owner was asked to sign in again with TOTP. Temporary network
+blocking and form text were cleared. Storage negative controls, post-window Web
+upload and both-device background upload checks are still pending; no acceptance
+or Authentication enforcement has been recorded.
+
+After fresh administrator sign-in and the Storage propagation window, the
+dedicated fixture test returned explicit App Check 401 errors for missing and
+invalid tokens, verified that neither request created an object, then uploaded
+to the same owned staging path with a valid token (200) and processed/displayed
+the image. The real hosted form also completed Storage upload and `prepareMedia`
+with App Check (200/200); all three processed variants decoded successfully.
+Its final public destination write was deliberately blocked, so this proves
+upload/processing/display, not public publication. That block was removed, the
+form cleared/reloaded, and the three synthetic admin-owned objects were deleted
+with exact generation/metageneration guards and verified absent. The destination
+remained unchanged. The dedicated service fixture's before/after test assets
+remain pending fixture cleanup after the Auth tests.
+
+At `2026-09-30T12:58:09Z`, Storage metrics showed VALID/ALLOW Web traffic and one
+explicit INVALID/DENY plus one MISSING_UNKNOWN_ORIGIN/DENY, matching the controls.
+The `12:58:10Z` callable health query was empty. Both-device post-15:56 background
+upload confirmation is still required before Storage acceptance and Authentication
+activation at that checkpoint. Receipts: `storage-after-boundary.json`, `storage-after-display.json`,
+`storage-hosted-form-proof.json`, `storage-hosted-cleanup.json`,
+`storage-service-metrics.json`, and `storage-callable-health.json`.
+
+The owner subsequently confirmed successful two-device upload/background tests.
+At `13:05:32Z`, fresh Storage VALID/ALLOW traffic was present for Android and iOS
+as well as Web. Expansion paused when the final health query found two Cloud Run
+500 responses for `acknowledgeBackgroundOperation` at `13:00:52Z`: both were
+zero-latency "no available instance" failures during a 16-request burst and
+autoscaling. The unchanged revision subsequently served 21 successful requests
+through `13:04:46Z`; there were no startup errors or App Check denials in that
+incident. The precise provider allocation decision is not observable. Recovery
+and classification were reviewed before acceptance, with the raw errors retained
+in the evidence rather than reported as a clean window. Client acknowledgement
+burst limiting/backoff is an open operational follow-up for the launch review.
+Receipts: `storage-native-confirmed.json`, `storage-acknowledge-investigation.json`,
+`storage-acknowledge-diagnosis.json`, and `storage-acceptance-v2.json`.
+
+Firebase Authentication App Check was set to ENFORCED at
+`2026-09-30T13:10:27.443Z`, with independent read-back state SHA-256
+`c9e301a817274b702b97a6446d63e57c77f0add0065e3bc687ef88fe0e572b11`.
+It is **applied, not accepted**. The minimum propagation window ends at
+`13:25:27Z`; the owner was asked to test fresh email/password, Google on both
+devices, and Apple on iPhone after 16:26 Israel. Post-window Web TOTP, isolated
+missing/invalid/expired-token controls, fixture password reset, cleanup, and the
+final 30-minute observation remain pending. `oauth2.googleapis.com` remains
+excluded. No client release, IAM or Rules change accompanied this activation.
+Monitoring read-back found the required service-denial policy already enabled
+and in scope (`monitor-authentication-plan.json`), so no duplicate alert or
+policy update was applied. The local fixture sign-in/reset probe is prepared
+with a 15-minute gate and dry-run default; it has not run yet. The built-in
+browser was returned to the login screen using the same tab-local sign-out
+workaround, and the owner was asked to complete Web TOTP after 16:26 Israel.
+The owner completed the Web sign-in early, at approximately 16:14 Israel; the
+admin dashboard rendered successfully. A paired disposable sign-in control at
+`13:15:13Z` returned explicit App Check 401 errors for missing/invalid tokens and
+200 for the same credentials with valid attestation. These are initial live
+successes, not completion of the propagation gate. Final controls, password
+reset and native provider results remain pending. Receipts:
+`authentication-web-early-confirmed.json` and `authentication-early-boundary.json`.
+The owner supplied the delivered Authentication-denial email screenshot for the
+incident starting `13:17Z`, count 2. Read-back at `13:21:33Z` showed exactly one
+INVALID/DENY and one MISSING_UNKNOWN_ORIGIN/DENY for Identity Toolkit, matching
+the two deliberate `13:15:13Z` controls, alongside valid Web ALLOW requests.
+This confirms expected alert delivery; it is not a native sign-in failure report.
+Receipt: `authentication-alert-user-confirmed.json`.
+
+The standalone hosted admin has no general sign-out control, and its root back
+button does not leave the panel. This blocks the normal recovery path when a
+sensitive action requires recent authentication. For this test only, the single
+Firebase Auth entry in this PlanLi tab's sessionStorage was removed and the page
+reloaded to allow fresh sign-in. No account, credential, MFA, server session or
+other browser data was changed. A visible sign-out/reauthentication control is an
+open admin usability gap; no client code or bundle fix has been released for it.
+
+The service-denial alert (`7465525761534131574`) was enabled with guarded
+read-back after the Firestore change. The owner confirmed receipt of the separate
+`PlanLi Error - App Check service rejected request` email from the deliberate
+15:17 Israel probes. App Check metrics explicitly recorded one INVALID/DENY and
+one MISSING_UNKNOWN_ORIGIN/DENY, alongside VALID/ALLOW traffic from iOS, Android
+and Web; the generic REST denial alone was not used as proof.
+
+A dedicated disposable service fixture completed an additional Storage baseline
+upload and `prepareMedia` processing at `2026-09-30T12:23:42.327Z`; its processed
+image decoded successfully in the hosted browser. Its private synthetic variants
+remain pending cleanup with that fixture after the service tests. This is a
+pre-enforcement control, not evidence that Storage enforcement is enabled.
 
 Stage 3 is in progress on `fix/security-stage3-app-check`, based on
 `02fdc659f33d28cc406bcfd2fb73995744491a04`. The four-function canary, seven
@@ -401,8 +563,9 @@ remains in its own branch/PR #453. Neither media hardening nor marker changes ar
 included in this stage-3 source.
 
 Stage 2 remains closed for progression with owner-deferred validation, not fully
-verified: deep secure-storage migration/restore and remaining Android continuity
-are still pending. Sign-out/link-return smoke on both devices was owner-confirmed
+verified: deep secure-storage migration/restore remains pending. Functional Android
+continuity was subsequently exercised during the September 30 rollout, as recorded
+above. Sign-out/link-return smoke on both devices was owner-confirmed
 during stage-3 canary acceptance. iPhone 16 / iOS app 1.1.3 (34)
 was owner-confirmed. Android installation from Google Play was owner-confirmed;
 the existing AAB is 1.1.0 (12), but the installed Android version/model and exact
