@@ -64,3 +64,14 @@ test('account deletion page retains its isolated deny-by-default CSP', () => {
   assert.deepEqual(directives.get('frame-ancestors'), ["'none'"]);
   assert.deepEqual(directives.get('object-src'), ["'none'"]);
 });
+
+test('admin image selection permits local blob images without permitting blob scripts or connections', () => {
+  const directives = parseDirectives(contentSecurityPolicyFor('**'));
+  assert.deepEqual(directives.get('img-src'), ["'self'", 'data:', 'blob:', 'https:']);
+  for (const directive of ['default-src', 'script-src', 'connect-src', 'frame-src']) {
+    assert.ok(!directives.get(directive).includes('blob:'), `${directive} must not permit blob URLs`);
+  }
+  for (const route of ['/trip{,/**}', '/route{,/**}', '/recommendation{,/**}']) {
+    assert.deepEqual(parseDirectives(contentSecurityPolicyFor(route)).get('img-src'), ["'self'"]);
+  }
+});
