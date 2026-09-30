@@ -25,7 +25,111 @@ The existing Text Search quota remains zero. See
 
 ## Current environment status
 
-### Security stage 3 (2026-09-27, 91 callables enforced; upload recovery verified)
+### Security stage 3 (103 callables enforced; atomic replay correction verified)
+
+Rollout expansion stopped on September 27 after the deletion replay control failed.
+The deletion group was applied at `2026-09-27T16:41:12.201Z` and initially **not accepted**:
+101 callables passed their group gates, while both deletion callables await replay
+verification. Missing App Check returned 401 for both deletion endpoints. A fresh
+limited-use token deleted the dedicated fixture's first private empty trip; reuse
+of the same token returned 404/NOT_FOUND instead of 403/APP_CHECK_REPLAYED, reaching
+business logic. Account deletion was not attempted at that checkpoint. The disposable account,
+second private trip and synthetic upload were reserved for verified cleanup below.
+Do not rerun the initial destructive test without reconciling this partial state.
+
+Read-only revalidation at `2026-09-30T11:04:26Z` confirmed `deletecontent-00032-bot`
+and `requestaccountdeletion-00031-mox` remain ACTIVE with
+`PLANLI_ENFORCE_APP_CHECK=true`. Their downloaded source archive matches local
+`index.js`, `callableAppCheck.js`, `package.json` and `package-lock.json` exactly.
+The provider-side cause of the replay failure is unproven. Firestore, Storage
+and Authentication service enforcement has not been enabled by this workflow.
+Stage 3 remains open; earlier platform results are September 27 evidence unless
+explicitly updated below.
+
+September 30 isolation controls used fresh Web limited-use attestations, empty
+request data and no Auth header, so they could not authorize deletion. Both
+endpoints intermittently accepted a previously consumed token up to the
+`SIGN_IN_REQUIRED` boundary, including tokens that had already produced
+`APP_CHECK_REPLAYED`. Fourteen request traces were correlated with VALID App Check
+and MISSING Auth on the exact serving revisions; each endpoint retained the same
+instance across its passing/failing replay controls. This rules out traffic split
+between old/new revisions and confirms the current guard is not sufficient for
+the required replay guarantee. It does not identify a provider-side root cause.
+Direct verifier diagnosis under the operator account returned IAM permission
+denied; no IAM roles or impersonation permissions were added.
+
+The existing callable rejection alert was expanded to all 103 deployed enforced
+targets with guarded state hashes and independent policy read-back on September
+30 (`monitor-deletion-applied-sept30.json`). The service-level policy stays disabled
+because those services remain UNENFORCED, independently rechecked at `11:08:09Z`.
+The earlier received email remains delivery evidence; no new delivery claim is
+made. The owner explicitly approved the schema-scope change and focused deployment
+of an atomic, expiring private consumed-token ledger for guest issuance and both
+deletion callables after validation/review. The correction creates one shared
+marker from verified issuer/app/jti, stores only `expireAt`, records SDK-rejected
+tokens too and fails closed on datastore uncertainty. Unenforced/emulator behavior
+is preserved. Validation: 17 guard/HTTP-boundary tests, 33 existing auth/deletion/
+guest tests and a real Firestore emulator concurrency/privacy check passed. Twenty
+concurrent requests through two independent datastore clients produced exactly one
+admission; anonymous reads of the private marker were denied. The original guard
+admitted both requests in the equivalent false/false regression control.
+The correction was deployed only to `issueGuestSession`, `deleteContent` and
+`requestAccountDeletion` at `2026-09-30T11:36:14Z`–`11:36:17Z`, from reviewed
+Functions source `f61c5a15f68953709f5aedc8f5fb97194322da18` on
+`fix/security-stage3-app-check` (operator/monitoring commit `e0916b1`). Independent
+read-back confirmed ACTIVE, 100% traffic, Node 22, persisted enforcement and source
+marker `115fbfeece9abdab2939461d8c3c2bfea2e2bf830e83653345d154f904e08500`:
+
+| Callable | Serving revision |
+| --- | --- |
+| `issueGuestSession` | `issueguestsession-00003-vix` |
+| `deleteContent` | `deletecontent-00033-doz` |
+| `requestAccountDeletion` | `requestaccountdeletion-00032-bax` |
+
+Downloaded deployed `index.js`, `callableAppCheck.js`, package and lock files match
+the reviewed local files for all three targets. Existing runtime/service-account/
+secret settings were preserved. The `appCheckConsumedTokens.expireAt` TTL is ACTIVE,
+its operation is complete, and that field is exempt from indexing. No other index
+or rule was deployed. The final immutable review reported no actionable findings;
+8 monitoring tests also passed. The existing alert was updated with guarded
+read-back to cover the new verification-required/unavailable reasons.
+
+Live controls after this deployment: fresh guest issuance succeeded; fresh tokens
+for both deletion endpoints reached the expected sign-in boundary; all sequential,
+delayed and cross-endpoint replays returned 403/APP_CHECK_REPLAYED. Twelve concurrent
+requests sharing one token were all rejected: the SDK-consumed request can create
+the marker before the SDK-fresh request. The safety guarantee is **at most one**
+admission, not guaranteed success for a deliberate concurrent replay. The initial
+probe's exactly-one assertion was therefore too strict; its result was preserved,
+and separate fresh-token controls passed without weakening the replay check.
+
+A new empty trip was created in the existing disposable account, deleted with a
+fresh token, and all replay attempts were rejected without further business writes.
+Fresh account deletion then completed; independent reads confirmed the remaining
+trip and children, private/public profiles, Auth user, media registry and all three
+synthetic image variants were removed. The deletion job is complete and local
+fixture credentials were removed. Thirty-five probe traces match server outcomes
+and serving revisions, including 27 replay rejections; no new ERROR/5xx events were
+found for these three functions in the checked post-deployment window. The owner
+reported guest content loads in response to the requested iPhone/Android check;
+an explicit report of the subsequent sign-in result is still outstanding.
+
+Ignored receipts include `ledger-rollout.json`, `ledger-deploy-readback.json`,
+`ledger-source-files.json`, `ledger-ttl-readback.json`, `ledger-live-probe.json`,
+`ledger-live-continuation.json`, `ledger-deletion-live.json`,
+`ledger-live-observation.json` and `monitor-ledger-applied.json`. They retain
+sanitized outcomes/traces, not actual attestations. The original rollout manifest
+and failed probe remain immutable; further service rollout requires an explicit
+continuation baseline acknowledging these three corrected targets and the unchanged
+other 100 callables. This is not yet a completed Stage 3 or launch approval.
+
+The actual hosted Web upload form was exercised on September 30 after admin/TOTP
+sign-in. Selecting a synthetic JPEG failed before Storage: local `blob:` image
+loads were blocked by CSP and the client reported `normalizeImageUri failed` /
+`Error picking image`. No Storage upload or final destination-image write occurred.
+A temporary browser-only block on `setDestinationUploadedImage` protected public
+content during the test and was removed afterward. This is a failed Web preflight,
+not successful upload evidence; a separate focused Hosting CSP correction remains.
 
 Stage 3 is in progress on `fix/security-stage3-app-check`, based on
 `02fdc659f33d28cc406bcfd2fb73995744491a04`. The four-function canary, seven
@@ -127,7 +231,8 @@ latter stopped at the SDK boundary. This verifies the changed security boundary,
 not every business operation. No user business data was mutated by these probes.
 All 20 traces correlated; the `15:12:05Z` read found no server errors.
 The current group ledger below supersedes this intermediate checkpoint.
-Both deletion callables remain pending.
+Both deletion callables are deployed, but their replay acceptance gate is blocked
+as described above.
 Firestore/Storage/Authentication service enforcement remains off.
 
 | Public callable | Serving revision |
@@ -141,7 +246,7 @@ Firestore/Storage/Authentication service enforcement remains off.
 | `getSharedTrip` | `getsharedtrip-00002-koj` |
 
 <!-- stage3-batch-status:start -->
-Current verified serving inventory: **91/103 callables enforced**.
+Current verified serving inventory: **103/103 callables enforced**.
 
 | Group | Targets | Applied (UTC) | Gate | Post-state SHA-256 |
 | --- | --- | --- | --- | --- |
@@ -154,7 +259,9 @@ Current verified serving inventory: **91/103 callables enforced**.
 | remaining-5 | 10 | 2026-09-27T15:30:47.429Z | accepted | `6dc030e6bb8b2ca22e06fd7699cbed812ef87ac2f1c301ce61cd1b488151d44e` |
 | remaining-6 | 10 | 2026-09-27T15:36:02.873Z | accepted | `9ecf017c89b744552f1f37123d898d38fafa7edb88df6cc9d94be6b711028209` |
 | remaining-7 | 10 | 2026-09-27T16:09:09.474Z | accepted | `c853c9d2971dad61ae42a364896f23735a0463c456accb23b64e9db0484386e9` |
-| remaining-8 | 10 | 2026-09-27T16:14:49.875Z | applied | `26080eee520f97eca85189d4fe211733e82a00dfcd645f7459bcf094ff81186a` |
+| remaining-8 | 10 | 2026-09-27T16:14:49.875Z | accepted | `26080eee520f97eca85189d4fe211733e82a00dfcd645f7459bcf094ff81186a` |
+| remaining-9 | 10 | 2026-09-27T16:22:51.778Z | accepted | `46e88f184acd9c848b6c225c538617e7db1b564767f05dd7e5e4310e52407c18` |
+| deletion | 2 | 2026-09-27T16:41:12.201Z | applied | `e1c283cb3ba0c3020d9737c39d96b2bbca3897b4ab957d19529eae677f4883a4` |
 
 Remaining-group receipts pair valid attestation/no Auth (SIGN_IN_REQUIRED) and
 missing-attestation rejection on each target, correlated against serving-revision
