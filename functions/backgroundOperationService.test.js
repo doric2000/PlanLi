@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const { randomUUID } = require('node:crypto');
 const { TERMS_VERSION, PRIVACY_VERSION, PROFILE_DETAILS_VERSION } = require('./legalPolicy.generated');
 const service = require('./backgroundOperationService');
+const routeDrafts = require('./routeDraftService');
 
 const bucket = 'demo-planli-e2e.appspot.com';
 const auth = { uid: 'owner', token: { email_verified: true, auth_time: Math.floor(Date.now() / 1000), firebase: { sign_in_provider: 'password' } } };
@@ -169,13 +170,39 @@ test('discard cannot race a pending save and cannot resurrect a discarded failur
 
 test('route media preserves mixed remote/local ordering and rejects stale slot identities', () => {
   const old = { assetId: 'remote' }; const added = { assetId: 'new' };
-  const draft = { days: [{ draftId: 'day', stops: [{ draftId: 'stop', media: old, mediaOrder: ['local', 'remote'] }] }] };
+  const draft = { days: [{ id: 'day', stops: [{ id: 'stop', media: old, mediaOrder: ['local', 'remote'] }] }] };
   const item = { index: 0, asset: added, slot: { type: 'route-stop', dayIndex: 0, stopIndex: 0, mediaIndex: 0, dayDraftId: 'day', draftId: 'stop' } };
   const result = service.attachManifestAssets(draft, [item], 'route');
   assert.deepEqual(result.days[0].stops[0].media, added);
   assert.deepEqual(result.days[0].stops[0].additionalMedia, [old]);
   assert.equal(draft.days[0].stops[0].media, old);
   assert.throws(() => service.attachManifestAssets(draft, [{ ...item, slot: { ...item.slot, draftId: 'moved' } }], 'route'));
+  assert.throws(() => service.attachManifestAssets(draft, [{ ...item, slot: { ...item.slot, dayDraftId: 'other-day' } }], 'route'));
+});
+
+test('background route media attaches to canonical identities read from a saved draft', async () => {
+  const f = fixture();
+  const revisionPath = 'routes/test-route/revisions/test-revision';
+  f.records.set(revisionPath, { ownerId: 'owner', state: 'draft', draft: { title: 'Test route' } });
+  f.records.set(`${revisionPath}/days/day_001`, { position: 0 });
+  f.records.set(`${revisionPath}/days/day_001/stops/stop_1`, { id: 'stop_1', position: 0 });
+  const loaded = await routeDrafts.readDraftRevision(f.admin.firestore(), { revisionPath });
+  const draft = routeDrafts.stripServerLocationBindings(loaded.draft);
+  const dayAsset = { assetId: randomUUID() };
+  const stopAsset = { assetId: randomUUID() };
+  const items = [
+    { index: 0, asset: dayAsset, slot: { type: 'route-day', dayIndex: 0, draftId: 'day_001' } },
+    { index: 1, asset: stopAsset, slot: { type: 'route-stop', dayIndex: 0, stopIndex: 0,
+      mediaIndex: 0, dayDraftId: 'day_001', draftId: 'stop_1' } },
+  ];
+  const result = service.attachManifestAssets(draft, items, 'route');
+  assert.deepEqual(result.days[0].media, dayAsset);
+  assert.deepEqual(result.days[0].stops[0].media, stopAsset);
+  assert.equal(draft.days[0].media, undefined);
+  assert.equal(draft.days[0].stops[0].media, undefined);
+  assert.throws(() => service.attachManifestAssets(draft,
+    [{ ...items[0], slot: { ...items[0].slot, draftId: 'other-day' } }], 'route'),
+  (error) => error.details?.reason === 'OPERATION_DRAFT_CONFLICT');
 });
 
 test('unseen server outcomes are retained until their owner acknowledges them', async () => {

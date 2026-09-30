@@ -25,6 +25,572 @@ The existing Text Search quota remains zero. See
 
 ## Current environment status
 
+### Security stage 3 — completed (2026-09-30)
+
+September 30 current checkpoint: all 103 callable Functions and Firestore,
+Storage and Firebase Authentication are enforced, and all 15 rollout groups
+have accepted runtime evidence. The final live inventory matches every journal
+post-state (`final-inventory-verification.json`). The old `moderateContent`
+endpoint is absent. Google Identity for iOS (`oauth2.googleapis.com`) remains
+explicitly excluded and UNENFORCED.
+
+The owner confirmed post-propagation email/password and Google sign-in on both
+devices and Apple on iPhone. Web TOTP sign-in and continued admin operation were
+verified. The final isolated Auth controls rejected missing, invalid and expired
+App Check tokens (401) while valid sign-in succeeded (200). A generated reset link
+was verified and used to change only the disposable fixture password, followed
+by successful fresh sign-in; reset-email delivery was not tested. The disposable
+account, private/public profiles and children, six synthetic variants and both
+staging paths were independently verified absent after self-deletion. Its
+credentials/reset link were removed locally. Real admin-form synthetic assets
+were also cleaned without changing the public destination.
+
+Closure was recorded on `fix/web-upload-blob-csp` against source checkpoint
+`555b9b4`. Hosting is the reviewed `c725a59` header-only release, and the three
+atomic replay callables retain their reviewed `f61c5a1` source; the other 100
+callables retain the prior rollout source. No new native build, OTA, store
+submission, IAM grant or Rules change accompanied the service activations.
+The final observation ran from `13:10:27Z` through `13:41:09Z` (over 30 minutes).
+The project-wide Cloud Run query, including callable and background services,
+found no ERROR/5xx events in that window. Service metrics contained only the five
+deliberate Authentication denials (two missing, two invalid and one expired token)
+alongside successful requests from all three platforms. The earlier recovered
+`13:00:52Z` allocation incident is retained in the history below, outside this
+final clean window. Atomic-ledger TTL remains ACTIVE with its index exemption.
+Stage 3 is closed; this does not approve the separate final launch gate.
+Receipts: `stage3-closure.json`, `final-inventory-verification.json`,
+`final-all-backend-health.json`, `authentication-acceptance-v2.json`,
+`service-fixture-cleanup.json`, and `final-ledger-ttl.json`.
+
+Open launch-review items are separate from App Check enforcement: deep secure
+storage migration/restore and backup/restore validation deferred from stage 2;
+operational readiness/cost limits; the missing standalone-admin sign-out control;
+and bounded retry/backoff for the acknowledgement burst described below. Exact
+installed Android version/model and device OTA IDs remain unverified. Functional
+Android continuity was exercised across the rollout with reads, favorites,
+background uploads and fresh sign-ins.
+
+#### Rollout history (earlier checkpoints superseded by the current status above)
+
+Rollout expansion stopped on September 27 after the deletion replay control failed.
+The deletion group was applied at `2026-09-27T16:41:12.201Z` and initially **not accepted**:
+101 callables passed their group gates, while both deletion callables await replay
+verification. Missing App Check returned 401 for both deletion endpoints. A fresh
+limited-use token deleted the dedicated fixture's first private empty trip; reuse
+of the same token returned 404/NOT_FOUND instead of 403/APP_CHECK_REPLAYED, reaching
+business logic. Account deletion was not attempted at that checkpoint. The disposable account,
+second private trip and synthetic upload were reserved for verified cleanup below.
+Do not rerun the initial destructive test without reconciling this partial state.
+
+Read-only revalidation at `2026-09-30T11:04:26Z` confirmed `deletecontent-00032-bot`
+and `requestaccountdeletion-00031-mox` remain ACTIVE with
+`PLANLI_ENFORCE_APP_CHECK=true`. Their downloaded source archive matches local
+`index.js`, `callableAppCheck.js`, `package.json` and `package-lock.json` exactly.
+The provider-side cause of the replay failure is unproven. At that checkpoint,
+Firestore, Storage and Authentication service enforcement remained disabled.
+Stage 3 remains open; earlier platform results are September 27 evidence unless
+explicitly updated below.
+
+September 30 isolation controls used fresh Web limited-use attestations, empty
+request data and no Auth header, so they could not authorize deletion. Both
+endpoints intermittently accepted a previously consumed token up to the
+`SIGN_IN_REQUIRED` boundary, including tokens that had already produced
+`APP_CHECK_REPLAYED`. Fourteen request traces were correlated with VALID App Check
+and MISSING Auth on the exact serving revisions; each endpoint retained the same
+instance across its passing/failing replay controls. This rules out traffic split
+between old/new revisions and confirms the current guard is not sufficient for
+the required replay guarantee. It does not identify a provider-side root cause.
+Direct verifier diagnosis under the operator account returned IAM permission
+denied; no IAM roles or impersonation permissions were added.
+
+The existing callable rejection alert was expanded to all 103 deployed enforced
+targets with guarded state hashes and independent policy read-back on September
+30 (`monitor-deletion-applied-sept30.json`). The service-level policy stays disabled
+because those services remain UNENFORCED, independently rechecked at `11:08:09Z`.
+The earlier received email remains delivery evidence; no new delivery claim is
+made. The owner explicitly approved the schema-scope change and focused deployment
+of an atomic, expiring private consumed-token ledger for guest issuance and both
+deletion callables after validation/review. The correction creates one shared
+marker from verified issuer/app/jti, stores only `expireAt`, records SDK-rejected
+tokens too and fails closed on datastore uncertainty. Unenforced/emulator behavior
+is preserved. Validation: 17 guard/HTTP-boundary tests, 33 existing auth/deletion/
+guest tests and a real Firestore emulator concurrency/privacy check passed. Twenty
+concurrent requests through two independent datastore clients produced exactly one
+admission; anonymous reads of the private marker were denied. The original guard
+admitted both requests in the equivalent false/false regression control.
+The correction was deployed only to `issueGuestSession`, `deleteContent` and
+`requestAccountDeletion` at `2026-09-30T11:36:14Z`–`11:36:17Z`, from reviewed
+Functions source `f61c5a15f68953709f5aedc8f5fb97194322da18` on
+`fix/security-stage3-app-check` (operator/monitoring commit `e0916b1`). Independent
+read-back confirmed ACTIVE, 100% traffic, Node 22, persisted enforcement and source
+marker `115fbfeece9abdab2939461d8c3c2bfea2e2bf830e83653345d154f904e08500`:
+
+| Callable | Serving revision |
+| --- | --- |
+| `issueGuestSession` | `issueguestsession-00003-vix` |
+| `deleteContent` | `deletecontent-00033-doz` |
+| `requestAccountDeletion` | `requestaccountdeletion-00032-bax` |
+
+Downloaded deployed `index.js`, `callableAppCheck.js`, package and lock files match
+the reviewed local files for all three targets. Existing runtime/service-account/
+secret settings were preserved. The `appCheckConsumedTokens.expireAt` TTL is ACTIVE,
+its operation is complete, and that field is exempt from indexing. No other index
+or rule was deployed. The final immutable review reported no actionable findings;
+8 monitoring tests also passed. The existing alert was updated with guarded
+read-back to cover the new verification-required/unavailable reasons.
+
+Live controls after this deployment: fresh guest issuance succeeded; fresh tokens
+for both deletion endpoints reached the expected sign-in boundary; all sequential,
+delayed and cross-endpoint replays returned 403/APP_CHECK_REPLAYED. Twelve concurrent
+requests sharing one token were all rejected: the SDK-consumed request can create
+the marker before the SDK-fresh request. The safety guarantee is **at most one**
+admission, not guaranteed success for a deliberate concurrent replay. The initial
+probe's exactly-one assertion was therefore too strict; its result was preserved,
+and separate fresh-token controls passed without weakening the replay check.
+
+A new empty trip was created in the existing disposable account, deleted with a
+fresh token, and all replay attempts were rejected without further business writes.
+Fresh account deletion then completed; independent reads confirmed the remaining
+trip and children, private/public profiles, Auth user, media registry and all three
+synthetic image variants were removed. The deletion job is complete and local
+fixture credentials were removed. Thirty-five probe traces match server outcomes
+and serving revisions, including 27 replay rejections; no new ERROR/5xx events were
+found for these three functions in the checked post-deployment window. The owner
+explicitly confirmed both iPhone and Android passed guest content loading and
+fresh sign-in after the correction (`native-ledger-confirmed.json`).
+At `2026-09-30T12:06:19.800Z`, a full 30-minute post-correction query over all 103
+callable services found no ERROR/5xx events (`ledger-all-callable-health.json`).
+Fresh service metrics showed VALID/ALLOW for iOS and Web; no new Android series
+appeared in that window; the owner subsequently confirmed the two-device result.
+
+Ignored receipts include `ledger-rollout.json`, `ledger-deploy-readback.json`,
+`ledger-source-files.json`, `ledger-ttl-readback.json`, `ledger-live-probe.json`,
+`ledger-live-continuation.json`, `ledger-deletion-live.json`,
+`ledger-live-observation.json` and `monitor-ledger-applied.json`. They retain
+sanitized outcomes/traces, not actual attestations. The original rollout manifest
+and failed probe remain immutable; further service rollout requires an explicit
+continuation baseline acknowledging these three corrected targets and the unchanged
+other 100 callables. This is not yet a completed Stage 3 or launch approval.
+
+The actual hosted Web upload form was exercised on September 30 after admin/TOTP
+sign-in. Selecting a synthetic JPEG failed before Storage: local `blob:` image
+loads were blocked by CSP and the client reported `normalizeImageUri failed` /
+`Error picking image`. No Storage upload or final destination-image write occurred.
+A temporary browser-only block on `setDestinationUploadedImage` protected public
+content during the test and was removed afterward. This is a failed Web preflight,
+not successful upload evidence. Under separate owner approval, the focused Hosting
+CSP correction was released at `2026-09-30T11:56:00.981Z` from
+`fix/web-upload-blob-csp`, commit `6e9430d7bdd75f23647b521fcf95d71f79abb87a`.
+It adds `blob:` only to global `img-src`; script, connection, frame and isolated
+link/account-deletion policies are unchanged. Three focused header tests passed;
+an actual local browser reproduced the old failure and decoded/normalized a
+480x480 JPEG under the corrected policy while continuing to block a blob script.
+The immutable final review found no actionable issues.
+
+Hosting version `c1e1c462b8af800d`, release
+`sites/planli-f0b12/channels/live/releases/1790769360981000`, independently matches
+the intended configuration and live `planli.cc/admin/` CSP. All 66 application
+files and both Firebase-reserved init files are hash-identical to prior version
+`06c2d958f2e664af`; no client bundle, Functions, Rules, OTA or native build changed.
+`hosting-csp-readback.json` records this intermediate release verification.
+
+The first post-release form retry exposed a second local-URI boundary:
+`useImageUploader` fetches the normalized `blob:` URI, and global `connect-src`
+still denied that local read. The completion adds `blob:` to `connect-src` only;
+no new remote origin, executable context or isolated-route policy was allowed.
+Three updated tests and a browser decode/normalize/local-fetch control passed,
+while blob script execution remained denied; the focused final review found no
+actionable issues. Under the authorized Hosting correction, commit
+`c725a59f64a8f4b7aca1ad86999473d6b3a4a87a` was released at
+`2026-09-30T12:06:03.625Z`, version `b154806a6f4d3da2`, release
+`sites/planli-f0b12/channels/live/releases/1790769963625000`. Independent read-back
+again verified the configuration, live CSP and all 68 unchanged file hashes
+(`hosting-csp-readback-2.json`). The actual hosted form then successfully decoded,
+normalized and uploaded the synthetic JPEG with App Check (Storage POST 200),
+processed it with `prepareMedia` (200), and decoded the returned 480x270 WebP.
+The final public destination update was deliberately blocked in the browser;
+the test therefore proves the upload/processing path, not final publication.
+That block and the temporary cache setting were removed. The destination was
+independently unchanged. All three synthetic variants were deleted using their
+exact generation/metageneration preconditions and verified absent; no registry
+entry had been created. Receipts: `hosted-form-upload-proof.json` and
+`hosted-synthetic-cleanup.json`.
+
+A fresh service-continuation snapshot and dry run accounted for the unchanged 100
+callables and three corrected revisions without modifying the original manifest
+or failed probes. Its intermediate snapshot was superseded before any service
+mutation by `services-continuation-v2.json`, manifest SHA-256
+`cfe7b83aced2d90b1fd3573ff42c1b47e35d9baec805b66c20ee3df75e714fc2`, pinned to
+operator source `c725a59` on `fix/web-upload-blob-csp`. Its separate journal explicitly
+imports the accepted unchanged groups and the new correction receipts; it does
+not pretend that all Functions were redeployed from this operator source.
+
+Firestore App Check was set to ENFORCED at `2026-09-30T12:15:26.209Z` with its
+previous mode/etag retained for focused rollback. Its post-window evidence was
+accepted on September 30 after the owner confirmed both-device checks.
+The minimum observation window ends at `12:30:26Z` (15:30:26 Israel); the owner
+was asked to run both-device read/favorite/update checks after 15:31. An early
+paired anonymous GET of the same public active destination returned 200 with a
+valid App Check token and 403 for missing/invalid tokens. The denial message is
+generic; acceptance used the service metrics and post-window platform evidence
+below. Firebase Authentication is now ENFORCED as recorded below; excluded
+Google Identity iOS enforcement remains UNENFORCED. Stage 3 and the final launch
+gate remain open.
+
+After the propagation window, the `12:30:36Z` paired control again returned
+200/403/403. Explicit INVALID/DENY and MISSING_UNKNOWN_ORIGIN/DENY metric counts
+each increased by one after that probe, proving the App Check boundary despite
+the generic error text. The hosted admin reloaded successfully with live
+Firestore listener and dashboard responses. A `12:30:45Z` query over all 103
+callables found no ERROR/5xx since the service change. The owner separately
+confirmed the post-15:31 two-device read/favorite/update check; the earlier
+guest/sign-in confirmation was not substituted for this later check. Receipts:
+`firestore-final-boundary-verdict.json`, `firestore-web-final.json`, and
+`firestore-callable-health.json`.
+
+Storage App Check was set to ENFORCED at `2026-09-30T12:40:20.903Z` using the
+same service-continuation manifest and prior-state safeguards. Its read-back
+state SHA-256 is `62226a8f178e7c02b0c4266e4a4c961f7afce8a61c3ffc5f6d44be456a239c09`.
+It was accepted at `2026-09-30T13:09:20.245Z`. The 15-minute propagation window ended at
+`12:55:20Z`; the owner was asked to test fresh uploads and 20-second background
+continuity on both devices after 15:56 Israel. Pre-enforcement receipts include
+the native September 27 upload tests, the September 30 hosted form proof, and
+the disposable fixture upload/display control. No Functions, Rules, Hosting or
+client release accompanied this service-setting change.
+
+The monitoring read-back required no additional change: the existing enabled
+service-denial policy already covers Storage (`monitor-storage-plan.json`). At
+`12:43:38Z`, the post-activation callable error query was empty. The first hosted
+form attempt stopped locally at the existing recent-admin-auth check, before any
+Storage upload; the owner was asked to sign in again with TOTP. Temporary network
+blocking and form text were cleared. Storage negative controls, post-window Web
+upload and both-device background upload checks are still pending; no acceptance
+or Authentication enforcement has been recorded.
+
+After fresh administrator sign-in and the Storage propagation window, the
+dedicated fixture test returned explicit App Check 401 errors for missing and
+invalid tokens, verified that neither request created an object, then uploaded
+to the same owned staging path with a valid token (200) and processed/displayed
+the image. The real hosted form also completed Storage upload and `prepareMedia`
+with App Check (200/200); all three processed variants decoded successfully.
+Its final public destination write was deliberately blocked, so this proves
+upload/processing/display, not public publication. That block was removed, the
+form cleared/reloaded, and the three synthetic admin-owned objects were deleted
+with exact generation/metageneration guards and verified absent. The destination
+remained unchanged. The dedicated service fixture's before/after test assets
+remain pending fixture cleanup after the Auth tests.
+
+At `2026-09-30T12:58:09Z`, Storage metrics showed VALID/ALLOW Web traffic and one
+explicit INVALID/DENY plus one MISSING_UNKNOWN_ORIGIN/DENY, matching the controls.
+The `12:58:10Z` callable health query was empty. Both-device post-15:56 background
+upload confirmation is still required before Storage acceptance and Authentication
+activation at that checkpoint. Receipts: `storage-after-boundary.json`, `storage-after-display.json`,
+`storage-hosted-form-proof.json`, `storage-hosted-cleanup.json`,
+`storage-service-metrics.json`, and `storage-callable-health.json`.
+
+The owner subsequently confirmed successful two-device upload/background tests.
+At `13:05:32Z`, fresh Storage VALID/ALLOW traffic was present for Android and iOS
+as well as Web. Expansion paused when the final health query found two Cloud Run
+500 responses for `acknowledgeBackgroundOperation` at `13:00:52Z`: both were
+zero-latency "no available instance" failures during a 16-request burst and
+autoscaling. The unchanged revision subsequently served 21 successful requests
+through `13:04:46Z`; there were no startup errors or App Check denials in that
+incident. The precise provider allocation decision is not observable. Recovery
+and classification were reviewed before acceptance, with the raw errors retained
+in the evidence rather than reported as a clean window. Client acknowledgement
+burst limiting/backoff is an open operational follow-up for the launch review.
+Receipts: `storage-native-confirmed.json`, `storage-acknowledge-investigation.json`,
+`storage-acknowledge-diagnosis.json`, and `storage-acceptance-v2.json`.
+
+Firebase Authentication App Check was set to ENFORCED at
+`2026-09-30T13:10:27.443Z`, with independent read-back state SHA-256
+`c9e301a817274b702b97a6446d63e57c77f0add0065e3bc687ef88fe0e572b11`.
+It is **applied, not accepted**. The minimum propagation window ends at
+`13:25:27Z`; the owner was asked to test fresh email/password, Google on both
+devices, and Apple on iPhone after 16:26 Israel. Post-window Web TOTP, isolated
+missing/invalid/expired-token controls, fixture password reset, cleanup, and the
+final 30-minute observation remain pending. `oauth2.googleapis.com` remains
+excluded. No client release, IAM or Rules change accompanied this activation.
+Monitoring read-back found the required service-denial policy already enabled
+and in scope (`monitor-authentication-plan.json`), so no duplicate alert or
+policy update was applied. The local fixture sign-in/reset probe is prepared
+with a 15-minute gate and dry-run default; it has not run yet. The built-in
+browser was returned to the login screen using the same tab-local sign-out
+workaround, and the owner was asked to complete Web TOTP after 16:26 Israel.
+The owner completed the Web sign-in early, at approximately 16:14 Israel; the
+admin dashboard rendered successfully. A paired disposable sign-in control at
+`13:15:13Z` returned explicit App Check 401 errors for missing/invalid tokens and
+200 for the same credentials with valid attestation. These are initial live
+successes, not completion of the propagation gate. Final controls, password
+reset and native provider results remain pending. Receipts:
+`authentication-web-early-confirmed.json` and `authentication-early-boundary.json`.
+The owner supplied the delivered Authentication-denial email screenshot for the
+incident starting `13:17Z`, count 2. Read-back at `13:21:33Z` showed exactly one
+INVALID/DENY and one MISSING_UNKNOWN_ORIGIN/DENY for Identity Toolkit, matching
+the two deliberate `13:15:13Z` controls, alongside valid Web ALLOW requests.
+This confirms expected alert delivery; it is not a native sign-in failure report.
+Receipt: `authentication-alert-user-confirmed.json`.
+
+The standalone hosted admin has no general sign-out control, and its root back
+button does not leave the panel. This blocks the normal recovery path when a
+sensitive action requires recent authentication. For this test only, the single
+Firebase Auth entry in this PlanLi tab's sessionStorage was removed and the page
+reloaded to allow fresh sign-in. No account, credential, MFA, server session or
+other browser data was changed. A visible sign-out/reauthentication control is an
+open admin usability gap; no client code or bundle fix has been released for it.
+
+The service-denial alert (`7465525761534131574`) was enabled with guarded
+read-back after the Firestore change. The owner confirmed receipt of the separate
+`PlanLi Error - App Check service rejected request` email from the deliberate
+15:17 Israel probes. App Check metrics explicitly recorded one INVALID/DENY and
+one MISSING_UNKNOWN_ORIGIN/DENY, alongside VALID/ALLOW traffic from iOS, Android
+and Web; the generic REST denial alone was not used as proof.
+
+A dedicated disposable service fixture completed an additional Storage baseline
+upload and `prepareMedia` processing at `2026-09-30T12:23:42.327Z`; its processed
+image decoded successfully in the hosted browser. Its private synthetic variants
+remain pending cleanup with that fixture after the service tests. This is a
+pre-enforcement control, not evidence that Storage enforcement is enabled.
+
+Stage 3 is in progress on `fix/security-stage3-app-check`, based on
+`02fdc659f33d28cc406bcfd2fb73995744491a04`. The four-function canary, seven
+public callables and the remaining groups listed below are enforced at this checkpoint.
+The obsolete `moderateContent` endpoint was removed;
+no client release occurred.
+The [stage-3 runbook](docs/security-app-check-rollout.md) fixes the rollout order,
+evidence gates, notification proof and per-batch rollback procedure.
+At `2026-09-27T15:39Z`, the owner reported iPhone route-photo update failure.
+Expansion stopped before `remaining-7`; no rollback was applied because the
+diagnosis identified a separate existing worker contract defect, not an App Check
+rejection. Native requests and upload events succeeded, the image was prepared,
+then the worker returned `OPERATION_DRAFT_CONFLICT`. The canonical saved route
+draft exposes day/stop `id`, while its media-attachment helper compared only
+`draftId`. Read-only inspection confirmed the media slot matches the canonical
+IDs. The focused fix below is deployed and the owner confirmed successful iPhone
+route-photo update. Read-only recovery verification at `2026-09-27T16:05:15.807Z`
+found the new operation successful, the route active and the uploaded asset
+attached to the published revision. Ten worker requests on the fixed revision
+returned 204 with no worker errors. The owner subsequently confirmed photo uploads
+from both iPhone and Android, including 20 seconds on the home screen. The same
+route has further successful operations. Storage metrics since `15:59Z` show
+VALID/ALLOW for iOS (4) and Android (2) at the `16:14:40Z` read-back. A synthetic
+JPEG uploaded from the production Web origin using the dedicated fixture account
+returned 200 for resumable-session creation, upload completion and `prepareMedia`;
+the browser decoded the resulting image at 480 x 480. This controlled API probe
+does not establish hosted upload-form behavior; that manual Web check is pending.
+The fixture's missing `moderation.status` was set to `active` with an update-time
+precondition for this test only; its media is reserved for account-deletion cleanup.
+The remaining-8 monitoring update initially received a Google API 500. A guarded
+retry and independent read-back confirmed the enabled policy covers all 91
+enforced callables before continuing to remaining-9.
+The fix is isolated on `fix/route-background-media-identity`, commit
+`4d906c00e63b8e67bbb7416117d7ca624725f934`: attachment now compares canonical
+day/stop IDs while retaining stale-slot rejection. All 39 focused background
+operation and route-draft tests passed under Node 22.23.1; the regression failed
+before the fix. After explicit owner approval, only
+`onBackgroundOperationWritten` was deployed from clean source commit
+`3777a61ab3170fd937418697f64f7cbcb68ecc31`, which adds documentation only to the
+reviewed fix. The deployment completed at `2026-09-27T15:59:08.923800656Z`
+(18:59 Israel). Independent read-back at `2026-09-27T15:59:35.364Z` confirmed
+ACTIVE / Node 22 and revision `onbackgroundoperationwritten-00003-qur` serving
+100% of traffic. Trigger, service account, limits and secret references match
+the baseline. The deployed source archive's `backgroundOperationService.js`
+SHA-256 matches local source exactly:
+`c0fa1b2b2b0de9621a93effb43228ca9a55bfa9be3e7e426f0a3a1f9ba65051e`.
+The previous revision `onbackgroundoperationwritten-00002-piw` and configuration
+are retained in the ignored rollback receipt captured at `2026-09-27T15:56:19.293Z`.
+The first post-update log query returned no entries; it does not prove an upload
+completed; the subsequent operation/data verification above establishes recovery.
+No other function, service enforcement, client binary or OTA changed in this
+deployment. The final read-only review
+of `4d906c0` against `670d292` found no actionable regressions and reused the
+39-pass receipt without repeating tests. The fix and release record are local;
+no push, PR or merge has been performed for this branch.
+Storage, Firestore and Authentication enforcement remain off. Stage 3 is not closed.
+Reviewed source checkpoint: `d7a860090441631149e653e0af33020654458428`, source
+SHA-256 `5feea6f8cdc34669b22138da6643734f668a5c3491a64fa59dd8fb3f46772d33`.
+The first canary deployment stopped before mutation when Firebase CLI could not
+list Functions. Independent read-back matched all four baseline revisions and
+configuration exactly; rollback reconciliation skipped all mutations and closed
+that attempt at `2026-09-27T14:19:01Z`. A subsequent read-only CLI inventory
+succeeded. The single retry uses the unchanged reviewed source and manifest
+`62f067dee98442776d4925b94a7bc8c0affbdf88a99ba6bfc6349ff97d8a05f7`
+in ignored `security-stage3/rollout-retry1.json`. It completed with independent
+runtime environment/source and 100% serving-traffic verification at
+`2026-09-27T14:22:19.314Z` (17:22 Israel). Deployed revisions:
+
+| Callable | Serving revision |
+| --- | --- |
+| `issueGuestSession` | `issueguestsession-00002-tev` |
+| `getReactionState` | `getreactionstate-00029-guv` |
+| `setFavorite` | `setfavorite-00031-fup` |
+| `listAdminSavedViews` | `listadminsavedviews-00004-faf` |
+
+All four carry `PLANLI_ENFORCE_APP_CHECK=true` and the source SHA above.
+Canary acceptance passed on September 27 after the owner confirmed the requested
+iOS/Android guest, sign-in, favorite add/remove and shared-link smoke. The
+`14:53:40Z` log read correlated VALID App Check with HTTP 200 for 14 iOS, 12
+Android and one Web request on the new revisions. Android guest issuance was
+included. More than 31 minutes of observation showed no canary 5xx/errors and
+only the two deliberate missing/invalid probes. Email delivery was confirmed.
+The immutable receipt is `security-stage3/canary-evidence.json`; the journal now
+marks canary accepted. The seven public callables completed deployment and
+independent source/environment/serving-traffic verification at
+`2026-09-27T14:57:25.274Z`. Their post-state hash is
+`81ba8211fb6298c4f305a3cce6f0b8ffb2891b9d3b0a33c7ba0f30a8609d810f`.
+All seven controlled calls without App Check returned HTTP 401 after deployment.
+The owner confirmed the requested guest browsing/link smoke on both phones after
+this deployment. The `15:01:46Z` log read found VALID App Check / missing Auth
+with HTTP 200 on both native platforms and no server errors; all seven controlled
+negative traces correlated with MISSING App Check. Individual `getSharedTrip`
+positive traffic was not independently observed in that bounded window; shared
+link behavior is owner-confirmed. Public acceptance completed at `15:03:15Z`.
+`remaining-1` completed source/environment/100% traffic read-back at `15:10:34Z`.
+All ten endpoints passed paired valid-App-Check/no-Auth and missing-App-Check
+probes: the former reached `SIGN_IN_REQUIRED` with App VALID/Auth MISSING; the
+latter stopped at the SDK boundary. This verifies the changed security boundary,
+not every business operation. No user business data was mutated by these probes.
+All 20 traces correlated; the `15:12:05Z` read found no server errors.
+The current group ledger below supersedes this intermediate checkpoint.
+Both deletion callables are deployed, but their replay acceptance gate is blocked
+as described above.
+Firestore/Storage/Authentication service enforcement remains off.
+
+| Public callable | Serving revision |
+| --- | --- |
+| `getPersonalizedRecommendations` | `getpersonalizedrecommendations-00030-req` |
+| `getMapRecommendations` | `getmaprecommendations-00020-pew` |
+| `getPersonalizedRoutes` | `getpersonalizedroutes-00030-cek` |
+| `loadRouteDetails` | `loadroutedetails-00029-rus` |
+| `getDestinationOverview` | `getdestinationoverview-00025-gov` |
+| `searchDestinations` | `searchdestinations-00025-yep` |
+| `getSharedTrip` | `getsharedtrip-00002-koj` |
+
+<!-- stage3-batch-status:start -->
+Current verified serving inventory: **103/103 callables enforced**.
+
+| Group | Targets | Applied (UTC) | Gate | Post-state SHA-256 |
+| --- | --- | --- | --- | --- |
+| canary | 4 | 2026-09-27T14:22:19.314Z | accepted | `f6069068bf1d72015b87e9203360b5ac77c739bc9b0bcaad0b1ea42a5c076da3` |
+| public | 7 | 2026-09-27T14:57:25.274Z | accepted | `81ba8211fb6298c4f305a3cce6f0b8ffb2891b9d3b0a33c7ba0f30a8609d810f` |
+| remaining-1 | 10 | 2026-09-27T15:10:34.930Z | accepted | `c9caf1a03247522b532c49b732094178fcb46289c391c68b627130a012e76c26` |
+| remaining-2 | 10 | 2026-09-27T15:16:00.007Z | accepted | `9f63fe1cbf601e8291c07ad0f269aba1d25d5725ef41c9ef2af06ce095233484` |
+| remaining-3 | 10 | 2026-09-27T15:20:44.168Z | accepted | `b57c51e24f8169e9443fec62b1f7a7445e958faac25e7bdf3e2b9fe4d11dfce1` |
+| remaining-4 | 10 | 2026-09-27T15:25:26.179Z | accepted | `d31d14ac66ba114b5df29aecc41ef1092e21222a346a9309eec30647dcd5f4a5` |
+| remaining-5 | 10 | 2026-09-27T15:30:47.429Z | accepted | `6dc030e6bb8b2ca22e06fd7699cbed812ef87ac2f1c301ce61cd1b488151d44e` |
+| remaining-6 | 10 | 2026-09-27T15:36:02.873Z | accepted | `9ecf017c89b744552f1f37123d898d38fafa7edb88df6cc9d94be6b711028209` |
+| remaining-7 | 10 | 2026-09-27T16:09:09.474Z | accepted | `c853c9d2971dad61ae42a364896f23735a0463c456accb23b64e9db0484386e9` |
+| remaining-8 | 10 | 2026-09-27T16:14:49.875Z | accepted | `26080eee520f97eca85189d4fe211733e82a00dfcd645f7459bcf094ff81186a` |
+| remaining-9 | 10 | 2026-09-27T16:22:51.778Z | accepted | `46e88f184acd9c848b6c225c538617e7db1b564767f05dd7e5e4310e52407c18` |
+| deletion | 2 | 2026-09-27T16:41:12.201Z | applied | `e1c283cb3ba0c3020d9737c39d96b2bbca3897b4ab957d19529eae677f4883a4` |
+
+Remaining-group receipts pair valid attestation/no Auth (SIGN_IN_REQUIRED) and
+missing-attestation rejection on each target, correlated against serving-revision
+logs. These receipts validate the changed boundary; final full platform smoke is
+still required. Exact per-function revisions and prior rollback state remain in
+the ignored rollout journal. No service-level enforcement or deletion-group
+acceptance is implied by these callable checkpoints.
+<!-- stage3-batch-status:end -->
+
+Additional live proof at `15:25:59Z` / `15:26:00Z`: two private empty trips were
+created successfully through the enforced callable in a dedicated disposable
+account, with VALID Auth/App Check and HTTP 200. They are reserved for the
+authorized deletion/cascade tests; their identifiers and temporary credentials
+remain only in ignored local fixtures. Cleanup has not yet been verified.
+At `15:27:49Z`, a fresh limited-use token obtained through the existing Web
+provider succeeded at `issueGuestSession` (HTTP 200), and its immediate replay
+returned HTTP 403 / `APP_CHECK_REPLAYED`; both traces were verified on the exact
+serving revision. Receipt: `additional-positive-replay-observation.json`.
+The broad `15:29:38Z` health read found no server errors after each target's
+enforcement time. It retained the already documented pre-enforcement missing-index
+error separately rather than classifying that old revision as a new regression.
+At `15:35:30Z`, live read-only controls with valid App Check preserved admin
+authorization (`admin_required`) and trip ownership (`TRIP_NOT_OWNED`), while the
+fixture owner read succeeded (HTTP 200). At `15:36:05Z`, an actually expired token
+was rejected at the SDK boundary (HTTP 401). The first `remaining-6` operator
+probe also retained that old token in its browser helper; all ten SDK logs
+explicitly reported token expiry. Those receipts were preserved. Supplying the
+refreshed token explicitly, with an expiry precheck, passed all 20 paired probes
+at `15:38:03Z`; no production code change or redeployment was needed.
+
+The App Check rejection alert is expanded after each verified group; exact
+policy read-back passed, retaining the existing email channel and other controls.
+The ignored `functions/.env.planli-f0b12` now persists the enabled flag and source
+marker. Coordinate any further backend deployment with this manifest: a new
+callable deployment from that environment enables enforcement for its target.
+The existing callable rejection policy `17246188049842534170` is now enabled
+and scoped to the enforced services, including replay rejections. Service-level
+policy `7465525761534131574` was created disabled for the later service rollout;
+the other three policies and email channel were retained. Initial read-back
+flagged Google's omission of the numeric zero threshold. The operator comparison
+now treats omitted zero as equivalent while still rejecting nonzero drift;
+a subsequent read-only check matched all five policies, without reapplying them.
+Controlled missing/invalid guest-call probes at `2026-09-27T14:27:29Z` both
+returned HTTP 401; their traces identify MISSING/INVALID App Check on the new
+guest revision. The owner confirmed receipt of the App Check alert email.
+Web `listAdminSavedViews` returned HTTP 200 with VALID Auth/App Check on
+`listadminsavedviews-00004-faf` at `14:23:59Z`; the standard queue rendered
+successfully. At `14:28:36Z`, the bounded canary log check showed no 5xx/errors.
+The subsequent native smoke and observation results above supersede this early
+checkpoint. Operator-only
+read-back fixes are committed as `a742734`; the Functions/Firebase deployment
+tree is identical to `d7a8600`, and no canary redeployment was performed.
+The early read-only observation through `14:34:23Z` found no additional canary
+requests or errors; the later accepted native smoke is recorded above.
+The separately authorized `moderateContent` endpoint retirement completed during
+the observation window. A fresh seven-day check found no POST traffic, and the
+tracked callable/client surface had no consumer. Firebase CLI reported deletion
+of only that endpoint; independent Functions API, Cloud Run service and public
+URL checks all returned 404 at approximately `2026-09-27T14:31Z`. Internal
+`adminService.moderateContent` remains used by the supported moderation flow.
+
+Pre-existing launch gap discovered during Web smoke: filtered moderation cases
+(urgent/overdue) return `FAILED_PRECONDITION` for missing composite `cases`
+indexes. This occurred before canary enforcement. Dashboard and saved-view
+reads returned HTTP 200. The missing-index error is not an App Check rejection
+and remains a separate unresolved operational defect.
+
+The shared callable boundary now explicitly rejects a consumed App Check token
+before authorization or business execution whenever consumption is enabled.
+The installed SDK reports consumed tokens to the handler rather than rejecting
+them automatically. Existing client deletion calls already request limited-use
+tokens; guest issuance retains its existing fresh-token requirement.
+
+Prior workspace work was retained locally in separate branches without deployment:
+stage-2 evidence in `test/security-stage2-evidence` (`c6d39ef`), media metadata
+hardening in `fix/media-claim-metadata` (`8bc4c85`), and Android marker layering
+remains in its own branch/PR #453. Neither media hardening nor marker changes are
+included in this stage-3 source.
+
+Stage 2 remains closed for progression with owner-deferred validation, not fully
+verified: deep secure-storage migration/restore remains pending. Functional Android
+continuity was subsequently exercised during the September 30 rollout, as recorded
+above. Sign-out/link-return smoke on both devices was owner-confirmed
+during stage-3 canary acceptance. iPhone 16 / iOS app 1.1.3 (34)
+was owner-confirmed. Android installation from Google Play was owner-confirmed;
+the existing AAB is 1.1.0 (12), but the installed Android version/model and exact
+device OTA IDs still require confirmation. Both artifacts use runtime 1.4.0.
+Provider configuration includes the September 27 DeviceCheck key replacement;
+the earlier August entries below are historical. At the pre-rollout read-back,
+Functions enforcement and Firestore/Storage/Authentication service enforcement
+were off. Google Identity for iOS enforcement remains explicitly out of scope.
+
+Stage 3 is not closed until live smoke tests, negative controls, delivered alerts,
+all rollout acceptance receipts and the final observation window are recorded.
+Focused local validation: 56 Functions tests (including an actual local callable
+HTTP boundary with a stubbed verifier), 21 rollout/monitoring tests and six client
+tests passed under Node 22.23.1. Missing, invalid, expired and consumed-token
+requests were rejected before business dispatch; fresh tokens remained usable.
+This is boundary evidence, not live platform attestation. The monitoring dry run
+reused the three unrelated enabled policies and the existing email channel.
+The immutable candidate `66a2b43` received independent security and CLI reviews.
+Review fixes cover interrupted/uncertain rollback recovery, previously accepted
+traffic drift, and resolving the serving revision in a fresh post-rollback
+baseline. Execution tests exercise these failure paths. Cloud Run v2 rejected
+traffic-only validation for a managed revision; the official v1 replacement API
+passed `dryRun=all` for all four canary services while retaining each exact
+revision template. Production rollback itself has not been exercised.
+
 ### Map presentation fixes OTA (2026-09-27, published)
 
 PR [#450](https://github.com/doric2000/PlanLi/pull/450) merged as

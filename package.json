@@ -12,6 +12,7 @@
     "security:production-prerequisites": "node scripts/securityProductionPrerequisites.js",
     "security:identity-platform": "node scripts/securityIdentityPlatformPlan.js",
     "security:app-check-providers": "node scripts/securityAppCheckProviders.js",
+    "security:app-check-rollout": "node scripts/securityAppCheckRollout.js",
     "security:oauth-readiness": "node scripts/securityOauthReadiness.js",
     "test:security-local": "node --test scripts/securityLocalScan.test.js",
     "sync:travel-taxonomy": "node scripts/syncTravelTaxonomy.js",

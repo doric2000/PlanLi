@@ -45,6 +45,7 @@ test('admin Hosting CSP permits only the reCAPTCHA resources required by App Che
   ]);
   assert.deepEqual(directives.get('connect-src'), [
     "'self'",
+    'blob:',
     'https://*.googleapis.com',
     'https://*.firebaseio.com',
     'wss://*.firebaseio.com',
@@ -63,4 +64,17 @@ test('account deletion page retains its isolated deny-by-default CSP', () => {
   assert.deepEqual(directives.get('form-action'), ["'none'"]);
   assert.deepEqual(directives.get('frame-ancestors'), ["'none'"]);
   assert.deepEqual(directives.get('object-src'), ["'none'"]);
+});
+
+test('admin image upload permits decoding and reading local blobs while keeping executable contexts restricted', () => {
+  const directives = parseDirectives(contentSecurityPolicyFor('**'));
+  assert.deepEqual(directives.get('img-src'), ["'self'", 'data:', 'blob:', 'https:']);
+  assert.ok(directives.get('connect-src').includes('blob:'));
+  assert.ok(!directives.get('connect-src').includes('data:'));
+  for (const directive of ['default-src', 'script-src', 'frame-src']) {
+    assert.ok(!directives.get(directive).includes('blob:'), `${directive} must not permit blob URLs`);
+  }
+  for (const route of ['/trip{,/**}', '/route{,/**}', '/recommendation{,/**}']) {
+    assert.deepEqual(parseDirectives(contentSecurityPolicyFor(route)).get('img-src'), ["'self'"]);
+  }
 });

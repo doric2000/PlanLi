@@ -59,15 +59,15 @@ function attachManifestAssets(draft, items, kind) {
   for (const item of ordered) {
     const slot = item.slot;
     const day = next.days?.[slot.dayIndex];
-    assert(day && (!slot.dayDraftId || day.draftId === slot.dayDraftId), 'OPERATION_DRAFT_CONFLICT');
+    assert(day && (!slot.dayDraftId || day.id === slot.dayDraftId), 'OPERATION_DRAFT_CONFLICT');
     const key = `${slot.dayIndex}:${slot.type}:${slot.stopIndex ?? ''}:${slot.mediaIndex ?? ''}`;
     assert(!slots.has(key), 'OPERATION_SLOT_DUPLICATE'); slots.add(key);
     if (slot.type === 'route-day') {
-      assert(!slot.draftId || day.draftId === slot.draftId, 'OPERATION_DRAFT_CONFLICT');
+      assert(!slot.draftId || day.id === slot.draftId, 'OPERATION_DRAFT_CONFLICT');
       day.media = item.asset; delete day.image;
     } else {
       const stop = day.stops?.[slot.stopIndex];
-      assert(stop && (!slot.draftId || stop.draftId === slot.draftId), 'OPERATION_DRAFT_CONFLICT');
+      assert(stop && (!slot.draftId || stop.id === slot.draftId), 'OPERATION_DRAFT_CONFLICT');
       if (!stops.has(stop)) {
         const remote = [stop.media, ...(stop.additionalMedia || [])].filter(Boolean);
         let remoteIndex = 0;

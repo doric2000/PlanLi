@@ -1,5 +1,6 @@
 const admin = require('firebase-admin');
 const { onCall } = require('firebase-functions/v2/https');
+const { assertCallableAppCheckFresh } = require('./callableAppCheck');
 const { onDocumentCreated, onDocumentWritten } = require('firebase-functions/v2/firestore');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { onObjectFinalized } = require('firebase-functions/v2/storage');
@@ -239,7 +240,9 @@ function callable(options, handler) {
     ...firebaseOptions
   } = options;
   if (!access) throw new Error('Every callable must declare an access level.');
-  return onCall({ ...CALLABLE_OPTIONS, ...firebaseOptions }, async (request) => {
+  const effectiveOptions = { ...CALLABLE_OPTIONS, ...firebaseOptions };
+  return onCall(effectiveOptions, async (request) => {
+    await assertCallableAppCheckFresh(request, effectiveOptions, { admin });
     const safeRequest = { ...request, data: normalizeCallableInput(request.data) };
     const accessContext = await authorizeRequest({
       admin,
