@@ -25,78 +25,69 @@ The existing Text Search quota remains zero. See
 
 ## Current environment status
 
-### Security stage 4 — candidate in progress (2026-09-30)
+### Security stage 4 — deployed; final verification in progress (2026-09-30)
 
-Work is on `fix/security-stage4-operations`, based on merged `55af33c`.
-The monthly Google provider guard, terminal mobile/Web error copy, guarded
-allocation tool, four additional alert definitions and 31-day cost model are
-implemented locally. **They are not deployed, and stage 4 is not closed.**
-Billing budgets and stage 3 enforcement remain unchanged. Routes quotas were
-tightened as recorded below; Places expansion and the monthly guard are not live.
-See [stage 4 controls, rollout and response procedure](docs/security-stage4.md).
+Implementation PR [#455](https://github.com/doric2000/PlanLi/pull/455) merged as
+`9290939390ea3502e3307bf65904da37cfa46aac`. **Stage 4 is not yet closed.**
+See [controls, allocation, capacity and response procedure](docs/security-stage4.md).
 
-The owner confirms MFA and recovery for Google, GitHub, Expo and Apple, including
-the two additional GitHub writers, and confirms he is the sole Expo publisher
-and Apple signing/key operator. Record this as owner attestation; direct
-verification of every security screen and Expo/Apple membership is unverified.
-Google project/billing administrators and GitHub collaborators were
-read back. The five active monitoring policies and 22 quotas matched their plans.
-The monitoring dry run preserves all five and proposes four new provider alerts.
+- Hosting version `a05d7c90c6acf93e`, release `1790785071371000`, went live at
+  `2026-09-30T16:17:51.371Z`. Public HTTP 200, exact candidate HTML and all 32
+  asset references were verified. Fresh admin/TOTP login, overview, destination
+  list, content search and route detail rendering passed. The hosted admin entry
+  has no mobile Places search form; provider search smoke is a mobile gate.
+- Production OTA group `84716ba6-7100-4277-bb6e-87f29fcabc1e` was published at
+  `2026-09-30T16:58:18.167Z` for both platforms, runtime `1.4.0`, channel and
+  environment `production`. Candidate inspection and public asset-hash delivery
+  passed. Native targets remain Android `1.1.0 (12)` and iOS `1.1.3 (34)`;
+  no native build or store submission was performed. Device application/smokes
+  are pending. Per-platform immutable update IDs and hashes are recorded below.
+- All nine provider consumers listed in the procedure were deployed in two
+  explicit batches and independently ACTIVE at `2026-09-30T17:05:57Z`.
+  Node 22, App Check and instance/concurrency limits were preserved. The other
+  137 Functions retained their revisions; no Rules or scheduled jobs were deployed.
+- Reviewed September and October allocations were created and read back under
+  private `system/runtime/providerUsage`. September includes observed usage plus
+  one full pre-expansion daily quota for telemetry/rollout lag. October starts
+  at `2026-10-01T07:00Z`; its pre-start baseline is zero. No existing counter was reset.
+- Nine monitoring policies are enabled: five preserved and four provider alerts.
+  A tagged synthetic event opened the 80% incident at `2026-09-30T16:25:07Z`;
+  the owner confirmed email receipt. This proves the new operational alert path,
+  not a real quota exhaustion or billing-budget email. The live project-filtered
+  ILS 75 budget and its existing thresholds were read back unchanged.
+- Routes quotas are 300/day and 30/minute, independently verified earlier at
+  `2026-09-30T15:58:33.699Z`. The four Places expansions remain pending a live
+  guarded search/selection smoke. Current Places limits are 300 Autocomplete/day,
+  150 Details/day and 30/minute each; reviewed targets are 350/300 per day and
+  60/minute each. Per-user controls and both sibling projects remain unchanged.
 
-Read-only billing inspection found three active projects sharing free Maps usage.
-The owner explicitly requested leaving the two sibling projects unchanged, then
-approved paid Maps use inside the same ILS 75 total, including more than ILS 15.
-The owner authorized implementing and applying the free-aware expansion.
-The allocation tool now supports `free-plus-paid-ils`: evidenced shared free
-headroom plus one combined paid-overage budget, with prior usage preserved.
-Full-price accounting remains available as a downside stress scenario.
-No counter was seeded with a guessed zero baseline and no provider guard was deployed.
-Read-only inspection found each sibling still permits 175,000 Autocomplete and
-125,000 Place Details requests/day; those ceilings cannot protect the shared free tier.
-The account report through September 29 showed ₪4.50 and a ₪4.69 month forecast;
-this is prelaunch activity, not evidence that 200 DAU will fit the budget.
-The reproducible model puts the moderate non-Maps 200-DAU scenario near ILS 45.26.
-The final model includes the larger free-aware counter workload: non-Maps cost
-is ILS 46.06, so its reserve is ILS 47 and Maps receives up to ILS 28. A conditional
-31-day scenario includes 90% of each free allowance: 350 Autocomplete/day and
-1,030 Atmosphere reservations/month, with other SKU limits inside their assigned
-free allowances, model ILS 27.73 Maps plus ILS 47 Cloud (ILS 74.73 reserved total).
-This corrects the earlier ILS 46/29, 1,040-Atmosphere illustration, which omitted
-the additional counter workload. The old 62-session no-free example is only a
-stress scenario. Sibling consumption must fit the remaining shared headroom;
-that future allocation is not guaranteed.
-The analysis found Routes had no practical daily Cloud quota and the current
-150/day Place Details ceiling does not account for the smaller Atmosphere free
-allowance. See the linked procedure for the inventory and proposed limits.
-The 24-control candidate adds Routes and changes four Places ceilings. A separate
-Routes-only tightening phase cannot raise an existing lower quota; full expansion
-requires the monthly guard to be serving first. Prior usage and reporting gaps
-must still be accounted for. Photo-heavy usage exceeds ILS 345 before Maps.
-Total Cloud cost is monitored and modeled, not hard-capped by this request counter.
+MFA/recovery for Google, GitHub (including both additional writers), Expo and
+Apple remains owner-attested. Google project/billing and GitHub access were read
+back; direct inspection of every security screen and Expo/Apple membership is
+unverified. Doric is the sole attested Expo publisher/Apple signing operator and
+primary responder; no backup operator is designated without verified access.
 
-Authorized live change, verified `2026-09-30T15:58:33.699Z`: project `planli-f0b12`
-Routes ComputeRoutes is now **300 requests/day and 30/minute**, replacing an
-effectively unlimited daily quota and 3,000/minute. Guarded preview/state hashes
-matched before apply and independent read-back confirmed both values. Manifest
-SHA256: `18cc520bbc14d83292621a9c438b61b687c2ea78ac27648feb54b432f5cd215e`.
-Source: uncommitted `fix/security-stage4-operations` on `55af33c`; this is a quota
-change, not a Functions, Hosting, native-build or OTA release. Other projects were
-unchanged. Receipt: ignored `routes-tighten-applied.json`. A production routing
-smoke after this change is not yet verified.
+The 31-day moderate 200-DAU scenario models ILS 46.06 non-Maps cost and reserves
+ILS 47 for it. Maps may use the remaining ILS 28: the selected allocation models
+ILS 27.73 paid overage, for ILS 74.73 combined reserved cost. Free usage is included
+with 90% assigned to PlanLi and 10% forecast headroom for the shared account.
+Sibling future use is not bounded by PlanLi; this is not a guaranteed invoice cap.
+The full-price/no-free case is a stress scenario. Photo-heavy use exceeds ILS 345
+before Maps and blocks audience expansion. No budget increase was applied.
 
-Completed local evidence includes atomic admission with independent Firestore
-emulator clients, rejected anonymous/authenticated counter reads and writes,
-200 synthetic concurrent requests, DST/month boundaries, retry/multi-language/
-route-chunk accounting, and terminal client/background error handling. The final
-review found two client error-contract gaps; both were fixed and covered by
-focused preview/trip tests. Two planner tests affected by an initial timeout
-passed a focused rerun without code or timeout changes. Final admin export and
-local responsive banner smoke passed; native and production smoke remain pending.
-The repository OTA runner requires clean synchronized `main`; the current work
-is uncommitted on the topic branch. Git publication/merge is still required before
-the planned client-first release. Safe account allocation, live deployment/read-back,
-new alert delivery, platform smoke tests and observation are still required.
-Receipts are ignored under `.codex_tmp/validation/security-stage4/`.
+Validation included atomic emulator admission and private Rules, 200 synthetic
+concurrent requests, month/DST boundaries, retries, bilingual requests, route
+chunks, terminal errors and draft preservation. Final release checks passed
+1,004 client tests (130 suites), 458 backend tests (three skipped), and Rules
+emulators. The reviewed client error-contract findings were fixed before release.
+The allocation CLI authentication correction passed seven focused tests and live
+read-only reuse checks for both reviewed months, without changing counters.
+
+Remaining gates: mobile search/selection, draft and existing-item save smokes;
+live counter increments; guarded Places quota expansion/read-back; and a final
+30-minute observation window. Backup/restore, deep SecureStore checks, admin
+sign-out, acknowledgement-burst repair and remaining launch checks stay in stage 5.
+Ignored evidence: `.codex_tmp/validation/security-stage4/`.
 
 ### Security stage 3 — completed (2026-09-30)
 
@@ -6982,3 +6973,23 @@ part of this follow-up.
 - Candidate: `e503ddd3-5641-4e4d-8ee8-9a9dd7eea5fa`; native targets Android `1.1.0 (12)` and iOS `1.1.3 (34)` unchanged.
 - Device application and post-update security smoke tests: pending.
 - Rollback: republish verified group `7811a506-b37d-422a-b25c-04fddde45686`; never change the runtime URL or channel in-app.
+
+## Android production OTA release
+
+- Source commit: `9290939390ea3502e3307bf65904da37cfa46aac`.
+- EAS Update group: `84716ba6-7100-4277-bb6e-87f29fcabc1e`; channel `production`; runtime `1.4.0`.
+- EAS environment: `production`; published at `2026-09-30T16:58:18.167Z`.
+- Immutable Android launch bundle: update `01a0f340-b0b7-7c06-b2be-980441c3a97f`; 10983756 bytes; SHA-256 `474CCB30765492844FF990E34C94710D443787A4829BA11FAAEEC05A7E881FDD`.
+- Message: Stage 4 provider monthly budget messages
+- Device application and post-update security smoke tests: pending.
+- Rollback: republish the immediately preceding verified production group; never change the runtime URL or channel in-app.
+
+## iOS production OTA release
+
+- Source commit: `9290939390ea3502e3307bf65904da37cfa46aac`.
+- EAS Update group: `84716ba6-7100-4277-bb6e-87f29fcabc1e`; channel `production`; runtime `1.4.0`.
+- EAS environment: `production`; published at `2026-09-30T16:58:18.167Z`.
+- Immutable iOS launch bundle: update `01a0f340-b0b7-75f9-9898-dd61ed85da79`; 10981340 bytes; SHA-256 `947704D3F052743A7A30E0182C52413C190DDDD9E43AB102ADFED7198EAEFE1C`.
+- Message: Stage 4 provider monthly budget messages
+- Device application and post-update security smoke tests: pending.
+- Rollback: republish the immediately preceding verified production group; never change the runtime URL or channel in-app.
