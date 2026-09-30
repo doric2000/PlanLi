@@ -1,30 +1,30 @@
 {
   "schemaVersion": 1,
   "projectId": "planli-f0b12",
-  "policy": "no-cost-launch-guardrails",
+  "policy": "budgeted-launch-guardrails",
   "quotas": [
     {
       "service": "places.googleapis.com",
       "quotaId": "AutocompletePlacesRequestPerDayPerProject",
-      "preferredValue": 300,
-      "purpose": "Place suggestions; 300/day stays below 10,000 requests in a 31-day month."
+      "preferredValue": 350,
+      "purpose": "Reviewed 350/day burst ceiling; requires the deployed monthly free-plus-paid provider guard."
     },
     {
       "service": "places.googleapis.com",
       "quotaId": "AutocompletePlacesRequestPerMinutePerProject",
-      "preferredValue": 30,
+      "preferredValue": 60,
       "purpose": "Limits autocomplete abuse bursts."
     },
     {
       "service": "places.googleapis.com",
       "quotaId": "GetPlaceRequestPerDayPerProject",
-      "preferredValue": 150,
-      "purpose": "Place details; 150/day stays below 5,000 requests in a 31-day month."
+      "preferredValue": 300,
+      "purpose": "Reviewed 300/day burst ceiling; each billed Details SKU also has a monthly allocation."
     },
     {
       "service": "places.googleapis.com",
       "quotaId": "GetPlaceRequestPerMinutePerProject",
-      "preferredValue": 30,
+      "preferredValue": 60,
       "purpose": "Limits place-details abuse bursts."
     },
     {
@@ -134,6 +134,18 @@
       "quotaId": "sendVerificationCodePerDayPerProject",
       "preferredValue": 0,
       "purpose": "Phone/SMS verification is disabled; PlanLi uses TOTP instead of SMS MFA."
+    },
+    {
+      "service": "routes.googleapis.com",
+      "quotaId": "ComputeRoutesRequestsPerDay",
+      "preferredValue": 300,
+      "purpose": "Daily route ceiling, in addition to per-SKU monthly admission."
+    },
+    {
+      "service": "routes.googleapis.com",
+      "quotaId": "ComputeRoutesRequestsPerMinutePerProject",
+      "preferredValue": 30,
+      "purpose": "Bound route-computation bursts without changing per-user budgets."
     }
   ]
 }

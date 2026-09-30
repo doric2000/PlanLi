@@ -200,8 +200,11 @@ export default function useExactPlaceSelection({
         setLastSelection({ ...(typeof selection === 'object' ? selection : { placeId: selection }),
           resolvedPlaceToken: result.resolvedPlaceToken,
           sessionId: null, selectionId: null });
-        setLocationResolveError('המקום זוהה, אך שיוך היעד לא הושלם. אפשר לנסות שוב או לבחור יעד.');
-        setLocationResolveRetryable(true);
+        const recoveryError = result.recovery?.reason ? { details: result.recovery } : null;
+        setLocationResolveError(recoveryError
+          ? locationErrorMessage(recoveryError, locale)
+          : 'המקום זוהה, אך שיוך היעד לא הושלם. אפשר לנסות שוב או לבחור יעד.');
+        setLocationResolveRetryable(recoveryError ? locationErrorRetryable(recoveryError) : true);
         return null;
       }
       if (result?.status === 'destination_name_confirmation_required') {

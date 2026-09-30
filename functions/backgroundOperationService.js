@@ -459,8 +459,9 @@ async function processBackgroundOperation(options) {
     }
     const code = String(error?.code || 'internal');
     const reason = String(error?.details?.reason || 'OPERATION_FAILED').slice(0, 80);
-    const retryable = ['unavailable', 'internal', 'deadline-exceeded'].includes(code) ||
-      ['recent_sign_in_required', 'totp_required', 'OPERATION_AUTH_EXPIRED'].includes(reason);
+    const retryable = error?.details?.retryable !== false &&
+      (['unavailable', 'internal', 'deadline-exceeded'].includes(code) ||
+      ['recent_sign_in_required', 'totp_required', 'OPERATION_AUTH_EXPIRED'].includes(reason));
     await update({ status: 'failed', stage: 'failed', leaseUntil: 0, error: { code, reason, retryable } });
     await notify({ admin, id, job: { ...job, status: 'failed' } });
   }

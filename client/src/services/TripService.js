@@ -59,6 +59,12 @@ export const tripErrorReason = (error) => (
 
 export const tripErrorMessage = (error, fallback = 'לא הצלחנו לעדכן את הטיול. נסו שוב.') => {
   const reason = tripErrorReason(error);
+  if (reason === 'provider_monthly_limit_reached') {
+    return 'מכסת שירותי המיקום החודשית מוצתה. העצירות נשמרו ויוצגו בקו מקווקו ללא חישוב מסלול חי.';
+  }
+  if (reason === 'provider_budget_unavailable') {
+    return 'חישוב המסלול החי אינו זמין כרגע. העצירות נשמרו ויוצגו בקו מקווקו.';
+  }
   if (reason === 'REVISION_CONFLICT') return 'הטיול השתנה במכשיר אחר. טענו את הגרסה העדכנית ונסו שוב.';
   if (reason === 'STOP_LIMIT_REACHED') return 'הגעתם למספר העצירות המרבי בטיול.';
   if (reason === 'DAY_LIMIT_REACHED') return 'אפשר לתכנן עד 14 ימים בכל טיול.';

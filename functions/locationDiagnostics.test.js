@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { HttpsError } = require('firebase-functions/v2/https');
+const { budgetError } = require('./providerUsageService');
 
 const {
   createIncidentId,
@@ -8,6 +9,16 @@ const {
   locationLog,
   reasonForLocationError,
 } = require('./locationDiagnostics');
+
+test('monthly provider errors retain terminal recovery and public reset time through callable decoration', () => {
+  for (const reason of ['provider_monthly_limit_reached', 'provider_budget_unavailable']) {
+    const result = decorateLocationError(budgetError(reason, '2026-10-01T07:00:00Z'), 'loc_1234567890ab', 'save_failed');
+    assert.equal(result.details.reason, reason);
+    assert.equal(result.details.retryable, false);
+    assert.equal(result.details.resetsAt, '2026-10-01T07:00:00.000Z');
+    assert.equal(result.details.limit, undefined);
+  }
+});
 
 test('location callable errors expose a stable recovery contract', () => {
   const incidentId = createIncidentId('loc_1234567890ab');

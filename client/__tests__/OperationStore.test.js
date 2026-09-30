@@ -5,6 +5,14 @@ const entry = (id, patch = {}) => ({ id, ownerUid: 'alice', kind: 'avatar', stat
   createdAt: 1000, updatedAt: 1000, acknowledged: false, ...patch });
 const storage = (entries = []) => ({ getItem: jest.fn(async () => JSON.stringify(entries)), setItem: jest.fn(async () => {}) });
 
+it.each(['provider_monthly_limit_reached', 'provider_budget_unavailable'])('shows terminal provider recovery for both callable and background errors: %s', (reason) => {
+  const callable = safeOperationError({ code: 'functions/unavailable', details: { reason, retryable: false } });
+  const background = safeOperationError({ code: 'functions/unavailable', reason, retryable: false });
+  expect(callable).toEqual(background);
+  expect(callable.message).toContain('טיוטה');
+  expect(callable.uncertain).toBe(false);
+});
+
 it('retains unseen success across restarts and removes payloads and provider errors from history', async () => {
   const disk = storage();
   const store = createOperationStore({ storage: disk });

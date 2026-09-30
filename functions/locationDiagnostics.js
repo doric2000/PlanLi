@@ -130,6 +130,9 @@ function decorateLocationError(error, incidentId, fallbackReason) {
     retryable,
     stage: locationStage(fallbackReason, error),
     recoveryAction: recoveryActionForReason(reason, retryable),
+    ...(['provider_monthly_limit_reached', 'provider_budget_unavailable'].includes(reason)
+      && typeof error?.details?.resetsAt === 'string' && Number.isFinite(Date.parse(error.details.resetsAt))
+      ? { resetsAt: new Date(error.details.resetsAt).toISOString() } : {}),
   });
 }
 

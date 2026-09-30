@@ -1,4 +1,5 @@
 const { HttpsError } = require('firebase-functions/v2/https');
+const providerUsage = require('./providerUsageService');
 const { locationLog } = require('./locationDiagnostics');
 const { distanceKm, normalize } = require('./destinationIdentityService');
 const {
@@ -108,11 +109,15 @@ async function fetchWithProviderPolicy(url, options = {}, {
   let lastError = null;
   for (let attempt = 0; attempt < MAX_PROVIDER_ATTEMPTS; attempt += 1) {
     consumeProviderRequest(requestContext);
+    // Reserve outside the retry catch: admission failure must never be retried
+    // as a provider/network failure, and each actual attempt costs one unit.
+    await providerUsage.reserveProviderUsage({ url, options,
+      projectId: options.headers?.['X-Goog-User-Project'] });
     const startedAt = Date.now();
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    const timeout = setTimeout(() => controller.abort(), Math.min(timeoutMs, 12000));
     try {
-      const response = await fetchImpl(url, { ...options, signal: controller.signal });
+      const response = await fetchImpl(url, { ...options, redirect: 'error', signal: controller.signal });
       logProviderAttempt(
         requestContext,
         url,
@@ -622,7 +627,8 @@ async function fetchReverseLocalityCandidates(options) {
       projectId: options.projectId,
     });
   } catch (error) {
-    if (String(error?.code || '').replace(/^functions\//, '') === 'resource-exhausted') throw error;
+    if (String(error?.code || '').replace(/^functions\//, '') === 'resource-exhausted'
+      || error?.details?.reason === 'provider_budget_unavailable') throw error;
     return null;
   }
   if (response?.status === 429) {

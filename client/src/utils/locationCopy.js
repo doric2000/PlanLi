@@ -25,6 +25,8 @@ export const LOCATION_COPY = Object.freeze({
     mapUnavailable: 'לא הצלחנו להציג את המפה. אפשר עדיין לאשר את המיקום.',
     supportCode: 'קוד תמיכה',
     errors: Object.freeze({
+      monthlyQuota: 'מכסת שירותי המיקום החודשית מוצתה. אפשר לשמור טיוטה ולהמשיך לגלוש בתוכן הקיים.',
+      budgetUnavailable: 'שירותי המיקום אינם זמינים כרגע. אפשר לשמור טיוטה ולהמשיך לגלוש בתוכן הקיים.',
       dailyQuota: 'מגבלת המיקום היומית הושגה. אפשר לנסות שוב לאחר האיפוס מחר.',
       temporaryQuota: 'מגבלת החיפוש הזמנית הושגה. נסו שוב בעוד זמן קצר.',
       requestCeiling: 'לא הצלחנו לאמת את המקום במסגרת החיפוש הזה. בחרו תוצאה מדויקת יותר.',
@@ -67,6 +69,8 @@ export const LOCATION_COPY = Object.freeze({
     mapUnavailable: 'We could not display the map. You can still confirm this location.',
     supportCode: 'Support code',
     errors: Object.freeze({
+      monthlyQuota: 'Monthly location capacity has been reached. You can save a draft and continue browsing existing content.',
+      budgetUnavailable: 'Location services are currently unavailable. You can save a draft and continue browsing existing content.',
       dailyQuota: 'Your daily location limit has been reached. Try again after the reset tomorrow.',
       temporaryQuota: 'The temporary search limit has been reached. Try again shortly.',
       requestCeiling: 'We could not verify this place within this search. Choose a more specific result.',

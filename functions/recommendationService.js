@@ -657,7 +657,8 @@ async function fetchGoogleReverseCountry(
     }
     return null;
   } catch (error) {
-    if (String(error?.code || '').replace(/^functions\//, '') === 'resource-exhausted') throw error;
+    if (String(error?.code || '').replace(/^functions\//, '') === 'resource-exhausted'
+      || error?.details?.reason === 'provider_budget_unavailable') throw error;
     return null;
   }
 }
@@ -1540,6 +1541,7 @@ async function resolveGoogleDestination({
           }
         }
       } catch (error) {
+        if (['provider_monthly_limit_reached', 'provider_budget_unavailable'].includes(error?.details?.reason)) throw error;
         locationLog('destination', {
           incidentId: requestContext.incidentId,
           outcome: 'fallback',

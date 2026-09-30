@@ -35,7 +35,7 @@ function validatePlan(plan) {
       plan.channel?.userLabels?.planli_control !== 'security-alert-email') {
     throw new Error('Monitoring plan email channel is not the reviewed PlanLi channel.');
   }
-  if (!Array.isArray(plan.policies) || ![4, 5].includes(plan.policies.length)) {
+  if (!Array.isArray(plan.policies) || !(plan.providerUsage ? [9] : [4, 5]).includes(plan.policies.length)) {
     throw new Error('Monitoring plan must contain four base policies and at most one App Check service policy.');
   }
   const ids = plan.policies.map((policy) => policy?.userLabels?.planli_control);
@@ -76,6 +76,7 @@ function parseArgs(argv) {
     const key = argv[index];
     if (key === '--apply') options.apply = true;
     else if (key === '--app-check-rollout') options.appCheckRollout = true;
+    else if (key === '--provider-usage') options.providerUsage = true;
     else if (['--project', '--manifest-hash', '--state-hash', '--confirm'].includes(key)) {
       options[key.slice(2).replace(/-([a-z])/g, (_, letter) => letter.toUpperCase())] =
         String(argv[index + 1] || '').trim();
@@ -218,6 +219,27 @@ function appCheckRolloutPlan(base, functions, services) {
   return plan;
 }
 
+function providerUsagePlan(base) {
+  if (!base.appCheckRollout || base.policies.length !== 5) throw new Error('Current App Check plan is required.');
+  const plan = structuredClone(base);
+  plan.providerUsage = true;
+  for (const event of ['threshold_80', 'threshold_95', 'exhausted', 'unavailable']) {
+    const control = `provider-usage-${event.replace('_', '-')}`;
+    plan.policies.push({
+      displayName: `PlanLi - Provider monthly usage ${event}`,
+      documentation: { mimeType: 'text/markdown', content: 'Owner: Doric. Correlate testRunId before escalation. Stop audience expansion, inspect the private monthly allocation and billing account usage. Never reset reservations or raise quotas as recovery. Existing browsing remains available. An unavailable counter blocks provider calls until repaired; a billing budget is not a spending cap.' },
+      userLabels: { managed_by: 'planli', planli_control: control },
+      conditions: [{ displayName: `Provider usage ${event}`, conditionMatchedLog: {
+        filter: `resource.type="cloud_run_revision" AND resource.labels.project_id="${PRODUCTION_PROJECT}" AND jsonPayload.message="provider_usage_control" AND jsonPayload.event="${event}"`,
+      } }],
+      combiner: 'OR', enabled: true, severity: event.startsWith('threshold') ? 'WARNING' : 'ERROR',
+      alertStrategy: { notificationRateLimit: { period: '3600s' }, autoClose: '1800s' },
+    });
+  }
+  validatePlan(plan);
+  return plan;
+}
+
 function monitoringStateHash(channels, policies) {
   return manifestHash({
     channels: channels.filter((item) => item.userLabels?.planli_control === 'security-alert-email'),
@@ -252,6 +274,7 @@ async function servingFunctions(functions, accessToken) {
 }
 
 async function execute(options = {}) {
+  if (options.providerUsage && !options.appCheckRollout) throw new Error('Provider usage requires --app-check-rollout to preserve current enforcement alerts.');
   let plan = loadPlan(options.configPath || CONFIG_PATH);
   const accessToken = (options.tokenProvider || gcloudAccessToken)().access_token;
   if (options.appCheckRollout) {
@@ -260,6 +283,7 @@ async function execute(options = {}) {
     const services = await requestJson('https://firebaseappcheck.googleapis.com/v1beta/projects/633543026638/services', accessToken);
     plan = appCheckRolloutPlan(plan, await servingFunctions(functions.functions || [], accessToken), services.services || []);
   }
+  if (options.providerUsage) plan = providerUsagePlan(plan);
   const hash = manifestHash(plan);
   assertApplyGates(options, hash);
   let channels = await listResources(plan.projectId, 'notificationChannels', accessToken);
@@ -335,6 +359,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  providerUsagePlan,
   CONFIRMATION,
   assertApplyGates,
   buildActions,

@@ -35,6 +35,15 @@ beforeEach(() => {
   service = require('../src/services/TripService');
 });
 
+test.each(['provider_monthly_limit_reached', 'provider_budget_unavailable'])(
+  'routing budget failure preserves saved stops without promising retries: %s', (reason) => {
+    const message = service.tripErrorMessage({ code: 'functions/unavailable', details: { reason, retryable: false } });
+    expect(message).toContain('העצירות נשמרו');
+    expect(message).toContain('קו מקווקו');
+    expect(message).not.toMatch(/נסו שוב|חיבור יציב|יסונכרנו/);
+    if (reason === 'provider_monthly_limit_reached') expect(message).toContain('החודשית מוצתה');
+  });
+
 test('creating a private trip is tracked until the callable returns its target', async () => {
   let complete;
   mockCallable.mockImplementation(() => new Promise((resolve) => { complete = resolve; }));

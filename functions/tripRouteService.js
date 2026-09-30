@@ -1,4 +1,5 @@
 const { HttpsError } = require('firebase-functions/v2/https');
+const providerUsage = require('./providerUsageService');
 
 const ROUTES_ENDPOINT = 'https://routes.googleapis.com/directions/v2:computeRoutes';
 const ROUTES_FIELD_MASK = 'routes.distanceMeters,routes.duration,routes.polyline.encodedPolyline';
@@ -41,9 +42,9 @@ async function requestRouteChunk({
   travelMode,
 }) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), ROUTES_TIMEOUT_MS);
+  let timeout;
   try {
-    const response = await fetchImpl(ROUTES_ENDPOINT, {
+    const requestOptions = {
       method: 'POST',
       signal: controller.signal,
       headers: {
@@ -63,7 +64,10 @@ async function requestRouteChunk({
         languageCode: 'he',
         units: 'METRIC',
       }),
-    });
+    };
+    await providerUsage.reserveProviderUsage({ url: ROUTES_ENDPOINT, options: requestOptions, projectId: billingProject });
+    timeout = setTimeout(() => controller.abort(), ROUTES_TIMEOUT_MS);
+    const response = await fetchImpl(ROUTES_ENDPOINT, { ...requestOptions, redirect: 'error' });
     if (!response.ok) {
       const reason = response.status === 403
         ? 'ROUTES_API_NOT_AVAILABLE'

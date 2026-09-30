@@ -9,6 +9,7 @@ const {
   manifestHash,
   parseArgs,
   preferenceIdFor,
+  execute,
 } = require('./securityCostQuotaPlan');
 
 function infoFor(quota) {
@@ -20,12 +21,12 @@ function infoFor(quota) {
 
 test('reviewed quota manifest has exact cost boundaries and unique controls', () => {
   const plan = loadPlan();
-  assert.equal(plan.quotas.length, 22);
-  assert.equal(new Set(plan.quotas.map((entry) => `${entry.service}:${entry.quotaId}`)).size, 22);
+  assert.equal(plan.quotas.length, 24);
+  assert.equal(new Set(plan.quotas.map((entry) => `${entry.service}:${entry.quotaId}`)).size, 24);
   assert.equal(plan.quotas.find((entry) =>
     entry.quotaId === 'CreateAssessmentRequestsPerDayPerProject').preferredValue, 300);
   assert.equal(plan.quotas.find((entry) =>
-    entry.quotaId === 'GetPlaceRequestPerDayPerProject').preferredValue, 150);
+    entry.quotaId === 'GetPlaceRequestPerDayPerProject').preferredValue, 300);
   assert.equal(plan.quotas.find((entry) =>
     entry.quotaId === 'SearchTextRequestPerDayPerProject').preferredValue, 0);
   assert.equal(plan.quotas.find((entry) =>
@@ -112,4 +113,41 @@ test('action builder refuses unknown and duplicate live quota state', () => {
 test('argument parser refuses alternate projects and unknown flags', () => {
   assert.throws(() => parseArgs(['--project', 'other']), /Refusing/);
   assert.throws(() => parseArgs(['--force']), /Unknown/);
+  assert.throws(() => parseArgs(['--phase', 'unknown']), /phase/);
+});
+
+test('early Routes phase selects only its two controls and cannot increase a lower live quota', () => {
+  const plan = loadPlan();
+  let routeMinute = 3000;
+  const commandRunner = args => {
+    if (args[1] === 'preferences') return [];
+    const service = args.find(a => a.startsWith('--service=')).slice(10);
+    return plan.quotas.filter(q => q.service === service).map(q => infoFor({ ...q,
+      preferredValue: q.quotaId === 'ComputeRoutesRequestsPerMinutePerProject' ? routeMinute : q.preferredValue }));
+  };
+  const preview = execute({ commandRunner, phase: 'routes' });
+  assert.equal(preview.actions.length, 2);
+  assert(preview.actions.every(a => a.service === 'routes.googleapis.com'));
+  routeMinute = 20;
+  assert.throws(() => execute({ commandRunner, phase: 'routes' }), /only tighten/);
+});
+
+test('apply refuses stale live state before any quota write and can resume from a new preview', () => {
+  const plan = loadPlan();
+  let writes = 0;
+  const values = new Map(plan.quotas.map(q => [q.quotaId, q.preferredValue]));
+  const commandRunner = args => {
+    if (args[1] === 'preferences') return [];
+    if (args[1] === 'info') {
+      const service = args.find(a => a.startsWith('--service=')).slice(10);
+      return plan.quotas.filter(q => q.service === service).map(q => infoFor({ ...q, preferredValue: values.get(q.quotaId) }));
+    }
+    writes++; throw new Error('Unexpected write');
+  };
+  const preview = execute({ commandRunner });
+  values.set('AutocompletePlacesRequestPerDayPerProject', 299);
+  assert.throws(() => execute({ commandRunner, apply: true, project: plan.projectId,
+    manifestHash: preview.manifestSha256, stateHash: preview.stateSha256, confirm: CONFIRMATION }), /state changed/);
+  assert.equal(writes, 0);
+  assert.notEqual(execute({ commandRunner }).stateSha256, preview.stateSha256);
 });

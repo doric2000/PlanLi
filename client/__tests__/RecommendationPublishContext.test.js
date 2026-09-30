@@ -20,6 +20,12 @@ import {
 
 let mockUuidSerial = 0;
 
+test.each(['provider_monthly_limit_reached', 'provider_budget_unavailable'])('provider admission failure survives persistence and never retries: %s', (reason) => {
+  const error = normalizedPublishError({ code: 'functions/unavailable', details: { reason, retryable: false } });
+  expect(publishRetryPolicy(error, 1)).toEqual({ automaticRetry: false, retryable: false, shouldRetry: false, delayMs: 0 });
+  expect(error.details.reason).toBe(reason);
+});
+
 test.each(['recent_sign_in_required', 'totp_required', 'OPERATION_AUTH_EXPIRED'])(
   'authentication recovery is manual and uses safe actionable copy: %s', (reason) => {
     const error = { code: 'functions/failed-precondition', message: 'private provider detail', details: { reason, retryable: true } };
