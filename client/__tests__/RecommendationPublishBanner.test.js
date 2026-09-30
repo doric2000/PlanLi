@@ -27,6 +27,14 @@ jest.mock('@expo/vector-icons', () => {
 });
 
 describe('RecommendationPublishBanner', () => {
+  it.each(['provider_monthly_limit_reached', 'provider_budget_unavailable'])('retains draft review without retry for %s', (reason) => {
+    mockPublishState.activeJob = { id: 'job-1', status: 'failed', stage: 'failed', progress: 0.5,
+      error: { code: 'functions/resource-exhausted', details: { reason, retryable: false } } };
+    const screen = render(<RecommendationPublishBanner />);
+    expect(screen.getByText(/טיוטה/)).toBeTruthy();
+    expect(screen.queryByTestId('publish-retry')).toBeNull();
+    expect(mockDiscard).not.toHaveBeenCalled();
+  });
   const originalRegionFlag = process.env.EXPO_PUBLIC_REGION_DISCOVERY_ENABLED;
   beforeEach(() => {
     jest.clearAllMocks(); mockRegionId = 'europe';

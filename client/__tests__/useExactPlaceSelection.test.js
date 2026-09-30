@@ -82,6 +82,25 @@ describe('useExactPlaceSelection', () => {
     expect(result.current.selectedCity.id).toBe('chiang-mai');
   });
 
+  it.each(['provider_monthly_limit_reached', 'provider_budget_unavailable'])(
+    'keeps the selected venue and honors terminal recovery: %s', async (reason) => {
+      mockResolve.mockResolvedValue({ status: 'destination_resolution_unavailable',
+        resolvedPlaceToken: 'verified-hotel-token', place: resolved.place,
+        recovery: { reason, retryable: false } });
+      const onChange = jest.fn();
+      const { result } = renderHook(() => useExactPlaceSelection({ onChange }));
+      await act(async () => result.current.handleSelectGooglePlace('wat-doi-kham', { autoConfirm: true }));
+      expect(result.current.pendingLocation.place).toMatchObject({
+        placeId: resolved.place.placeId, resolvedPlaceToken: 'verified-hotel-token',
+      });
+      expect(result.current.locationResolveRetryable).toBe(false);
+      expect(result.current.locationResolveError).toContain('אפשר לשמור טיוטה');
+      expect(result.current.locationResolveError).not.toContain('לנסות שוב');
+      expect(mockResolve).toHaveBeenCalledTimes(1);
+      act(() => result.current.confirmPendingLocation());
+      expect(onChange).not.toHaveBeenCalled();
+    });
+
   it('confirms a missing Hebrew name without searching for the place again', async () => {
     mockResolve.mockResolvedValue({ status: 'destination_name_confirmation_required', resolvedPlaceToken: 'name-token',
       nameConfirmation: { englishName: 'Town', suggestedHebrewName: 'טאון' }, place: resolved.place });

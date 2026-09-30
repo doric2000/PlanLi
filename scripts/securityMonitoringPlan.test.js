@@ -11,7 +11,24 @@ const {
   policyBody,
   appCheckRolloutPlan,
   monitoringStateHash,
+  providerUsagePlan,
 } = require('./securityMonitoringPlan');
+
+test('monthly usage adds exactly four isolated controls while preserving all five live policies', () => {
+  const base = appCheckRolloutPlan(loadPlan(), [], []);
+  const plan = providerUsagePlan(base);
+  assert.deepEqual(plan.policies.slice(0, 5), base.policies);
+  assert.equal(plan.policies.length, 9);
+  for (const [index, event] of ['threshold_80', 'threshold_95', 'exhausted', 'unavailable'].entries()) {
+    const policy = plan.policies[index + 5];
+    const filter = policy.conditions[0].conditionMatchedLog.filter;
+    assert(filter.includes(`jsonPayload.event="${event}"`));
+    assert(filter.includes('jsonPayload.message="provider_usage_control"'));
+    assert(filter.includes('resource.labels.project_id="planli-f0b12"'));
+    assert.equal(policy.enabled, true);
+  }
+  assert.throws(() => providerUsagePlan(loadPlan()), /Current App Check/);
+});
 
 test('reviewed monitoring manifest has four unique controls and keeps App Check dormant', () => {
   const plan = loadPlan();

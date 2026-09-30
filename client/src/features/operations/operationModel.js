@@ -1,4 +1,5 @@
 import { mediaAuthenticationErrorMessage } from '../../utils/travelMediaErrors';
+import { locationErrorMessage } from '../../utils/locationErrors';
 
 export const OPERATION_HISTORY_KEY = '@planli/operation-history';
 export const SUCCESS_VISIBLE_MS = 8000;
@@ -41,6 +42,10 @@ export function operationCopy(operation) {
 
 export function safeOperationError(error) {
   const code = String(error?.code || 'unknown').slice(0, 80);
+  const reason = error?.details?.reason || error?.reason;
+  if (['provider_monthly_limit_reached', 'provider_budget_unavailable'].includes(reason)) {
+    return { code, message: locationErrorMessage({ code, details: { reason, retryable: false } }), uncertain: false };
+  }
   const uncertain = /deadline-exceeded|timeout|persistence-mismatch/.test(code);
   return {
     code,

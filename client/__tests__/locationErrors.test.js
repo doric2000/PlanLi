@@ -6,6 +6,17 @@ import {
 
 describe('location error presentation', () => {
   it.each([
+    ['provider_monthly_limit_reached', 'resource-exhausted', 'monthlyQuota'],
+    ['provider_budget_unavailable', 'unavailable', 'budgetUnavailable'],
+  ])('keeps %s terminal and offers a draft instead of a short retry', (reason, code, kind) => {
+    const error = { code: `functions/${code}`, details: { reason, retryable: false } };
+    expect(locationErrorKind(error)).toBe(kind);
+    expect(locationErrorRetryable(error)).toBe(false);
+    expect(locationErrorMessage(error)).toContain('טיוטה');
+    expect(locationErrorMessage(error, 'en')).toContain('draft');
+    expect(locationErrorMessage(error)).not.toContain('דקות');
+  });
+  it.each([
     ['functions/resource-exhausted', 'temporaryQuota'],
     ['functions/unavailable', 'network'],
     ['functions/deadline-exceeded', 'timeout'],

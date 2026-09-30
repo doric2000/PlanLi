@@ -25,6 +25,79 @@ The existing Text Search quota remains zero. See
 
 ## Current environment status
 
+### Security stage 4 — candidate in progress (2026-09-30)
+
+Work is on `fix/security-stage4-operations`, based on merged `55af33c`.
+The monthly Google provider guard, terminal mobile/Web error copy, guarded
+allocation tool, four additional alert definitions and 31-day cost model are
+implemented locally. **They are not deployed, and stage 4 is not closed.**
+Billing budgets and stage 3 enforcement remain unchanged. Routes quotas were
+tightened as recorded below; Places expansion and the monthly guard are not live.
+See [stage 4 controls, rollout and response procedure](docs/security-stage4.md).
+
+The owner confirms MFA and recovery for Google, GitHub, Expo and Apple, including
+the two additional GitHub writers, and confirms he is the sole Expo publisher
+and Apple signing/key operator. Record this as owner attestation; direct
+verification of every security screen and Expo/Apple membership is unverified.
+Google project/billing administrators and GitHub collaborators were
+read back. The five active monitoring policies and 22 quotas matched their plans.
+The monitoring dry run preserves all five and proposes four new provider alerts.
+
+Read-only billing inspection found three active projects sharing free Maps usage.
+The owner explicitly requested leaving the two sibling projects unchanged, then
+approved paid Maps use inside the same ILS 75 total, including more than ILS 15.
+The owner authorized implementing and applying the free-aware expansion.
+The allocation tool now supports `free-plus-paid-ils`: evidenced shared free
+headroom plus one combined paid-overage budget, with prior usage preserved.
+Full-price accounting remains available as a downside stress scenario.
+No counter was seeded with a guessed zero baseline and no provider guard was deployed.
+Read-only inspection found each sibling still permits 175,000 Autocomplete and
+125,000 Place Details requests/day; those ceilings cannot protect the shared free tier.
+The account report through September 29 showed ₪4.50 and a ₪4.69 month forecast;
+this is prelaunch activity, not evidence that 200 DAU will fit the budget.
+The reproducible model puts the moderate non-Maps 200-DAU scenario near ILS 45.26.
+The final model includes the larger free-aware counter workload: non-Maps cost
+is ILS 46.06, so its reserve is ILS 47 and Maps receives up to ILS 28. A conditional
+31-day scenario includes 90% of each free allowance: 350 Autocomplete/day and
+1,030 Atmosphere reservations/month, with other SKU limits inside their assigned
+free allowances, model ILS 27.73 Maps plus ILS 47 Cloud (ILS 74.73 reserved total).
+This corrects the earlier ILS 46/29, 1,040-Atmosphere illustration, which omitted
+the additional counter workload. The old 62-session no-free example is only a
+stress scenario. Sibling consumption must fit the remaining shared headroom;
+that future allocation is not guaranteed.
+The analysis found Routes had no practical daily Cloud quota and the current
+150/day Place Details ceiling does not account for the smaller Atmosphere free
+allowance. See the linked procedure for the inventory and proposed limits.
+The 24-control candidate adds Routes and changes four Places ceilings. A separate
+Routes-only tightening phase cannot raise an existing lower quota; full expansion
+requires the monthly guard to be serving first. Prior usage and reporting gaps
+must still be accounted for. Photo-heavy usage exceeds ILS 345 before Maps.
+Total Cloud cost is monitored and modeled, not hard-capped by this request counter.
+
+Authorized live change, verified `2026-09-30T15:58:33.699Z`: project `planli-f0b12`
+Routes ComputeRoutes is now **300 requests/day and 30/minute**, replacing an
+effectively unlimited daily quota and 3,000/minute. Guarded preview/state hashes
+matched before apply and independent read-back confirmed both values. Manifest
+SHA256: `18cc520bbc14d83292621a9c438b61b687c2ea78ac27648feb54b432f5cd215e`.
+Source: uncommitted `fix/security-stage4-operations` on `55af33c`; this is a quota
+change, not a Functions, Hosting, native-build or OTA release. Other projects were
+unchanged. Receipt: ignored `routes-tighten-applied.json`. A production routing
+smoke after this change is not yet verified.
+
+Completed local evidence includes atomic admission with independent Firestore
+emulator clients, rejected anonymous/authenticated counter reads and writes,
+200 synthetic concurrent requests, DST/month boundaries, retry/multi-language/
+route-chunk accounting, and terminal client/background error handling. The final
+review found two client error-contract gaps; both were fixed and covered by
+focused preview/trip tests. Two planner tests affected by an initial timeout
+passed a focused rerun without code or timeout changes. Final admin export and
+local responsive banner smoke passed; native and production smoke remain pending.
+The repository OTA runner requires clean synchronized `main`; the current work
+is uncommitted on the topic branch. Git publication/merge is still required before
+the planned client-first release. Safe account allocation, live deployment/read-back,
+new alert delivery, platform smoke tests and observation are still required.
+Receipts are ignored under `.codex_tmp/validation/security-stage4/`.
+
 ### Security stage 3 — completed (2026-09-30)
 
 September 30 current checkpoint: all 103 callable Functions and Firestore,

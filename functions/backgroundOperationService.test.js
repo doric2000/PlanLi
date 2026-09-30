@@ -351,6 +351,22 @@ function editFixture({ adminEdit = true, draft = false } = {}) {
   return { ...f, media };
 }
 
+test('monthly admission failure retains background intent and forbids automatic or manual retry', async () => {
+  const { budgetError } = require('./providerUsageService');
+  for (const reason of ['provider_monthly_limit_reached', 'provider_budget_unavailable']) {
+    const f = editFixture({ adminEdit: false });
+    await service.startBackgroundOperation(f.options);
+    const before = structuredClone(f.records.get('recommendations/edit-target'));
+    await service.processBackgroundOperation({ ...f.worker, saveRecommendationImpl: async () => { throw budgetError(reason); } });
+    const job = f.records.get(f.jobPath);
+    assert.equal(job.status, 'failed');
+    assert.equal(job.error.reason, reason);
+    assert.equal(job.error.retryable, false);
+    assert(job.legacyPayload);
+    assert.deepEqual(f.records.get('recommendations/edit-target'), before);
+  }
+});
+
 test('owner and admin reorder retained photos without uploads; the worker survives client departure', async () => {
   for (const adminEdit of [false, true]) {
     const f = editFixture({ adminEdit });

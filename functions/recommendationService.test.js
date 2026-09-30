@@ -1,5 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+test.mock.method(require('./providerUsageService'), 'reserveProviderUsage', async () => {});
 
 const {
   fetchGoogleReverseCountry,

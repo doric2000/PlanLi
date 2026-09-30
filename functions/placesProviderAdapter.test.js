@@ -1,5 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+// Provider parsing is isolated here; providerUsage tests exercise admission.
+test.mock.method(require('./providerUsageService'), 'reserveProviderUsage', async () => {});
 
 const {
   NEW_AUTOCOMPLETE_FIELD_MASK,

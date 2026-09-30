@@ -11,6 +11,8 @@ export function locationErrorKind(error) {
   const reason = String(error?.details?.reason || '').toLowerCase();
   const recoveryAction = String(error?.details?.recoveryAction || '').toLowerCase();
   const message = String(error?.message || '').toLowerCase();
+  if (reason === 'provider_monthly_limit_reached') return 'monthlyQuota';
+  if (reason === 'provider_budget_unavailable') return 'budgetUnavailable';
   if (reason === 'route_new_place_limit') return 'requestCeiling';
   if (reason === 'destination_reassignment_in_progress') return 'temporarilyLocked';
   if (reason === 'selection_expired' || message.includes('expired')) return 'expired';
@@ -53,6 +55,8 @@ export function locationErrorMessage(error, locale = 'he') {
   const copy = locationCopy(locale);
   let message;
   switch (locationErrorKind(error)) {
+    case 'monthlyQuota': message = copy.errors.monthlyQuota; break;
+    case 'budgetUnavailable': message = copy.errors.budgetUnavailable; break;
     case 'dailyQuota': message = copy.errors.dailyQuota; break;
     case 'temporaryQuota': message = copy.errors.temporaryQuota; break;
     case 'requestCeiling': message = copy.errors.requestCeiling; break;

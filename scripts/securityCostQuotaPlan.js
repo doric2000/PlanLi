@@ -8,7 +8,7 @@ const { spawnSync } = require('node:child_process');
 const REPO_ROOT = path.resolve(__dirname, '..');
 const CONFIG_PATH = path.join(REPO_ROOT, 'config', 'security-cost-quotas.json');
 const PRODUCTION_PROJECT = 'planli-f0b12';
-const CONFIRMATION = 'APPLY PLANLI PRODUCTION NO COST QUOTAS';
+const CONFIRMATION = 'APPLY PLANLI PRODUCTION BUDGETED QUOTAS';
 
 function stable(value) {
   if (Array.isArray(value)) return value.map(stable);
@@ -22,11 +22,11 @@ function sha256(value) {
 
 function validatePlan(plan) {
   if (plan?.schemaVersion !== 1 || plan.projectId !== PRODUCTION_PROJECT ||
-      plan.policy !== 'no-cost-launch-guardrails') {
+      plan.policy !== 'budgeted-launch-guardrails') {
     throw new Error('Cost-quota plan must target the reviewed production project and policy.');
   }
-  if (!Array.isArray(plan.quotas) || plan.quotas.length !== 22) {
-    throw new Error('Cost-quota plan must contain exactly 22 reviewed quota controls.');
+  if (!Array.isArray(plan.quotas) || plan.quotas.length !== 24) {
+    throw new Error('Cost-quota plan must contain exactly 24 reviewed quota controls.');
   }
   const ids = new Set();
   for (const quota of plan.quotas) {
@@ -40,8 +40,12 @@ function validatePlan(plan) {
     ids.add(id);
   }
   const required = new Map([
-    ['places.googleapis.com:AutocompletePlacesRequestPerDayPerProject', 300],
-    ['places.googleapis.com:GetPlaceRequestPerDayPerProject', 150],
+    ['places.googleapis.com:AutocompletePlacesRequestPerDayPerProject', 350],
+    ['places.googleapis.com:AutocompletePlacesRequestPerMinutePerProject', 60],
+    ['places.googleapis.com:GetPlaceRequestPerDayPerProject', 300],
+    ['places.googleapis.com:GetPlaceRequestPerMinutePerProject', 60],
+    ['routes.googleapis.com:ComputeRoutesRequestsPerDay', 300],
+    ['routes.googleapis.com:ComputeRoutesRequestsPerMinutePerProject', 30],
     ['places.googleapis.com:SearchTextRequestPerDayPerProject', 0],
     ['geocoding-backend.googleapis.com:V4GeocodeLocationPerDayPerProject', 300],
     ['recaptchaenterprise.googleapis.com:CreateAssessmentRequestsPerDayPerProject', 300],
@@ -67,11 +71,11 @@ function manifestHash(plan) {
 }
 
 function parseArgs(argv) {
-  const options = { apply: false, project: '', manifestHash: '', confirm: '' };
+  const options = { apply: false, project: '', manifestHash: '', confirm: '', phase: 'all' };
   for (let index = 0; index < argv.length; index += 1) {
     const key = argv[index];
     if (key === '--apply') options.apply = true;
-    else if (['--project', '--manifest-hash', '--confirm'].includes(key)) {
+    else if (['--project', '--manifest-hash', '--state-hash', '--confirm', '--phase'].includes(key)) {
       options[key.slice(2).replace(/-([a-z])/g, (_, letter) => letter.toUpperCase())] =
         String(argv[index + 1] || '').trim();
       index += 1;
@@ -80,6 +84,7 @@ function parseArgs(argv) {
   if (options.project && options.project !== PRODUCTION_PROJECT) {
     throw new Error('Refusing a project other than planli-f0b12.');
   }
+  if (!['all', 'routes'].includes(options.phase)) throw new Error('Unknown quota phase.');
   return options;
 }
 
@@ -184,20 +189,30 @@ function execute(options = {}) {
   const hash = manifestHash(plan);
   assertApplyGates(options, hash);
   const commandRunner = options.commandRunner || defaultCommandRunner;
+  const phase = options.phase || 'all';
+  if (!['all', 'routes'].includes(phase)) throw new Error('Unknown quota phase.');
+  const selected = (actions) => phase === 'routes' ? actions.filter(a => a.service === 'routes.googleapis.com') : actions;
   let state = readState(plan, commandRunner);
-  let actions = buildActions(plan, state.preferences, state.quotaInfosByService);
+  let actions = selected(buildActions(plan, state.preferences, state.quotaInfosByService));
+  if (phase === 'routes' && actions.some(a => BigInt(a.currentValue) < BigInt(a.preferredValue))) {
+    throw new Error('The early Routes phase may only tighten existing quotas.');
+  }
+  const stateHash = sha256(JSON.stringify(stable(actions)));
   const result = {
     mode: options.apply ? 'apply' : 'dry-run',
     projectId: plan.projectId,
+    phase,
     manifestSha256: hash,
+    stateSha256: stateHash,
     actions,
   };
   if (!options.apply) return result;
+  if (options.stateHash !== stateHash) throw new Error('Live quota state changed or --state-hash missing; inspect again.');
   for (const action of actions.filter((entry) => entry.action !== 'reuse-quota-preference')) {
     applyAction(plan, action, commandRunner);
   }
   state = readState(plan, commandRunner);
-  actions = buildActions(plan, state.preferences, state.quotaInfosByService);
+  actions = selected(buildActions(plan, state.preferences, state.quotaInfosByService));
   const pending = actions.filter((entry) => entry.action !== 'reuse-quota-preference');
   if (pending.length) {
     throw new Error(`Quota read-back did not reach the reviewed values: ${pending.map((entry) => entry.quotaId).join(', ')}`);
@@ -210,7 +225,7 @@ if (require.main === module) {
     const result = execute(parseArgs(process.argv.slice(2)));
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
     if (result.mode === 'dry-run') {
-      process.stdout.write(`No production state changed. Apply additionally requires --manifest-hash and --confirm "${CONFIRMATION}".\n`);
+      process.stdout.write(`No production state changed. Apply requires --manifest-hash, --state-hash and --confirm "${CONFIRMATION}" after monthly guard deployment/read-back.\n`);
     }
   } catch (error) {
     process.stderr.write(`Security cost-quota plan failed: ${error.message}\n`);
@@ -228,4 +243,5 @@ module.exports = {
   preferenceIdFor,
   quotaValue,
   validatePlan,
+  execute,
 };
