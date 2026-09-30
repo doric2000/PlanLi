@@ -25,7 +25,7 @@ The existing Text Search quota remains zero. See
 
 ## Current environment status
 
-### Security stage 3 (103 callables enforced; atomic replay correction verified)
+### Security stage 3 (atomic replay verified; Firestore enforcement under observation)
 
 Rollout expansion stopped on September 27 after the deletion replay control failed.
 The deletion group was applied at `2026-09-27T16:41:12.201Z` and initially **not accepted**:
@@ -41,8 +41,8 @@ Read-only revalidation at `2026-09-30T11:04:26Z` confirmed `deletecontent-00032-
 and `requestaccountdeletion-00031-mox` remain ACTIVE with
 `PLANLI_ENFORCE_APP_CHECK=true`. Their downloaded source archive matches local
 `index.js`, `callableAppCheck.js`, `package.json` and `package-lock.json` exactly.
-The provider-side cause of the replay failure is unproven. Firestore, Storage
-and Authentication service enforcement has not been enabled by this workflow.
+The provider-side cause of the replay failure is unproven. At that checkpoint,
+Firestore, Storage and Authentication service enforcement remained disabled.
 Stage 3 remains open; earlier platform results are September 27 evidence unless
 explicitly updated below.
 
@@ -111,8 +111,12 @@ synthetic image variants were removed. The deletion job is complete and local
 fixture credentials were removed. Thirty-five probe traces match server outcomes
 and serving revisions, including 27 replay rejections; no new ERROR/5xx events were
 found for these three functions in the checked post-deployment window. The owner
-reported guest content loads in response to the requested iPhone/Android check;
-an explicit report of the subsequent sign-in result is still outstanding.
+explicitly confirmed both iPhone and Android passed guest content loading and
+fresh sign-in after the correction (`native-ledger-confirmed.json`).
+At `2026-09-30T12:06:19.800Z`, a full 30-minute post-correction query over all 103
+callable services found no ERROR/5xx events (`ledger-all-callable-health.json`).
+Fresh service metrics showed VALID/ALLOW for iOS and Web; no new Android series
+appeared in that window; the owner subsequently confirmed the two-device result.
 
 Ignored receipts include `ledger-rollout.json`, `ledger-deploy-readback.json`,
 `ledger-source-files.json`, `ledger-ttl-readback.json`, `ledger-live-probe.json`,
@@ -143,8 +147,48 @@ Hosting version `c1e1c462b8af800d`, release
 the intended configuration and live `planli.cc/admin/` CSP. All 66 application
 files and both Firebase-reserved init files are hash-identical to prior version
 `06c2d958f2e664af`; no client bundle, Functions, Rules, OTA or native build changed.
-`hosting-csp-readback.json` records verification. The post-release actual-form
-upload check is in progress and must pass before Storage enforcement.
+`hosting-csp-readback.json` records this intermediate release verification.
+
+The first post-release form retry exposed a second local-URI boundary:
+`useImageUploader` fetches the normalized `blob:` URI, and global `connect-src`
+still denied that local read. The completion adds `blob:` to `connect-src` only;
+no new remote origin, executable context or isolated-route policy was allowed.
+Three updated tests and a browser decode/normalize/local-fetch control passed,
+while blob script execution remained denied; the focused final review found no
+actionable issues. Under the authorized Hosting correction, commit
+`c725a59f64a8f4b7aca1ad86999473d6b3a4a87a` was released at
+`2026-09-30T12:06:03.625Z`, version `b154806a6f4d3da2`, release
+`sites/planli-f0b12/channels/live/releases/1790769963625000`. Independent read-back
+again verified the configuration, live CSP and all 68 unchanged file hashes
+(`hosting-csp-readback-2.json`). The actual hosted form then successfully decoded,
+normalized and uploaded the synthetic JPEG with App Check (Storage POST 200),
+processed it with `prepareMedia` (200), and decoded the returned 480x270 WebP.
+The final public destination update was deliberately blocked in the browser;
+the test therefore proves the upload/processing path, not final publication.
+That block and the temporary cache setting were removed. The destination was
+independently unchanged. All three synthetic variants were deleted using their
+exact generation/metageneration preconditions and verified absent; no registry
+entry had been created. Receipts: `hosted-form-upload-proof.json` and
+`hosted-synthetic-cleanup.json`.
+
+A fresh service-continuation snapshot and dry run accounted for the unchanged 100
+callables and three corrected revisions without modifying the original manifest
+or failed probes. Its intermediate snapshot was superseded before any service
+mutation by `services-continuation-v2.json`, manifest SHA-256
+`cfe7b83aced2d90b1fd3573ff42c1b47e35d9baec805b66c20ee3df75e714fc2`, pinned to
+operator source `c725a59` on `fix/web-upload-blob-csp`. Its separate journal explicitly
+imports the accepted unchanged groups and the new correction receipts; it does
+not pretend that all Functions were redeployed from this operator source.
+
+Firestore App Check was set to ENFORCED at `2026-09-30T12:15:26.209Z` with its
+previous mode/etag retained for focused rollback. It is **applied, not accepted**.
+The minimum observation window ends at `12:30:26Z` (15:30:26 Israel); the owner
+was asked to run both-device read/favorite/update checks after 15:31. An early
+paired anonymous GET of the same public active destination returned 200 with a
+valid App Check token and 403 for missing/invalid tokens. The denial message is
+generic; final acceptance still requires service metrics and post-window platform
+evidence. Storage, Authentication and excluded Google Identity iOS enforcement
+remain UNENFORCED. Stage 3 and the final launch gate remain open.
 
 Stage 3 is in progress on `fix/security-stage3-app-check`, based on
 `02fdc659f33d28cc406bcfd2fb73995744491a04`. The four-function canary, seven
