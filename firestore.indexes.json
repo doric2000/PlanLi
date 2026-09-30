@@ -1436,6 +1436,12 @@
       "indexes": []
     },
     {
+      "collectionGroup": "appCheckConsumedTokens",
+      "fieldPath": "expireAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
       "collectionGroup": "guestSessionIssuance",
       "fieldPath": "expireAt",
       "ttl": true,

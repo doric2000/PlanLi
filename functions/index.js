@@ -242,7 +242,7 @@ function callable(options, handler) {
   if (!access) throw new Error('Every callable must declare an access level.');
   const effectiveOptions = { ...CALLABLE_OPTIONS, ...firebaseOptions };
   return onCall(effectiveOptions, async (request) => {
-    assertCallableAppCheckFresh(request, effectiveOptions);
+    await assertCallableAppCheckFresh(request, effectiveOptions, { admin });
     const safeRequest = { ...request, data: normalizeCallableInput(request.data) };
     const accessContext = await authorizeRequest({
       admin,

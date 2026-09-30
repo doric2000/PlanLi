@@ -8,11 +8,19 @@ function boundary(options = {}, onCallFactory = (effective, handler) => ({ effec
   const source = fs.readFileSync(require.resolve('./index'), 'utf8');
   const wrapper = source.slice(source.indexOf('function callable('), source.indexOf('\nasync function consumePublicRequest'));
   const calls = { authorize: 0, normalize: 0, handler: 0, logs: [] };
+  const consumed = new Set();
+  const admin = { firestore: () => ({ doc: (path) => ({ create: async () => {
+    if (consumed.has(path)) throw Object.assign(new Error('Exists'), { code: 6 });
+    consumed.add(path);
+  } }) }) };
   const context = {
-    CALLABLE_OPTIONS: { enforceAppCheck: true }, admin: {},
+    CALLABLE_OPTIONS: { enforceAppCheck: true }, admin,
     onCall: onCallFactory,
     assertCallableAppCheckFresh: (request, effective) =>
-      assertCallableAppCheckFresh(request, effective, (...args) => calls.logs.push(args)),
+      assertCallableAppCheckFresh({ ...request, app: request.app ? {
+        appId: 'test-app', token: { iss: 'test-issuer', sub: 'test-app', jti: 'test-jti', exp: 2000000000 },
+        ...request.app,
+      } : undefined }, effective, { admin, log: (...args) => calls.logs.push(args) }),
     normalizeCallableInput: (data) => { calls.normalize++; return data; },
     authorizeRequest: async ({ auth }) => {
       calls.authorize++;
@@ -24,6 +32,7 @@ function boundary(options = {}, onCallFactory = (effective, handler) => ({ effec
   vm.runInContext(wrapper, context);
   const fn = context.callable({ access: 'active', ...options }, async (request, access) => {
     calls.handler++;
+    if (request.data?.failBusiness) throw new Error('BUSINESS_FAILED');
     return { data: request.data, uid: access.uid };
   });
   return typeof fn === 'function' ? { handler: fn, calls } : { ...fn, calls };
@@ -51,6 +60,20 @@ test('valid App Check does not bypass authentication', async () => {
   const { handler, calls } = boundary({ consumeAppCheckToken: true });
   await assert.rejects(handler({ app: { alreadyConsumed: false }, data: {} }), /AUTH_REQUIRED/);
   assert.equal(calls.handler, 0);
+  await assert.rejects(handler({ app: { alreadyConsumed: false }, auth: { uid: 'test' }, data: {} }),
+    (error) => error.details.reason === 'APP_CHECK_REPLAYED');
+  assert.equal(calls.authorize, 1);
+});
+
+test('business failure does not release the token; a genuinely fresh token can retry', async () => {
+  const { handler, calls } = boundary({ consumeAppCheckToken: true });
+  const request = { app: { alreadyConsumed: false }, auth: { uid: 'test' }, data: { failBusiness: true } };
+  await assert.rejects(handler(request), /BUSINESS_FAILED/);
+  await assert.rejects(handler({ ...request, data: {} }), (e) => e.details.reason === 'APP_CHECK_REPLAYED');
+  const result = await handler({ ...request, data: {}, app: { alreadyConsumed: false,
+    token: { iss: 'test-issuer', sub: 'test-app', jti: 'new-token', exp: 2000000000 } } });
+  assert.equal(result.uid, 'test');
+  assert.equal(calls.handler, 2);
 });
 
 test('ordinary reusable tokens and unenforced rollout behavior are unchanged', async () => {
@@ -84,7 +107,8 @@ test('real callable HTTP boundary rejects missing, forged, expired and replayed 
     if (token === 'forged' || token === 'expired') throw new Error('Synthetic token verification failure');
     const alreadyConsumed = consumed.has(token);
     if (options?.consume) consumed.add(token);
-    return { appId: 'test-app', alreadyConsumed };
+    return { appId: 'test-app', alreadyConsumed,
+      token: { iss: 'test-issuer', sub: 'test-app', jti: token, exp: 2000000000 } };
   });
   const { handler, calls } = boundary({ consumeAppCheckToken: true, cors: false }, onCall);
   const serverApp = express();
