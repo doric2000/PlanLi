@@ -36,11 +36,13 @@ jest.mock('../src/config/firebase', () => ({
 jest.mock('../src/services/PendingContentService', () => ({
   listMyPendingContent: jest.fn(async () => ({ items: [], nextCursor: null })),
 }));
+jest.mock('../src/services/FirestoreReadDiagnostics', () => ({ reportFirestoreReadFailure: jest.fn() }));
 
 import { clearUserDataCache } from '../src/hooks/useUserData';
 import { useProfileContent } from '../src/features/profile/hooks/useProfileContent';
 import { useProfileData } from '../src/features/profile/hooks/useProfileData';
-import { invalidateProfileResource } from '../src/features/profile/services/ProfileResourceService';
+import { invalidateProfileResource, requestProfileResource } from '../src/features/profile/services/ProfileResourceService';
+import { reportFirestoreReadFailure } from '../src/services/FirestoreReadDiagnostics';
 
 const deferred = () => {
   let resolve;
@@ -57,6 +59,17 @@ describe('useProfileData loading', () => {
     clearUserDataCache();
     invalidateProfileResource();
     jest.clearAllMocks();
+  });
+
+  it('reports failed content reads and keeps the failed request retryable', async () => {
+    const failure = Object.assign(new Error('query unavailable'), { code: 'unavailable' });
+    mockGetCountFromServer.mockResolvedValue({ data: () => ({ count: 0 }) });
+    mockGetDocs.mockRejectedValue(failure);
+    const args = { uid: 'profile-1', user: { uid: 'profile-1' }, isOwnProfile: true };
+    await expect(requestProfileResource(args).promise).rejects.toBe(failure);
+    expect(reportFirestoreReadFailure).toHaveBeenCalledWith(failure, 'profile_content');
+    mockGetDocs.mockResolvedValue({ docs: [] });
+    await expect(requestProfileResource(args).promise).resolves.toMatchObject({ recommendations: [], routes: [] });
   });
 
   it('uses the live owner identity and shares recommendation content with derived stats', async () => {

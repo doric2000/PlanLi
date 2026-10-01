@@ -11,6 +11,7 @@ import {
 } from 'firebase/firestore';
 
 import { db } from '../../../config/firebase';
+import { reportFirestoreReadFailure } from '../../../services/FirestoreReadDiagnostics';
 import { primeUserDataCache } from '../../../hooks/useUserData';
 import { createRequestCoordinator } from '../../../utils/requestCoordinator';
 import { registerProfileResourceInvalidator } from '../../../utils/profileResourceInvalidation';
@@ -144,7 +145,10 @@ export function requestProfileResource({ uid, user, isOwnProfile }) {
   }
   return profileCoordinator.request(
     resourceKey(uid, isOwnProfile),
-    () => loadProfileResource({ uid, user, isOwnProfile })
+    () => loadProfileResource({ uid, user, isOwnProfile }).catch((error) => {
+      reportFirestoreReadFailure(error, 'profile_content');
+      throw error;
+    })
   );
 }
 
