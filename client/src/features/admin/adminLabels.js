@@ -3,6 +3,7 @@ export const ADMIN_SECTIONS = Object.freeze([
   { id: 'queue', label: 'תור בדיקה', icon: 'file-tray-full-outline' },
   { id: 'search', label: 'חיפוש תוכן', icon: 'search-outline' },
   { id: 'destinations', label: 'מקומות', icon: 'location-outline' },
+  { id: 'systemRecommendations', label: 'המלצות מערכת', icon: 'sparkles-outline' },
   { id: 'users', label: 'משתמשים', icon: 'people-outline' },
   { id: 'audit', label: 'יומן פעילות', icon: 'time-outline' },
 ]);

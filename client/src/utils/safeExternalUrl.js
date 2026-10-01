@@ -29,6 +29,8 @@ export const EXTERNAL_URL_POLICIES = Object.freeze({
   unsplashProfile: Object.freeze(['unsplash.com']),
   wikimediaSource: Object.freeze(['commons.wikimedia.org']),
   creativeCommonsLicense: Object.freeze(['creativecommons.org']),
+  facebookSource: Object.freeze(['www.facebook.com', 'facebook.com', 'm.facebook.com']),
+  planliRecommendation: Object.freeze(['planli.cc']),
 });
 
 const DESTINATION_SOURCE_POLICIES = Object.freeze({

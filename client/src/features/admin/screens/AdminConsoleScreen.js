@@ -18,6 +18,7 @@ import AdminDestinationsSection from '../components/AdminDestinationsSection';
 import AdminOverviewSection from '../components/AdminOverviewSection';
 import AdminSearchSection from '../components/AdminSearchSection';
 import AdminUsersSection from '../components/AdminUsersSection';
+import SystemRecommendationsSection from '../components/SystemRecommendationsSection';
 import AdminAsyncState from '../components/AdminAsyncState';
 import ModerationQueueSection from '../components/ModerationQueueSection';
 
@@ -164,7 +165,9 @@ export default function AdminConsoleScreen({ navigation, route }) {
           ? <AdminDestinationsSection focusCountryId={focusDestination.countryId} focusCityId={focusDestination.cityId} onFocusHandled={() => { setFocusDestination({ countryId: '', cityId: '' }); navigation.setParams?.({ countryId: undefined, cityId: undefined }); }} onBackToCase={returnCaseId ? returnToCase : null} />
           : section === 'users'
             ? <AdminUsersSection focusUid={focusUserUid} onBackToCase={returnCaseId ? returnToCase : null} />
-            : <AdminAuditSection />;
+            : section === 'systemRecommendations'
+              ? <SystemRecommendationsSection />
+              : <AdminAuditSection />;
 
   return (
     <SafeAreaView style={styles.screen} edges={['left', 'right', 'bottom']} testID="admin-panel-screen">

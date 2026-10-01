@@ -20,6 +20,10 @@ export const ADMIN_CALLABLE_TIMEOUTS = Object.freeze({
   previewDestinationReassignment: 320000,
   startDestinationReassignment: 320000,
   deactivateDestination: 320000,
+  startRecommendationIngestionCollection: 80000,
+  updateSystemRecommendationCandidate: 80000,
+  approveSystemRecommendationCandidate: 320000,
+  bulkApproveSystemRecommendationCandidates: 560000,
 });
 const call = async (name, payload = {}) => {
   if (!callables.has(name)) {
@@ -74,3 +78,14 @@ export const previewDestinationReassignment = (source, target) => call('previewD
 export const startDestinationReassignment = (source, target, expectedImpactHash, reason) => call('startDestinationReassignment', { source, target, expectedImpactHash, reason });
 export const getDestinationReassignmentJob = (jobId) => call('getDestinationReassignmentJob', { jobId });
 export const deactivateDestination = (countryId, cityId, reason) => call('deactivateDestination', { countryId, cityId, reason });
+export const getRecommendationIngestionStatus = () => call('getRecommendationIngestionStatus');
+export const updateRecommendationIngestionGroup = (payload) => call('updateRecommendationIngestionGroup', payload);
+export const advanceRecommendationIngestionStage = (payload) => call('advanceRecommendationIngestionStage', payload);
+export const startRecommendationIngestionCollection = (groupKey) => call('startRecommendationIngestionCollection', { groupKey });
+export const listSystemRecommendationCandidates = (payload = {}) => call('listSystemRecommendationCandidates', payload);
+export const getSystemRecommendationCandidate = (candidateId) => call('getSystemRecommendationCandidate', { candidateId });
+export const updateSystemRecommendationCandidate = (candidateId, expectedRevision, patch) => call('updateSystemRecommendationCandidate', { candidateId, expectedRevision, patch });
+export const searchSystemRecommendationPlaces = (candidateId, query) => call('searchSystemRecommendationPlaces', { candidateId, query });
+export const rejectSystemRecommendationCandidate = (candidateId, expectedRevision, reason) => call('rejectSystemRecommendationCandidate', { candidateId, expectedRevision, reason });
+export const approveSystemRecommendationCandidate = (candidateId, expectedRevision) => call('approveSystemRecommendationCandidate', { candidateId, expectedRevision });
+export const bulkApproveSystemRecommendationCandidates = (items) => call('bulkApproveSystemRecommendationCandidates', { items });

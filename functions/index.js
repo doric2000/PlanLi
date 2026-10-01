@@ -202,6 +202,8 @@ const unsplashAccessKey = defineSecret('UNSPLASH_ACCESS_KEY');
 const publicRateLimitKey = defineSecret('PUBLIC_RATE_LIMIT_KEY');
 const appleSignInPrivateKey = defineSecret('APPLE_SIGN_IN_PRIVATE_KEY');
 const expoPushAccessToken = defineSecret('EXPO_PUSH_ACCESS_TOKEN');
+const apifyToken = defineSecret('APIFY_TOKEN');
+const openaiApiKey = defineSecret('OPENAI_API_KEY');
 const appleSignInTeamId = defineString('APPLE_SIGN_IN_TEAM_ID', {
   description: 'Apple Developer Team ID used by Sign in with Apple.',
 });
@@ -316,6 +318,74 @@ exports.maintainBackgroundOperationsScheduled = onSchedule({ schedule: 'every 5 
   timeZone: 'UTC', serviceAccount: MEDIA_SERVICE_ACCOUNT, timeoutSeconds: 540, memory: '1GiB',
   maxInstances: 1, secrets: [restCountriesKey, publicRateLimitKey] },
   () => backgroundOperations.maintainBackgroundOperations(backgroundOperationOptions()));
+
+// System recommendation ingestion: admin-only review/publication and server-only jobs.
+const recommendationIngestion = require('./recommendationIngestionService');
+const ingestionDeps = (withExtraction = false) => recommendationIngestion.productionDeps({
+  admin,
+  mediaBucket: mediaStorageBucket.value(),
+  openaiApiKey: withExtraction ? openaiApiKey.value() : '',
+});
+const ingestionPublishOptions = () => ({
+  restCountriesKey: restCountriesKey.value(),
+  mediaBucket: mediaStorageBucket.value(),
+  providerRateLimitKey: publicRateLimitKey.value(),
+});
+exports.getRecommendationIngestionStatus = callable({ access: 'signedIn', timeoutSeconds: 30 },
+  (request) => recommendationIngestion.getRecommendationIngestionStatus({ admin, auth: request.auth }));
+exports.updateRecommendationIngestionGroup = callable({ access: 'signedIn', timeoutSeconds: 30 },
+  (request) => recommendationIngestion.updateRecommendationIngestionGroup({ admin, auth: request.auth, data: request.data }));
+exports.advanceRecommendationIngestionStage = callable({ access: 'signedIn', timeoutSeconds: 30 },
+  (request) => recommendationIngestion.advanceRecommendationIngestionStage({ admin, auth: request.auth, data: request.data }));
+exports.startRecommendationIngestionCollection = callable({ access: 'signedIn', timeoutSeconds: 60,
+  secrets: [apifyToken] },
+  (request) => recommendationIngestion.startRecommendationIngestionCollection({
+    admin, auth: request.auth, data: request.data, apifyToken: apifyToken.value(),
+  }));
+exports.listSystemRecommendationCandidates = callable({ access: 'signedIn', timeoutSeconds: 30 },
+  (request) => recommendationIngestion.listSystemRecommendationCandidates({ admin, auth: request.auth, data: request.data }));
+exports.getSystemRecommendationCandidate = callable({ access: 'signedIn', timeoutSeconds: 30 },
+  (request) => recommendationIngestion.getSystemRecommendationCandidate({ admin, auth: request.auth, data: request.data }));
+exports.updateSystemRecommendationCandidate = callable({ access: 'signedIn', timeoutSeconds: 60 },
+  (request) => recommendationIngestion.updateSystemRecommendationCandidate({
+    admin, auth: request.auth, data: request.data, deps: ingestionDeps(),
+  }));
+exports.searchSystemRecommendationPlaces = callable({ access: 'signedIn', timeoutSeconds: 30 },
+  (request) => recommendationIngestion.searchSystemRecommendationPlaces({
+    admin, auth: request.auth, data: request.data, deps: ingestionDeps(),
+  }));
+exports.rejectSystemRecommendationCandidate = callable({ access: 'signedIn', timeoutSeconds: 30 },
+  (request) => recommendationIngestion.rejectSystemRecommendationCandidate({ admin, auth: request.auth, data: request.data }));
+exports.approveSystemRecommendationCandidate = callable({ access: 'signedIn', timeoutSeconds: 300,
+  memory: '1GiB', secrets: [restCountriesKey, publicRateLimitKey], ...PROVIDER_CALLABLE_LIMITS },
+  (request) => recommendationIngestion.approveSystemRecommendationCandidate({
+    admin, auth: request.auth, data: request.data, ...ingestionPublishOptions(),
+  }));
+exports.bulkApproveSystemRecommendationCandidates = callable({ access: 'signedIn', timeoutSeconds: 540,
+  memory: '1GiB', secrets: [restCountriesKey, publicRateLimitKey], ...PROVIDER_CALLABLE_LIMITS },
+  (request) => recommendationIngestion.bulkApproveSystemRecommendationCandidates({
+    admin, auth: request.auth, data: request.data, ...ingestionPublishOptions(),
+  }));
+// One task per eligible source version; failures are retried by the scheduler, not by the trigger.
+exports.onRecommendationIngestionTaskCreated = firestoreCreated(
+  'system/recommendationIngestion/tasks/{taskId}',
+  async (event) => {
+    const sourceId = event.data?.data()?.sourceId;
+    if (typeof sourceId !== 'string' || !/^src_[a-f0-9]{32}$/.test(sourceId)) return null;
+    try {
+      return await recommendationIngestion.processIngestionSource({ admin, sourceId, deps: ingestionDeps(true) });
+    } catch (error) {
+      console.error('recommendation_ingestion_task_failed', { sourceId, reason: error?.details?.reason || 'unknown' });
+      return null;
+    }
+  },
+  { retry: false, timeoutSeconds: 540, memory: '1GiB', concurrency: 1, maxInstances: 2,
+    serviceAccount: MEDIA_SERVICE_ACCOUNT, secrets: [openaiApiKey] }
+);
+exports.pollRecommendationIngestionScheduled = onSchedule({ schedule: 'every 5 minutes', region: REGION,
+  timeZone: 'UTC', serviceAccount: CORE_SERVICE_ACCOUNT, timeoutSeconds: 300, memory: '512MiB',
+  maxInstances: 1, secrets: [apifyToken] },
+  () => recommendationIngestion.pollRecommendationIngestionRuns({ admin, apifyToken: apifyToken.value() }));
 
 async function locationSave(stage, request, task) {
   const incidentId = createIncidentId(request?.data?.incidentId);

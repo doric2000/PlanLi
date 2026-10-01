@@ -3054,6 +3054,10 @@ async function saveRecommendation({
   resolveExactPlace = resolveExactPlaceWithDestination,
   resolveExistingForEdit = resolveExistingDestination,
   operation,
+  // Server-only publisher identity for trusted system publication. Callers must
+  // derive it from server configuration after their own authorization; it is
+  // never read from request data and only supports idempotent creation.
+  trustedOwnerUid = null,
 }) {
   const saveStartedAt = Date.now();
   assert(auth?.uid, 'unauthenticated', 'You must be signed in.');
@@ -3061,7 +3065,13 @@ async function saveRecommendation({
   if (Array.isArray(data?.recommendation?.media) && data.recommendation.media.length) {
     assert(mediaBucket, 'failed-precondition', 'MEDIA_STORAGE_BUCKET is not configured.');
   }
-  const uid = auth.uid;
+  if (trustedOwnerUid != null) {
+    assert(typeof trustedOwnerUid === 'string' && /^[A-Za-z0-9_-]{6,128}$/.test(trustedOwnerUid),
+      'failed-precondition', 'The trusted publisher is invalid.');
+    assert(!operation && !data?.recommendationId && data?.publishRequestId,
+      'failed-precondition', 'Trusted publication only supports idempotent creation.');
+  }
+  const uid = trustedOwnerUid || auth.uid;
   const db = admin.firestore();
   if (operation) {
     const receipt = (await operation.ref.get()).data()?.committedResult;
@@ -3349,6 +3359,11 @@ async function saveRecommendation({
       const owner = ownerSnapshot.data();
       assert(owner && !['suspended', 'deleting'].includes(owner.moderation?.status) && owner.status !== 'deleting',
         'permission-denied', 'The owner is no longer eligible to publish.');
+    }
+    if (trustedOwnerUid) {
+      const trustedOwner = (await transaction.get(db.doc(`users/${uid}`))).data();
+      assert(trustedOwner?.moderation?.status === 'active' && trustedOwner.status !== 'deleting',
+        'permission-denied', 'The system publisher is not eligible to publish.');
     }
     const current = await transaction.get(recommendationRef);
     const currentData = current.exists ? current.data() : null;

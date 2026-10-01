@@ -1,6 +1,8 @@
 import { httpsCallable } from 'firebase/functions';
 import {
   ADMIN_CALLABLE_TIMEOUTS,
+  approveSystemRecommendationCandidate,
+  bulkApproveSystemRecommendationCandidates,
   deleteUserAsAdmin,
   getModerationDashboard,
   resolveModerationCase,
@@ -44,5 +46,14 @@ describe('AdminService callable deadlines', () => {
     });
     expect(ADMIN_CALLABLE_TIMEOUTS.setUserSuspension).toBeGreaterThan(300000);
     expect(ADMIN_CALLABLE_TIMEOUTS.deleteUserAsAdmin).toBeGreaterThan(540000);
+  });
+
+  it('sends exact candidate revisions and allows publication to outlast the server', async () => {
+    await approveSystemRecommendationCandidate('cand_1', 4);
+    await bulkApproveSystemRecommendationCandidates([{ candidateId: 'cand_1', expectedRevision: 4 }]);
+    const approveIndex = httpsCallable.mock.calls.findIndex(([, name]) => name === 'approveSystemRecommendationCandidate');
+    expect(httpsCallable.mock.results[approveIndex].value).toHaveBeenCalledWith({ candidateId: 'cand_1', expectedRevision: 4 });
+    expect(ADMIN_CALLABLE_TIMEOUTS.approveSystemRecommendationCandidate).toBeGreaterThan(300000);
+    expect(ADMIN_CALLABLE_TIMEOUTS.bulkApproveSystemRecommendationCandidates).toBeGreaterThan(540000);
   });
 });

@@ -3900,3 +3900,86 @@ test('Google errors and unknown country overrides are rejected', async () => {
     global.fetch = originalFetch;
   }
 });
+
+test('trusted system publication owns the server-chosen publisher and matches the reviewed preview', async () => {
+  const { buildPublishData, deterministicPublishRequestId } = require('./recommendationIngestionPolicy');
+  const { buildPreview } = require('./recommendationIngestionService');
+  const publisherUid = 'system-recommendations-publisher';
+  const assetId = '123e4567-e89b-42d3-a456-426614174000';
+  const seed = {
+    'countries/HU': { name: 'הונגריה', names: { he: 'הונגריה', en: 'Hungary' }, code: 'HU', status: 'active' },
+    'countries/HU/destinations/budapest': {
+      name: 'בודפשט', names: { he: 'בודפשט', en: 'Budapest' }, status: 'active', stats: { recommendationCount: 0 },
+      googleCache: { coordinates: { lat: 47.4979, lng: 19.0402 } },
+    },
+    [`users/${publisherUid}`]: { moderation: { status: 'active' } },
+  };
+  const metadataFor = (path) => [{
+    bucket: 'test.appspot.com', size: '2048', contentType: 'image/webp',
+    metadata: {
+      ownerUid: publisherUid, assetId, variant: path.split('/').at(-1).replace('.webp', ''), state: 'prepared',
+      width: '1280', height: '1280', firebaseStorageDownloadTokens: 'token',
+    },
+  }];
+  const withStorage = (admin) => Object.assign(admin, { storage: () => ({ bucket: () => ({
+    name: 'test.appspot.com', file: (path) => ({ getMetadata: async () => metadataFor(path) }),
+  }) }) });
+  const variant = (name) => ({ path: `media/${publisherUid}/${assetId}/${name}.webp` });
+  const candidate = {
+    candidateId: 'cand_trusted',
+    publishRequestId: deterministicPublishRequestId('cand_trusted'),
+    content: {
+      title: 'קפה אורורה', description: 'Quiet garden, excellent cardamom buns.', categoryId: 'food',
+      subcategoryIds: ['cafe'], budget: 'economy', details: { priceNote: 'Coffee 3 euro' }, needs: [], practicalFacts: [],
+    },
+    destinationRef: { countryId: 'HU', cityId: 'budapest' },
+    destinationNames: { countryName: 'הונגריה', cityName: 'בודפשט' },
+    location: { status: 'resolved', placeId: 'place-aurora',
+      place: { placeId: 'place-aurora', name: 'קפה אורורה', address: 'Synthetic street 1', coordinates: { lat: 47.5, lng: 19.05 } } },
+    photoIds: [0],
+  };
+  const pool = [{ index: 0, state: 'prepared', asset: { assetId, aspectRatio: 1,
+    placeholder: { thumbhash: 'hash', color: '#112233' }, large: variant('large'), feed: variant('feed'), thumb: variant('thumb') } }];
+  const resolveExactPlace = async ({ admin, destinationRef }) => ({
+    ...(await resolveExistingDestination(admin.firestore(), destinationRef)),
+    place: { placeId: 'place-aurora', name: 'קפה אורורה', address: 'Synthetic street 1', coordinates: { lat: 47.5, lng: 19.05 } },
+  });
+  const data = buildPublishData(candidate, pool);
+  const reviewer = { uid: 'admin-1', token: { admin: true, email_verified: true, firebase: { sign_in_provider: 'password' } } };
+
+  const admin = withStorage(createFakeAdmin(seed));
+  const result = await saveRecommendation({
+    admin, auth: reviewer, mapsKey: 'unused', mediaBucket: 'test.appspot.com', data, resolveExactPlace,
+    trustedOwnerUid: publisherUid,
+  });
+  const saved = admin.documents.get(`recommendations/${result.recommendationId}`);
+  const preview = buildPreview({ candidate, pool, publisherUid });
+  assert.equal(saved.ownerId, publisherUid);
+  for (const field of ['title', 'description', 'categoryId', 'subcategoryIds', 'budget', 'details', 'locationMode', 'category', 'tags']) {
+    assert.deepEqual(saved[field], preview[field], `${field} differs between preview and publication`);
+  }
+  assert.deepEqual(saved.media.map((asset) => asset.assetId), preview.media.map((asset) => asset.assetId));
+  assert.equal(saved.place.placeId, preview.place.placeId);
+  for (const privateField of ['source', 'evidence', 'actualLikes', 'sourceId', 'candidateId', 'publishRequestId']) {
+    assert.equal(Object.hasOwn(saved, privateField), false);
+  }
+
+  const replay = await saveRecommendation({
+    admin, auth: reviewer, mapsKey: 'unused', mediaBucket: 'test.appspot.com', data, resolveExactPlace,
+    trustedOwnerUid: publisherUid,
+  });
+  assert.equal(replay.recommendationId, result.recommendationId);
+  assert.equal(replay.idempotentReplay, true);
+
+  // A trusted owner is never derived from request data and only supports idempotent creation.
+  const spoofAdmin = withStorage(createFakeAdmin(seed));
+  await assert.rejects(saveRecommendation({ admin: spoofAdmin, auth: verifiedAuth, mapsKey: 'unused',
+    mediaBucket: 'test.appspot.com', data: { ...data, trustedOwnerUid: publisherUid, ownerId: publisherUid }, resolveExactPlace }),
+  /outside the caller media folder/, 'request data cannot select the publisher');
+  await assert.rejects(saveRecommendation({ admin: spoofAdmin, auth: reviewer, mapsKey: 'unused',
+    mediaBucket: 'test.appspot.com', data: { ...data, publishRequestId: undefined }, resolveExactPlace,
+    trustedOwnerUid: publisherUid }), /idempotent creation/);
+  const suspended = withStorage(createFakeAdmin({ ...seed, [`users/${publisherUid}`]: { moderation: { status: 'suspended' } } }));
+  await assert.rejects(saveRecommendation({ admin: suspended, auth: reviewer, mapsKey: 'unused',
+    mediaBucket: 'test.appspot.com', data, resolveExactPlace, trustedOwnerUid: publisherUid }), /not eligible/);
+});
