@@ -25,6 +25,27 @@ The existing Text Search quota remains zero. See
 
 ## Current environment status
 
+### System recommendation ingestion — backend deployed; admin Hosting pending (2026-10-02)
+
+PR [#458](https://github.com/doric2000/PlanLi/pull/458) merged as
+`4ef23841e4ad7cbab12e6a7822e610ccbe240148`. See
+[docs/system-recommendation-ingestion.md](docs/system-recommendation-ingestion.md).
+
+- Deployed from `main` at `4ef2384` on 2026-10-01 (UTC): 13 new Functions in
+  `europe-west1` (all `ACTIVE`, no errors after deploy; the 5-minute poller ran
+  cleanly) and the `candidates`/`sources` composite indexes (`CREATING` at
+  deploy time). Existing Functions were not redeployed; their shared-code changes
+  are behavior-neutral for them.
+- Secrets `APIFY_TOKEN` and `OPENAI_API_KEY` exist (version 1); the CLI granted
+  the core/media Functions service accounts secret accessor on them.
+- Production data (setup script, authorized): Auth user and public profile
+  `system-recommendations-publisher` ("המלצות מערכת", no sign-in method), config
+  `enabled: true`, `rolloutStage: trial`, caps $0.25/run, $10 and 1,000 posts
+  total; Athens group verified and enabled, the other four disabled.
+- **Not yet live:** the admin Hosting bundle with the new section (built and
+  verified locally from `4ef2384`; deploy pending). No collection run, model call
+  or publication has happened; ledger spend is $0.
+
 ### Mobile profile/notification incident — investigation open (2026-10-01)
 
 Multiple users report empty/failing notifications and profile content on iOS and
