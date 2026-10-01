@@ -24,6 +24,27 @@ export function safeAdminError(error, { operationMayContinue = false } = {}) {
   if (reason === 'case_revision_conflict') return 'מנהל אחר עדכן את התיק. המצב העדכני נטען ויש לבדוק אותו מחדש לפני החלטה.';
   if (reason === 'admin_account_protected') return 'אי אפשר להפעיל אכיפה על מנהל פעיל. יש להסיר קודם את הרשאת המנהל באזור המתקדם.';
   if (reason === 'target_owner_missing') return 'לתיק הזה אין חשבון משתמש שאפשר להפעיל עליו אכיפה.';
+  if (reason === 'candidate_revision_conflict') return 'ההמלצה עודכנה מאז שנטענה. הגרסה העדכנית נטענה ויש לבדוק אותה שוב לפני אישור.';
+  if (reason === 'candidate_not_ready') return 'ההמלצה עדיין לא מוכנה לפרסום. יש להשלים את השדות החסרים.';
+  if (reason === 'candidate_publishing') return 'ההמלצה כבר בתהליך פרסום. יש לרענן בעוד רגע.';
+  if (reason === 'candidate_locked') return 'ההמלצה כבר פורסמה או נדחתה ולא ניתן לשנות אותה.';
+  if (reason === 'candidate_not_found') return 'ההמלצה המוצעת כבר אינה זמינה. יש לרענן את התור.';
+  if (reason === 'candidate_photo_invalid') return 'אפשר לבחור רק תמונות מהפוסט המקורי שעובדו בהצלחה.';
+  if (reason === 'candidate_place_outside_destination') return 'המקום שנבחר אינו נמצא ביעד של ההמלצה.';
+  if (reason === 'ingestion_disabled') return 'איסוף המלצות המערכת כבוי כרגע.';
+  if (reason === 'ingestion_publisher_missing') return 'חשבון "המלצות מערכת" עדיין לא הוגדר בשרת.';
+  if (reason === 'ingestion_budget_exhausted') return 'תקציב האיסוף המאושר נוצל. אין אפשרות להפעיל ריצה נוספת.';
+  if (reason === 'ingestion_stage_limit') return 'הפעולה חורגת מהמגבלות של שלב ההרצה הנוכחי.';
+  if (reason === 'ingestion_stage_unverified') return 'יש לפרסם המלצת מערכת אחת ולבדוק אותה באפליקציה לפני הרחבת האיסוף.';
+  if (reason === 'ingestion_stage_checklist_incomplete') return 'יש לאשר את כל סעיפי הבדיקה לפני הרחבת האיסוף.';
+  if (reason === 'ingestion_stage_invalid') return 'שלב ההרצה המבוקש אינו תקין.';
+  if (reason === 'ingestion_run_active') return 'ריצת איסוף כבר פעילה. יש להמתין לסיומה.';
+  if (reason === 'ingestion_group_not_ready') return 'יש לאמת את הקבוצה ואת היעד שלה לפני הפעלה.';
+  if (reason === 'ingestion_group_missing' || reason === 'ingestion_group_invalid') return 'קבוצת הפייסבוק אינה תקינה או אינה קיימת.';
+  if (reason === 'ingestion_destination_missing') return 'יש לבחור יעד פעיל של PlanLi.';
+  if (reason === 'ingestion_places_quota' || reason === 'ingestion_media_quota') return 'המכסה היומית של האיסוף נוצלה. אפשר לנסות שוב מחר.';
+  if (reason === 'apify_not_configured') return 'ספק האיסוף עדיין לא הוגדר בשרת.';
+  if (reason === 'ingestion_input_invalid') return 'אחד השדות אינו תקין. יש לבדוק את הערכים ולנסות שוב.';
   if (reason === 'place_destination_mismatch') return 'המקום המאומת אינו שייך לעיר של התוכן. יש לבחור מועמד אחר.';
   if (code.includes('permission-denied')) {
     return 'הרשאת המנהל לא אושרה בשרת. יש לוודא שהחשבון רשום כמנהל פעיל ולהתחבר מחדש.';

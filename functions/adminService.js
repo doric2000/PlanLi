@@ -129,6 +129,38 @@ const SENSITIVE_ADMIN_ACTIONS = Object.freeze({
     recentSignIn: true,
     reason: 'changing an airport updates public destination facts.',
   },
+  startRecommendationIngestionCollection: {
+    recentSignIn: true,
+    reason: 'starting a collection run spends the paid scraping budget.',
+  },
+  updateRecommendationIngestionGroup: {
+    recentSignIn: true,
+    reason: 'changing ingestion groups controls what may be collected.',
+  },
+  advanceRecommendationIngestionStage: {
+    recentSignIn: true,
+    reason: 'expanding the ingestion rollout raises collection limits.',
+  },
+  updateSystemRecommendationCandidate: {
+    recentSignIn: true,
+    reason: 'editing a system candidate changes content that may be published.',
+  },
+  searchSystemRecommendationPlaces: {
+    recentSignIn: true,
+    reason: 'place searches consume the shared ingestion provider quota.',
+  },
+  rejectSystemRecommendationCandidate: {
+    recentSignIn: true,
+    reason: 'rejecting a system candidate mutates the review queue.',
+  },
+  approveSystemRecommendationCandidate: {
+    recentSignIn: true,
+    reason: 'approval publishes public content under the system account.',
+  },
+  bulkApproveSystemRecommendationCandidates: {
+    recentSignIn: true,
+    reason: 'bulk approval publishes multiple public recommendations.',
+  },
 });
 
 function isRecentSignInRequired(action) {

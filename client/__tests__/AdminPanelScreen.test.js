@@ -46,6 +46,17 @@ jest.mock('../src/services/AdminService', () => ({
   setUserSuspension: jest.fn(),
   updateAdminAttachedPlace: jest.fn(),
   updateModerationCase: jest.fn(),
+  advanceRecommendationIngestionStage: jest.fn(),
+  approveSystemRecommendationCandidate: jest.fn(),
+  bulkApproveSystemRecommendationCandidates: jest.fn(),
+  getRecommendationIngestionStatus: jest.fn(),
+  getSystemRecommendationCandidate: jest.fn(),
+  listSystemRecommendationCandidates: jest.fn(),
+  rejectSystemRecommendationCandidate: jest.fn(),
+  searchSystemRecommendationPlaces: jest.fn(),
+  startRecommendationIngestionCollection: jest.fn(),
+  updateRecommendationIngestionGroup: jest.fn(),
+  updateSystemRecommendationCandidate: jest.fn(),
 }));
 jest.mock('../src/services/LocationService', () => ({
   searchPlaces: jest.fn(),
@@ -59,6 +70,10 @@ jest.mock('../src/hooks/useImagePickerWithUpload', () => ({
   useImagePickerWithUpload: () => ({ pickFromGallery: jest.fn(), uploadImageAsset: jest.fn() }),
 }));
 jest.mock('../src/config/firebase', () => ({ auth: {} }));
+// The system-recommendation preview reuses the public detail renderer.
+jest.mock('../src/features/moderation/components/ReportButton', () => () => null);
+jest.mock('../src/components/ExactLocationMapPreview', () => () => null);
+jest.mock('../src/components/OpenWithLocationSheet', () => () => null);
 jest.mock('firebase/auth', () => ({ signOut: jest.fn() }));
 jest.mock('@expo/vector-icons', () => ({
   Ionicons: (props) => {

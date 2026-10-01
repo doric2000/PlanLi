@@ -264,8 +264,33 @@ async function prepareMedia({
   nowMs = Date.now(),
   commitPreparedAsset,
 }) {
-  const preparationStartedAt = Date.now();
   assert(auth?.uid, 'unauthenticated', 'You must be signed in.');
+  return prepareStagedMedia({
+    admin,
+    ownerUid: auth.uid,
+    data,
+    mediaBucket,
+    commitPreparedAsset,
+    consumeBudget: (sourceBytes) => consumeMediaProcessingBudget({
+      admin, uid: auth.uid, sourceBytes, nowMs,
+    }),
+  });
+}
+
+// Shared canonical preparation. Callers authorize the owner and choose the
+// processing budget; ordinary users always go through prepareMedia above.
+async function prepareStagedMedia({
+  admin,
+  ownerUid,
+  data,
+  mediaBucket,
+  commitPreparedAsset,
+  consumeBudget,
+}) {
+  const preparationStartedAt = Date.now();
+  assert(typeof consumeBudget === 'function', 'failed-precondition', 'A media processing budget is required.');
+  const auth = { uid: ownerUid };
+  assert(auth.uid, 'unauthenticated', 'You must be signed in.');
   const kind = String(data?.kind || '');
   assert(MEDIA_PRESETS[kind], 'invalid-argument', 'Unsupported media kind.');
   const stagingPath = String(data?.stagingPath || '');
@@ -305,7 +330,7 @@ async function prepareMedia({
     'Staging image is too large.'
   );
 
-  await consumeMediaProcessingBudget({ admin, uid: auth.uid, sourceBytes, nowMs });
+  await consumeBudget(sourceBytes);
 
   const [sourceBuffer] = await stagingFile.download();
   let sourceInfo;
@@ -501,4 +526,5 @@ module.exports = {
   markMediaClaimed,
   normalizeBucketName,
   prepareMedia,
+  prepareStagedMedia,
 };
