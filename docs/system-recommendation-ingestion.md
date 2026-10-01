@@ -5,7 +5,7 @@ groups into normal PlanLi recommendations owned by the "המלצות מערכת"
 
 ```text
 Apify run (capped) → private source → filter (fresh, ≥50 actual Likes, text, dedupe)
-→ one Claude Haiku 4.5 extraction per eligible post → exact-span validation
+→ one OpenAI gpt-4o-mini extraction per eligible post → exact-span validation
 → photo download + canonical media pipeline → place resolution
 → private candidate → admin review/edit → "אישור ופרסום" → saveRecommendation
 ```
@@ -16,7 +16,7 @@ Apify run (capped) → private source → filter (fresh, ≥50 actual Likes, tex
 |---|---|
 | Pure policy: normalization, filters, stages, readiness, publish mapping | `functions/recommendationIngestionPolicy.js` |
 | Collection, processing, review, publication, status | `functions/recommendationIngestionService.js` |
-| Claude extraction and fidelity validation | `functions/recommendationExtractionService.js` |
+| OpenAI extraction and fidelity validation | `functions/recommendationExtractionService.js` |
 | Apify client (`maxItems`, `maxTotalChargeUsd`) | `functions/apifyFacebookGroupsProvider.js` |
 | Bounded Facebook CDN image download | `functions/ingestionImageDownloader.js` |
 | Trusted publisher option | `saveRecommendation({ trustedOwnerUid })` in `functions/recommendationService.js` |
@@ -72,7 +72,7 @@ publisher, plus the reviewer's in-app verification checklist.
 
 ## Live prerequisites (each separately authorized)
 
-1. `firebase functions:secrets:set APIFY_TOKEN` and `ANTHROPIC_API_KEY` (operator only).
+1. `firebase functions:secrets:set APIFY_TOKEN` and `OPENAI_API_KEY` (operator only).
 2. `node scripts/setupRecommendationIngestion.js` (dry run), then `--apply --confirm-project=planli-f0b12`.
 3. Deploy the new Functions and the `candidates`/`sources` indexes.
 4. Verify one group in the console, `--apply --enable`, run the trial, review, publish one, check in the app.

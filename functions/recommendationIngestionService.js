@@ -1452,13 +1452,13 @@ module.exports = {
   updateRecommendationIngestionGroup,
   updateSystemRecommendationCandidate,
   // Production dependency factory used by index.js.
-  productionDeps: ({ admin, mediaBucket, anthropicApiKey, placesProvider = 'new' }) => {
+  productionDeps: ({ admin, mediaBucket, openaiApiKey, placesProvider = 'new' }) => {
     const { autocompletePlaces, fetchBilingualPlace } = require('./placesProviderAdapter');
-    const { createAnthropicClient } = require('./recommendationExtractionService');
+    const { createOpenAIClient } = require('./recommendationExtractionService');
     let client = null;
     return {
       extract: ({ source, model }) => {
-        if (!client && anthropicApiKey) client = createAnthropicClient(anthropicApiKey);
+        if (!client && openaiApiKey) client = createOpenAIClient(openaiApiKey);
         return extractRecommendationCandidates({ source, client, model });
       },
       downloadImage: (url) => downloadSourceImage(url),

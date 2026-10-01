@@ -89,24 +89,45 @@ test('post text is quoted data and the prompt forbids following embedded instruc
 
 test('extraction makes one bounded structured call and reports incomplete output', async () => {
   const calls = [];
-  const client = { messages: { create: async (request) => {
+  const client = { chat: { completions: { create: async (request) => {
     calls.push(request);
-    return { stop_reason: 'end_turn', usage: { input_tokens: 900, output_tokens: 120 },
-      content: [{ type: 'text', text: JSON.stringify({ candidates: [raw()] }) }] };
-  } } };
+    return { usage: { prompt_tokens: 900, completion_tokens: 120 },
+      choices: [{ finish_reason: 'stop', message: { content: JSON.stringify({ candidates: [raw()] }), refusal: null } }] };
+  } } } };
   const result = await extractRecommendationCandidates({ source, client });
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].model, 'claude-haiku-4-5');
-  assert.equal(calls[0].output_config.format.type, 'json_schema');
-  assert.equal(calls[0].max_tokens, 2000);
+  assert.equal(calls[0].model, 'gpt-4o-mini');
+  assert.equal(calls[0].response_format.type, 'json_schema');
+  assert.equal(calls[0].response_format.json_schema.strict, true);
+  assert.equal(calls[0].max_completion_tokens, 2000);
+  assert.equal(calls[0].messages[0].role, 'system');
   assert.equal(result.candidates.length, 1);
   assert.equal(result.usage.inputTokens, 900);
 
-  const truncated = { messages: { create: async () => ({ stop_reason: 'max_tokens', content: [], usage: {} }) } };
+  const truncated = { chat: { completions: { create: async () => ({ usage: {},
+    choices: [{ finish_reason: 'length', message: { content: '{"candidates":[', refusal: null } }] }) } } };
   await assert.rejects(extractRecommendationCandidates({ source, client: truncated }),
     (error) => error.details?.reason === 'extraction_incomplete');
   await assert.rejects(extractRecommendationCandidates({ source, client: null }),
     (error) => error.details?.reason === 'extraction_not_configured');
   assert.equal(extractionCacheKey(source), extractionCacheKey({ ...source }));
   assert.notEqual(extractionCacheKey(source), extractionCacheKey({ ...source, contentHash: 'hash-2' }));
+});
+
+test('the OpenAI client sends one bounded request with the key only in a header', async () => {
+  const { createOpenAIClient } = require('./recommendationExtractionService');
+  const requests = [];
+  const client = createOpenAIClient('synthetic-key', { fetchImpl: async (url, options) => {
+    requests.push({ url, options });
+    return new Response(JSON.stringify({ choices: [{ finish_reason: 'stop', message: { content: '{"candidates":[]}' } }] }));
+  } });
+  const result = await extractRecommendationCandidates({ source, client });
+  assert.deepEqual(result.candidates, []);
+  assert.equal(requests[0].url, 'https://api.openai.com/v1/chat/completions');
+  assert.equal(requests[0].options.redirect, 'error');
+  assert.equal(requests[0].options.headers.Authorization, 'Bearer synthetic-key');
+  assert.equal(requests[0].options.body.includes('synthetic-key'), false);
+  const rejected = createOpenAIClient('k', { fetchImpl: async () => new Response('{}', { status: 401 }) });
+  await assert.rejects(extractRecommendationCandidates({ source, client: rejected }),
+    (error) => error.details?.reason === 'extraction_http_401');
 });

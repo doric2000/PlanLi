@@ -14,7 +14,7 @@ const {
   spanIsInSource,
 } = require('./recommendationIngestionPolicy');
 
-const EXTRACTION_MODEL = 'claude-haiku-4-5';
+const EXTRACTION_MODEL = 'gpt-4o-mini';
 const EXTRACTION_PROMPT_VERSION = 1;
 const EXTRACTION_MAX_OUTPUT_TOKENS = 2000;
 const EXTRACTION_TIMEOUT_MS = 45_000;
@@ -105,10 +105,35 @@ function userContent(source) {
   ].join('\n');
 }
 
-function createAnthropicClient(apiKey) {
-  const sdk = require('@anthropic-ai/sdk');
-  const Anthropic = sdk.default || sdk;
-  return new Anthropic({ apiKey, maxRetries: 1, timeout: EXTRACTION_TIMEOUT_MS });
+// Minimal Chat Completions client over the built-in fetch (no extra dependency):
+// one bounded request, no redirects, key only in the Authorization header.
+function createOpenAIClient(apiKey, { fetchImpl = global.fetch, timeoutMs = EXTRACTION_TIMEOUT_MS } = {}) {
+  const create = async (body) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    let response;
+    try {
+      response = await fetchImpl('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        redirect: 'error',
+        signal: controller.signal,
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+    } catch (error) {
+      throw new HttpsError('unavailable', 'The extraction provider did not respond.', {
+        reason: error?.name === 'AbortError' ? 'extraction_timeout' : 'extraction_unreachable',
+      });
+    } finally {
+      clearTimeout(timer);
+    }
+    if (!response.ok) {
+      throw new HttpsError(response.status === 429 || response.status >= 500 ? 'unavailable' : 'failed-precondition',
+        'The extraction provider rejected the request.', { reason: `extraction_http_${response.status}` });
+    }
+    return response.json();
+  };
+  return { chat: { completions: { create } } };
 }
 
 // One bounded model call per eligible post. Returns raw (unvalidated) candidates and usage.
@@ -118,25 +143,32 @@ async function extractRecommendationCandidates({ source, client, model = EXTRACT
       reason: 'extraction_not_configured',
     });
   }
-  const response = await client.messages.create({
+  // The frozen system prompt comes first so OpenAI's automatic prompt caching can reuse it.
+  const response = await client.chat.completions.create({
     model,
-    max_tokens: EXTRACTION_MAX_OUTPUT_TOKENS,
-    system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
-    messages: [{ role: 'user', content: userContent(source) }],
-    output_config: { format: { type: 'json_schema', schema: OUTPUT_SCHEMA } },
+    max_completion_tokens: EXTRACTION_MAX_OUTPUT_TOKENS,
+    messages: [
+      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'user', content: userContent(source) },
+    ],
+    response_format: {
+      type: 'json_schema',
+      json_schema: { name: 'recommendation_candidates', strict: true, schema: OUTPUT_SCHEMA },
+    },
   });
   const usage = {
-    inputTokens: Number(response?.usage?.input_tokens || 0),
-    outputTokens: Number(response?.usage?.output_tokens || 0),
-    cacheReadTokens: Number(response?.usage?.cache_read_input_tokens || 0),
+    inputTokens: Number(response?.usage?.prompt_tokens || 0),
+    outputTokens: Number(response?.usage?.completion_tokens || 0),
+    cacheReadTokens: Number(response?.usage?.prompt_tokens_details?.cached_tokens || 0),
   };
-  if (response?.stop_reason !== 'end_turn') {
+  const choice = response?.choices?.[0];
+  if (choice?.message?.refusal || choice?.finish_reason !== 'stop') {
     throw new HttpsError('unavailable', 'The extraction response was incomplete.', {
-      reason: response?.stop_reason === 'refusal' ? 'extraction_refused' : 'extraction_incomplete',
+      reason: choice?.message?.refusal ? 'extraction_refused' : 'extraction_incomplete',
       usage,
     });
   }
-  const text = (response.content || []).filter((block) => block.type === 'text').map((block) => block.text).join('');
+  const text = String(choice.message?.content || '');
   let parsed;
   try {
     parsed = JSON.parse(text);
@@ -239,7 +271,7 @@ module.exports = {
   EXTRACTION_PROMPT_VERSION,
   OUTPUT_SCHEMA,
   SYSTEM_PROMPT,
-  createAnthropicClient,
+  createOpenAIClient,
   extractRecommendationCandidates,
   extractionCacheKey,
   userContent,

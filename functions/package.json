@@ -68,7 +68,6 @@
     "build-country-geo": "node scripts/buildCountryGeoData.js"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "0.131.0",
     "@google-cloud/storage": "7.21.0",
     "countries-list": "3.4.1",
     "expo-server-sdk": "7.1.0",

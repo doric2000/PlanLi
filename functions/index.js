@@ -203,7 +203,7 @@ const publicRateLimitKey = defineSecret('PUBLIC_RATE_LIMIT_KEY');
 const appleSignInPrivateKey = defineSecret('APPLE_SIGN_IN_PRIVATE_KEY');
 const expoPushAccessToken = defineSecret('EXPO_PUSH_ACCESS_TOKEN');
 const apifyToken = defineSecret('APIFY_TOKEN');
-const anthropicApiKey = defineSecret('ANTHROPIC_API_KEY');
+const openaiApiKey = defineSecret('OPENAI_API_KEY');
 const appleSignInTeamId = defineString('APPLE_SIGN_IN_TEAM_ID', {
   description: 'Apple Developer Team ID used by Sign in with Apple.',
 });
@@ -324,7 +324,7 @@ const recommendationIngestion = require('./recommendationIngestionService');
 const ingestionDeps = (withExtraction = false) => recommendationIngestion.productionDeps({
   admin,
   mediaBucket: mediaStorageBucket.value(),
-  anthropicApiKey: withExtraction ? anthropicApiKey.value() : '',
+  openaiApiKey: withExtraction ? openaiApiKey.value() : '',
 });
 const ingestionPublishOptions = () => ({
   restCountriesKey: restCountriesKey.value(),
@@ -380,7 +380,7 @@ exports.onRecommendationIngestionTaskCreated = firestoreCreated(
     }
   },
   { retry: false, timeoutSeconds: 540, memory: '1GiB', concurrency: 1, maxInstances: 2,
-    serviceAccount: MEDIA_SERVICE_ACCOUNT, secrets: [anthropicApiKey] }
+    serviceAccount: MEDIA_SERVICE_ACCOUNT, secrets: [openaiApiKey] }
 );
 exports.pollRecommendationIngestionScheduled = onSchedule({ schedule: 'every 5 minutes', region: REGION,
   timeZone: 'UTC', serviceAccount: CORE_SERVICE_ACCOUNT, timeoutSeconds: 300, memory: '512MiB',

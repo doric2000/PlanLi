@@ -87,7 +87,7 @@ function makeDeps({ predictions, extractCandidates } = {}) {
     extract: async () => {
       calls.extract += 1;
       return {
-        model: 'claude-haiku-4-5',
+        model: 'gpt-4o-mini',
         usage: { inputTokens: 800, outputTokens: 100 },
         candidates: extractCandidates || [{
           placeName: 'Cafe Aurora', titleSpan: 'Cafe Aurora',
@@ -495,7 +495,7 @@ test('a worker that lost its lease never overwrites the new owner', async () => 
     // Another worker takes over while this one is still running.
     const current = admin.documents.get(sourceKey);
     admin.documents.set(sourceKey, { ...current, processing: { ...current.processing, leaseId: 'other-worker' } });
-    return { model: 'claude-haiku-4-5', usage: {}, candidates: [{
+    return { model: 'gpt-4o-mini', usage: {}, candidates: [{
       placeName: 'Cafe Aurora', titleSpan: 'Cafe Aurora', descriptionSpans: ['quiet garden, excellent cardamom buns and friendly staff.'],
       categoryId: 'food', subcategoryIds: ['cafe'], detailSpans: { phone: '', externalUrl: '', priceNote: '' }, photoIndexes: [], photoEvidence: '',
     }] };

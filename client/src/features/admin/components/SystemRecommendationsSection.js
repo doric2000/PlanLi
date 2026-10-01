@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Image, Linking, Platform, Alert, Pressable, View, useWindowDimensions } from 'react-native';
+import { Image, Platform, Alert, Pressable, View, useWindowDimensions } from 'react-native';
 
 import AppText from '../../../components/AppText';
 import AppTextInput from '../../../components/AppTextInput';
@@ -24,6 +24,7 @@ import {
   updateSystemRecommendationCandidate,
 } from '../../../services/AdminService';
 import { adminStyles as styles } from '../../../styles';
+import { openSafeExternalUrl } from '../../../utils/safeExternalUrl';
 import { safeAdminError } from '../adminErrors';
 import AdminAction from './AdminAction';
 import AdminAsyncState from './AdminAsyncState';
@@ -99,6 +100,11 @@ function formFromDetail(detail) {
     externalUrl: content.details?.externalUrl || '',
     photoIds: detail?.candidate?.photoIds || [],
   };
+}
+
+// Only validated Facebook source links and PlanLi recommendation links open.
+function openExternal(url, policy) {
+  openSafeExternalUrl(url, policy).catch(() => {});
 }
 
 function formatDate(ms) {
@@ -348,7 +354,7 @@ export default function SystemRecommendationsSection() {
               {group.verified ? 'מאומתת' : 'לא אומתה'} · {group.enabled ? 'פעילה' : 'כבויה'} · {group.countryId ? `${group.countryId}/${group.cityId}` : 'ללא יעד'} · {group.resultsLimit} פוסטים
             </AppText>
             <View style={styles.actions}>
-              <AdminAction compact label="פתיחת הקבוצה" onPress={() => Linking.openURL(group.url)} />
+              <AdminAction compact label="פתיחת הקבוצה" onPress={() => openExternal(group.url, 'facebookSource')} />
               <AdminAction
                 compact
                 label={group.verified ? 'ביטול אימות' : 'סימון כמאומתת'}
@@ -490,7 +496,7 @@ export default function SystemRecommendationsSection() {
         <View style={styles.contextCard} testID="system-rec-source">
           <AppText style={styles.subsectionTitle}>מקור (פרטי)</AppText>
           <AppText style={styles.body}>פורסם: {formatDate(source.postedAtMs)} · לייקים בפועל: {source.actualLikes ?? 'לא ידוע'}{source.totalReactions != null ? ` · כל התגובות: ${source.totalReactions}` : ''}</AppText>
-          {source.url ? <AdminAction compact label="פתיחת הפוסט המקורי" onPress={() => Linking.openURL(source.url)} /> : null}
+          {source.url ? <AdminAction compact label="פתיחת הפוסט המקורי" onPress={() => openExternal(source.url, 'facebookSource')} /> : null}
           {source.changedAfterReview ? <AppText style={styles.inlineError}>הפוסט המקורי השתנה אחרי הבדיקה.</AppText> : null}
           <AppText style={styles.systemSourceText} selectable>{source.text}</AppText>
           {(candidate.issues || []).map((issue, index) => (
@@ -507,7 +513,7 @@ export default function SystemRecommendationsSection() {
             {ready ? 'מוכן לפרסום' : `חסר: ${(candidate.readiness?.missing || []).map((key) => MISSING_LABELS[key] || key).join(', ')}`}
           </AppText>
           {candidate.published ? (
-            <AdminAction compact label="פתיחת ההמלצה שפורסמה" onPress={() => Linking.openURL(candidate.published.url)} testID="system-rec-published-link" />
+            <AdminAction compact label="פתיחת ההמלצה שפורסמה" onPress={() => openExternal(candidate.published.url, 'planliRecommendation')} testID="system-rec-published-link" />
           ) : null}
         </View>
 
@@ -622,7 +628,7 @@ export default function SystemRecommendationsSection() {
       {renderStatus()}
       {action.error ? <AppText style={styles.inlineError} testID="system-rec-error">{action.error}</AppText> : null}
       {action.success ? <AppText style={styles.inlineSuccess} testID="system-rec-success">{action.success}</AppText> : null}
-      {action.link ? <AdminAction compact label="פתיחת ההמלצה שפורסמה" onPress={() => Linking.openURL(action.link)} testID="system-rec-success-link" /> : null}
+      {action.link ? <AdminAction compact label="פתיחת ההמלצה שפורסמה" onPress={() => openExternal(action.link, 'planliRecommendation')} testID="system-rec-success-link" /> : null}
       <View style={[styles.chipRow, styles.systemFilters]}>
         {REVIEW_FILTERS.map((filter) => (
           <Chip key={filter.id} label={filter.label} active={reviewState === filter.id}

@@ -9,6 +9,13 @@ import {
 describe('safe external URL boundary', () => {
   afterEach(() => jest.restoreAllMocks());
 
+  it('limits admin review links to Facebook sources and PlanLi recommendations', () => {
+    expect(getSafeExternalUrl('https://www.facebook.com/groups/1/posts/2/', 'facebookSource')).toBe('https://www.facebook.com/groups/1/posts/2/');
+    expect(getSafeExternalUrl('https://facebook.com.evil.example/groups/1/', 'facebookSource')).toBeNull();
+    expect(getSafeExternalUrl('https://planli.cc/recommendation/rec_1', 'planliRecommendation')).toBe('https://planli.cc/recommendation/rec_1');
+    expect(getSafeExternalUrl('https://www.facebook.com/groups/1/', 'planliRecommendation')).toBeNull();
+  });
+
   it('opens a normalized URL only under the caller-specific exact host policy', async () => {
     const openUrl = jest.spyOn(Linking, 'openURL').mockResolvedValue();
 
