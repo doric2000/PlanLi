@@ -61,13 +61,17 @@ describe('useProfileData loading', () => {
     jest.clearAllMocks();
   });
 
-  it('reports failed content reads and keeps the failed request retryable', async () => {
+  it('reports content failures, preserves backoff and recovers after invalidation', async () => {
     const failure = Object.assign(new Error('query unavailable'), { code: 'unavailable' });
     mockGetCountFromServer.mockResolvedValue({ data: () => ({ count: 0 }) });
     mockGetDocs.mockRejectedValue(failure);
     const args = { uid: 'profile-1', user: { uid: 'profile-1' }, isOwnProfile: true };
     await expect(requestProfileResource(args).promise).rejects.toBe(failure);
     expect(reportFirestoreReadFailure).toHaveBeenCalledWith(failure, 'profile_content');
+    const backedOff = requestProfileResource(args);
+    expect(backedOff.source).toBe('backoff');
+    await expect(backedOff.promise).rejects.toBe(failure);
+    invalidateProfileResource(args.uid);
     mockGetDocs.mockResolvedValue({ docs: [] });
     await expect(requestProfileResource(args).promise).resolves.toMatchObject({ recommendations: [], routes: [] });
   });
