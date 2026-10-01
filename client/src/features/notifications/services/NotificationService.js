@@ -13,6 +13,7 @@ import {
 } from 'firebase/firestore';
 
 import { cloudFunctions, db } from '../../../config/firebase';
+import { reportFirestoreReadFailure } from '../../../services/FirestoreReadDiagnostics';
 import {
   NOTIFICATION_SCHEMA_VERSION,
   NotificationChannel,
@@ -177,18 +178,26 @@ export async function getNotificationPage(userId, channel, options = {}) {
     NOTIFICATION_PAGE_SIZE,
     Math.max(1, Number(options.pageSize || NOTIFICATION_PAGE_SIZE))
   );
-  const snapshot = await getDocs(buildNotificationPageQuery(userId, channel, {
-    ...options,
-    pageSize,
-  }));
-  return pageFromSnapshot(snapshot, pageSize);
+  try {
+    const snapshot = await getDocs(buildNotificationPageQuery(userId, channel, {
+      ...options,
+      pageSize,
+    }));
+    return pageFromSnapshot(snapshot, pageSize);
+  } catch (error) {
+    reportFirestoreReadFailure(error, 'notification_page');
+    throw error;
+  }
 }
 
 export function subscribeToNotificationPage(userId, channel, onPage, onError, options = {}) {
   return onSnapshot(
     buildNotificationPageQuery(userId, channel, options),
     (snapshot) => onPage(pageFromSnapshot(snapshot)),
-    onError
+    (error) => {
+      reportFirestoreReadFailure(error, 'notification_listener');
+      onError?.(error);
+    }
   );
 }
 

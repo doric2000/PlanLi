@@ -25,6 +25,24 @@ The existing Text Search quota remains zero. See
 
 ## Current environment status
 
+### Mobile profile/notification incident — investigation open (2026-10-01)
+
+Multiple users report empty/failing notifications and profile content on iOS and
+Android while the callable-backed feed remains available. Stage 4 acceptance and
+the remaining Places quota expansion are paused. No security enforcement was
+disabled and no production content/counters were changed during investigation.
+Read-only checks found valid mobile App Check traffic for Firestore, matching
+deployed Rules (unchanged since September 15), READY indexes for these queries,
+and existing active content and schema-v2 notification rows. These checks do not
+prove that the mobile listeners receive their responses. The cause is unconfirmed.
+
+A focused diagnostic patch reports failed profile reads, notification page reads
+and notification listeners through the existing Sentry integration, once per
+operation/error code per app session. It excludes server messages, document paths
+and query/account values and preserves the original error/retry behavior. This is
+an investigation aid, not a verified repair; it is not yet released. Current live
+OTA remains `84716ba6-7100-4277-bb6e-87f29fcabc1e` from `9290939`.
+
 ### Security stage 4 — deployed; final verification in progress (2026-09-30)
 
 Implementation PR [#455](https://github.com/doric2000/PlanLi/pull/455) merged as

@@ -12,9 +12,11 @@ jest.mock('firebase/firestore', () => ({
 }));
 jest.mock('firebase/functions', () => ({ httpsCallable: jest.fn() }));
 jest.mock('../src/config/firebase', () => ({ db: { kind: 'db' }, cloudFunctions: { kind: 'functions' } }));
+jest.mock('../src/services/FirestoreReadDiagnostics', () => ({ reportFirestoreReadFailure: jest.fn() }));
 
 import * as mockFirestore from 'firebase/firestore';
 import { httpsCallable as mockHttpsCallable } from 'firebase/functions';
+import { reportFirestoreReadFailure } from '../src/services/FirestoreReadDiagnostics';
 
 import {
   buildNotificationPageQuery,
@@ -25,6 +27,7 @@ import {
   NOTIFICATION_PAGE_SIZE,
   resolveNotificationTargetAvailability,
   setNotificationRead,
+  subscribeToNotificationPage,
 } from '../src/features/notifications/services/NotificationService';
 
 describe('NotificationService', () => {
@@ -34,6 +37,20 @@ describe('NotificationService', () => {
     jest.clearAllMocks();
     mockCallable.mockResolvedValue({ data: {} });
     mockHttpsCallable.mockReturnValue(mockCallable);
+  });
+
+  it('reports page and listener failures without changing the original failure or unsubscribe', async () => {
+    const failure = Object.assign(new Error('read failed'), { code: 'unavailable' });
+    mockFirestore.getDocs.mockRejectedValueOnce(failure);
+    await expect(getNotificationPage('owner', 'personal')).rejects.toBe(failure);
+    expect(reportFirestoreReadFailure).toHaveBeenCalledWith(failure, 'notification_page');
+    const unsubscribe = jest.fn();
+    const onError = jest.fn();
+    mockFirestore.onSnapshot.mockReturnValueOnce(unsubscribe);
+    expect(subscribeToNotificationPage('owner', 'personal', jest.fn(), onError)).toBe(unsubscribe);
+    mockFirestore.onSnapshot.mock.calls[0][2](failure);
+    expect(onError).toHaveBeenCalledWith(failure);
+    expect(reportFirestoreReadFailure).toHaveBeenCalledWith(failure, 'notification_listener');
   });
 
   it('builds the bounded channel query with the schema and cursor', () => {
