@@ -185,6 +185,16 @@ describe('Admin console end-to-end surface', () => {
     }));
   }, 20000);
 
+  it('signs the admin out from the console and opens sign-in for a fresh TOTP session', async () => {
+    const { signOut } = require('firebase/auth');
+    signOut.mockResolvedValueOnce();
+    const screen = render(<AdminPanelScreen navigation={navigation} />);
+    await screen.findByTestId('admin-overview-content', {}, { timeout: 10000 });
+    fireEvent.press(screen.getByTestId('admin-sign-out'));
+    await waitFor(() => expect(signOut).toHaveBeenCalled());
+    await waitFor(() => expect(navigation.navigate).toHaveBeenCalledWith('Main', expect.anything()));
+  }, 20000);
+
   it('opens each workload metric as its matching filtered queue', async () => {
     const screen = render(<AdminPanelScreen navigation={navigation} />);
     await screen.findByTestId('admin-overview-content', {}, { timeout: 10000 });

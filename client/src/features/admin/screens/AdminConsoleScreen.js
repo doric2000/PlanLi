@@ -37,6 +37,17 @@ function requestedSection(params = {}) {
 }
 
 export default function AdminConsoleScreen({ navigation, route }) {
+  const [signingOut, setSigningOut] = useState(false);
+  // Sensitive admin actions need a fresh TOTP sign-in; this lets the admin start one.
+  const signOutOfConsole = useCallback(async () => {
+    setSigningOut(true);
+    try {
+      await signOut(auth);
+      openAuthFlow(navigation, 'Login');
+    } finally {
+      setSigningOut(false);
+    }
+  }, [navigation]);
   const {
     isAdmin,
     hasTotpEnrollment,
@@ -178,7 +189,7 @@ export default function AdminConsoleScreen({ navigation, route }) {
           <View style={styles.sidebarFooter}><Ionicons name="lock-closed-outline" size={16} color="#667085" /><AppText style={styles.sidebarFooterText}>גישה מאובטחת · יציאה אוטומטית לאחר 30 דקות</AppText></View>
         </View> : null}
         <View style={styles.main}>
-          <View style={styles.topbar}><View><AppText style={styles.title}>{active.label}</AppText><AppText style={styles.subtitle}>ניהול הקהילה, התוכן והמקומות בעברית ובמקום אחד</AppText></View><View style={styles.secureBadge}><Ionicons name="shield-checkmark-outline" size={17} color="#027A48" /><AppText style={styles.secureBadgeText}>גישה מאובטחת</AppText></View></View>
+          <View style={styles.topbar}><View><AppText style={styles.title}>{active.label}</AppText><AppText style={styles.subtitle}>ניהול הקהילה, התוכן והמקומות בעברית ובמקום אחד</AppText></View><View style={styles.topbarActions}><View style={styles.secureBadge}><Ionicons name="shield-checkmark-outline" size={17} color="#027A48" /><AppText style={styles.secureBadgeText}>גישה מאובטחת</AppText></View><Pressable accessibilityRole="button" accessibilityLabel="התנתקות מקונסולת הניהול" accessibilityState={{ busy: signingOut, disabled: signingOut }} disabled={signingOut} onPress={signOutOfConsole} style={({ pressed }) => [styles.signOutButton, pressed && styles.cardPressed]} testID="admin-sign-out"><Ionicons name="log-out-outline" size={17} color="#B42318" /><AppText style={styles.signOutText}>{signingOut ? 'מתנתק…' : 'התנתקות'}</AppText></Pressable></View></View>
           {!wide ? <View style={styles.mobileNavScroll} accessibilityRole="tablist"><View style={styles.mobileNav}>{ADMIN_SECTIONS.map((item) => <Pressable key={item.id} accessibilityRole="tab" accessibilityState={{ selected: section === item.id }} accessibilityLabel={`פתיחת ${item.label}`} testID={`admin-tab-${item.id}`} style={({ pressed }) => [styles.mobileNavItem, section === item.id && styles.mobileNavItemActive, pressed && styles.cardPressed]} onPress={() => navigate(item.id)}><Ionicons name={item.icon} size={18} color={section === item.id ? '#FFFFFF' : '#475467'} /><AppText numberOfLines={1} style={[styles.mobileNavText, section === item.id && styles.mobileNavTextActive]}>{item.label}</AppText></Pressable>)}</View></View> : null}
           {section === 'queue' ? <View style={styles.mainBodyQueue}>{body}</View> : <ScrollView testID="admin-section-scroll" style={styles.mainScroll} contentContainerStyle={styles.mainBody} keyboardShouldPersistTaps="handled">{body}</ScrollView>}
         </View>
