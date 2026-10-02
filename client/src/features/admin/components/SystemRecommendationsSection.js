@@ -73,6 +73,8 @@ const ISSUE_LABELS = Object.freeze({
   classification_required: 'יש לבחור קטגוריה ותת־קטגוריה.',
 });
 const NO_NAVIGATION = Object.freeze({ navigate: () => {} });
+// contextCard sizes for row layouts; in this vertical page each card takes its content height.
+const cardStyle = [styles.contextCard, styles.destinationContextCard];
 
 function confirmAction(message, onConfirm) {
   if (Platform.OS === 'web') {
@@ -334,7 +336,7 @@ export default function SystemRecommendationsSection() {
     const budget = data.budget || {};
     const nextStage = data.nextStage;
     return (
-      <View style={styles.contextCard} testID="system-rec-status">
+      <View style={cardStyle} testID="system-rec-status">
         <View style={styles.row}>
           <AppText style={styles.subsectionTitle}>איסוף מקבוצות פייסבוק</AppText>
           <View style={styles.badge}><AppText style={styles.badgeText}>{STAGE_LABELS[data.rolloutStage] || data.rolloutStage}</AppText></View>
@@ -493,7 +495,7 @@ export default function SystemRecommendationsSection() {
           />
         </View>
 
-        <View style={styles.contextCard} testID="system-rec-source">
+        <View style={cardStyle} testID="system-rec-source">
           <AppText style={styles.subsectionTitle}>מקור (פרטי)</AppText>
           <AppText style={styles.body}>פורסם: {formatDate(source.postedAtMs)} · לייקים בפועל: {source.actualLikes ?? 'לא ידוע'}{source.totalReactions != null ? ` · כל התגובות: ${source.totalReactions}` : ''}</AppText>
           {source.url ? <AdminAction compact label="פתיחת הפוסט המקורי" onPress={() => openExternal(source.url, 'facebookSource')} /> : null}
@@ -507,7 +509,7 @@ export default function SystemRecommendationsSection() {
           {candidate.photoMapping?.evidence ? <AppText style={styles.helpText}>שיוך תמונות: {candidate.photoMapping.evidence}</AppText> : null}
         </View>
 
-        <View style={styles.contextCard}>
+        <View style={cardStyle}>
           <AppText style={styles.subsectionTitle}>מצב</AppText>
           <AppText style={styles.body} testID="system-rec-readiness">
             {ready ? 'מוכן לפרסום' : `חסר: ${(candidate.readiness?.missing || []).map((key) => MISSING_LABELS[key] || key).join(', ')}`}
@@ -518,7 +520,7 @@ export default function SystemRecommendationsSection() {
         </View>
 
         {editable ? (
-          <View style={styles.contextCard} testID="system-rec-edit">
+          <View style={cardStyle} testID="system-rec-edit">
             <AppText style={styles.subsectionTitle}>עריכה</AppText>
             <AppText style={styles.fieldLabel}>כותרת (שם המקום או הפעילות)</AppText>
             <AppTextInput style={styles.input} value={form.title} onChangeText={(title) => setForm((current) => ({ ...current, title }))} accessibilityLabel="כותרת" testID="system-rec-title" />

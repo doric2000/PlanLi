@@ -14,6 +14,10 @@ import { colors, common } from './src/styles';
 
 const Stack = createStackNavigator();
 const navigationRef = createNavigationContainerRef();
+// On web, React Navigation lets a full-page card grow with its content so the
+// document scrolls, but this page's body does not scroll. Keep each card at the
+// window height so the console's own section ScrollView scrolls instead.
+const adminWebScreenOptions = { ...rtlStackScreenOptions, cardStyle: { flex: 1 } };
 
 function AdminEntryScreen(props) {
   const { user, loading } = useAuth();
@@ -40,7 +44,7 @@ export default function AdminWebApp() {
       <SafeAreaProvider initialMetrics={initialWindowMetrics}>
         <AuthProvider navigationRef={navigationRef}>
           <NavigationContainer ref={navigationRef}>
-            <Stack.Navigator initialRouteName="AdminPanel" screenOptions={rtlStackScreenOptions}>
+            <Stack.Navigator initialRouteName="AdminPanel" screenOptions={adminWebScreenOptions}>
               <Stack.Screen name="AdminPanel" component={AdminEntryScreen} />
               <Stack.Screen
                 name="AdminAuth"
