@@ -64,7 +64,8 @@ function runSummary(run) {
 // Starts one bounded provider run. maxItems and maxTotalChargeUsd are the
 // provider-side spending caps; the application ledger reserves them first.
 async function startGroupRun({
-  token, fetchImpl, groupUrl, resultsLimit, onlyPostsNewerThan, maxTotalChargeUsd, timeoutSeconds = 600,
+  token, fetchImpl, groupUrl, resultsLimit, onlyPostsNewerThan, maxTotalChargeUsd, viewOption = 'TOP_POSTS',
+  timeoutSeconds = 600,
 }) {
   const run = await apifyRequest(`/acts/${ACTOR_ID}/runs`, {
     token,
@@ -74,7 +75,7 @@ async function startGroupRun({
     body: {
       startUrls: [{ url: groupUrl }],
       resultsLimit,
-      viewOption: 'CHRONOLOGICAL',
+      viewOption,
       onlyPostsNewerThan,
     },
   });

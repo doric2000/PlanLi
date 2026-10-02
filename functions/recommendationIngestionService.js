@@ -24,6 +24,7 @@ const {
 const {
   DEFAULT_COLLECTION_CAP_POSTS,
   DEFAULT_COLLECTION_CAP_USD,
+  DEFAULT_VIEW_OPTION,
   DESCRIPTION_MAX,
   FRESHNESS_DAYS,
   INGESTION_ROOT,
@@ -36,6 +37,7 @@ const {
   STAGE_CHECKLIST,
   TERMINAL_REVIEW_STATES,
   TITLE_MAX,
+  VIEW_OPTIONS,
   assert,
   buildPublishData,
   catalogCategory,
@@ -139,6 +141,7 @@ async function readConfig(db) {
     capPosts: Number(data.capPosts) > 0 ? Math.floor(Number(data.capPosts)) : DEFAULT_COLLECTION_CAP_POSTS,
     maxImagesPerPost: Math.max(1, Math.min(MAX_POST_IMAGES, Number(data.maxImagesPerPost) || MAX_POST_IMAGES)),
     extractionModel: typeof data.extractionModel === 'string' && data.extractionModel ? data.extractionModel : EXTRACTION_MODEL,
+    viewOption: VIEW_OPTIONS.includes(data.viewOption) ? data.viewOption : DEFAULT_VIEW_OPTION,
     stageVerifications: data.stageVerifications && typeof data.stageVerifications === 'object' ? data.stageVerifications : {},
   };
 }
@@ -406,7 +409,7 @@ async function startRecommendationIngestionCollection({ admin, auth, data, apify
       updatedAt: fieldValue(admin).serverTimestamp(),
     });
     const created = {
-      runId, groupKey, groupUrl: group.url, status: 'starting', stage: config.rolloutStage,
+      runId, groupKey, groupUrl: group.url, status: 'starting', stage: config.rolloutStage, viewOption: config.viewOption,
       reservedUsd, resultsLimit, onlyPostsNewerThan, requestedBy: auth.uid, ledgerSettled: false,
       createdAt: fieldValue(admin).serverTimestamp(), updatedAt: fieldValue(admin).serverTimestamp(),
     };
@@ -423,6 +426,7 @@ async function startRecommendationIngestionCollection({ admin, auth, data, apify
       resultsLimit: run.resultsLimit,
       onlyPostsNewerThan,
       maxTotalChargeUsd: run.reservedUsd,
+      viewOption: run.viewOption,
     });
   } catch (error) {
     if (error?.details?.uncertain === true) {

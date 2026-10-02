@@ -178,6 +178,7 @@ test('trial collection reserves a capped budget, filters before extraction, and 
   assert.equal(deps.calls.start[0].maxTotalChargeUsd, 0.25);
   assert.equal(deps.calls.start[0].resultsLimit, 10);
   assert.equal(deps.calls.start[0].onlyPostsNewerThan, '2026-04-01');
+  assert.equal(deps.calls.start[0].viewOption, 'TOP_POSTS', 'popular posts are requested, not the newest');
   assert.deepEqual(admin.documents.get(`${ROOT}/state/collectionBudget`).reservedUsd, 0.25);
 
   await assert.rejects(service.startRecommendationIngestionCollection({ admin, auth, data: { groupKey: GROUP_KEY }, apifyToken: 'token', deps }),

@@ -78,7 +78,7 @@ test('provider runs carry provider-side item and charge caps', async () => {
   const body = JSON.parse(options.body);
   assert.deepEqual(body, {
     startUrls: [{ url: 'https://www.facebook.com/groups/123/' }], resultsLimit: 10,
-    viewOption: 'CHRONOLOGICAL', onlyPostsNewerThan: '2026-04-01',
+    viewOption: 'TOP_POSTS', onlyPostsNewerThan: '2026-04-01',
   });
   await assert.rejects(apify.startGroupRun({ token: 't', fetchImpl: async () => { throw new Error('reset'); },
     groupUrl: 'https://www.facebook.com/groups/123/', resultsLimit: 1, onlyPostsNewerThan: '2026-04-01', maxTotalChargeUsd: 0.1 }),
