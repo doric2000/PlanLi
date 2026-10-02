@@ -25,7 +25,7 @@ The existing Text Search quota remains zero. See
 
 ## Current environment status
 
-### System recommendation ingestion — backend deployed; admin Hosting pending (2026-10-02)
+### System recommendation ingestion — deployed; trial not yet run (2026-10-02)
 
 PR [#458](https://github.com/doric2000/PlanLi/pull/458) merged as
 `4ef23841e4ad7cbab12e6a7822e610ccbe240148`. See
@@ -42,9 +42,13 @@ PR [#458](https://github.com/doric2000/PlanLi/pull/458) merged as
   `system-recommendations-publisher` ("המלצות מערכת", no sign-in method), config
   `enabled: true`, `rolloutStage: trial`, caps $0.25/run, $10 and 1,000 posts
   total; Athens group verified and enabled, the other four disabled.
-- **Not yet live:** the admin Hosting bundle with the new section (built and
-  verified locally from `4ef2384`; deploy pending). No collection run, model call
-  or publication has happened; ledger spend is $0.
+- Hosting (operator-deployed 2026-10-02 12:40 Israel time, live channel) serves admin
+  bundle `index-5a731e94de3a8dd8855e790f72b16e64.js`, built from `c10fe63`
+  (PR [#460](https://github.com/doric2000/PlanLi/pull/460): admin web cards keep
+  window height so every section scrolls; system section cards no longer
+  overlap). Live HTML references that bundle (HTTP 200) and it contains the
+  system recommendations section.
+- No collection run, model call or publication has happened; ledger spend is $0.
 
 ### Mobile profile/notification incident — investigation open (2026-10-01)
 
