@@ -150,3 +150,18 @@ test('publish data contains only canonical fields and the selected photos in ord
     assert.equal(serialized.includes(privateField), false, `${privateField} must stay private`);
   }
 });
+
+test('provider output shape: posts keep distinct identities and zero reactions are a verified zero', () => {
+  // Real actor output: facebookId is the group's ID, legacyId is the post's ID.
+  const base = { facebookId: '1864457083986225', url: 'https://www.facebook.com/groups/1864457083986225/permalink/1/' };
+  const first = normalizeApifyItem(syntheticItem({ ...base, postId: undefined, legacyId: '2681420632289862', id: 'UzpfSTE' }), { groupKey: 'g' });
+  const second = normalizeApifyItem(syntheticItem({ ...base, postId: undefined, legacyId: '2681407385624520', id: 'UzpfSTF' }), { groupKey: 'g' });
+  assert.notEqual(first.sourceId, second.sourceId);
+  assert.equal(first.providerPostId, '2681420632289862');
+
+  const noReactions = normalizeApifyItem(syntheticItem({ postId: 'p0', reactionLikeCount: undefined, likesCount: 0 }), { groupKey: 'g' });
+  assert.equal(noReactions.actualLikes, 0);
+  assert.equal(evaluateSource(noReactions, { now: NOW }).status, 'below_threshold');
+  const reactionsWithoutBreakdown = normalizeApifyItem(syntheticItem({ postId: 'p1', reactionLikeCount: undefined, likesCount: 80 }), { groupKey: 'g' });
+  assert.equal(reactionsWithoutBreakdown.actualLikes, null, 'total reactions never stand in for Likes');
+});

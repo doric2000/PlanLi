@@ -25,6 +25,9 @@ const TITLE_MAX = 120;
 const DESCRIPTION_MAX = 5000;
 const DEFAULT_COLLECTION_CAP_USD = 10;
 const DEFAULT_COLLECTION_CAP_POSTS = 1000;
+// Actor sort orders. Popular posts are needed to reach the actual-Like threshold.
+const VIEW_OPTIONS = Object.freeze(['TOP_POSTS', 'CHRONOLOGICAL', 'RECENT_ACTIVITY']);
+const DEFAULT_VIEW_OPTION = 'TOP_POSTS';
 
 // The rollout is enforced server-side: one complete trial must be published and
 // verified in the app before any larger collection can start.
@@ -127,6 +130,14 @@ function safeHttpsUrl(value) {
   }
 }
 
+// Apify omits reactionLikeCount when a post has no reactions at all; that is a
+// verified zero. A post with reactions but no Like breakdown stays unverifiable.
+function actualLikeCount(item) {
+  const likes = finiteNonNegativeInteger(item?.reactionLikeCount);
+  if (likes != null) return likes;
+  return finiteNonNegativeInteger(item?.likesCount) === 0 ? 0 : null;
+}
+
 function sourceImages(item) {
   const attachments = [
     ...(Array.isArray(item?.attachments) ? item.attachments : []),
@@ -161,7 +172,8 @@ function sourceImages(item) {
 // retained for context only; eligibility uses the actual Like reaction count.
 function normalizeApifyItem(item, { groupKey }) {
   assert(item && typeof item === 'object', 'invalid-argument', 'ingestion_item_invalid', 'Provider item is invalid.');
-  const providerPostId = String(item.postId || item.facebookId || item.legacyId || item.id || '').trim().slice(0, 200);
+  // In provider output facebookId is the group's ID; legacyId/postId identify the post.
+  const providerPostId = String(item.legacyId || item.postId || item.id || '').trim().slice(0, 200);
   const url = safeHttpsUrl(item.url || item.facebookUrl);
   const text = normalizeSourceText(item.text || item.message || '').slice(0, MAX_SOURCE_TEXT_LENGTH);
   const images = sourceImages(item);
@@ -175,7 +187,7 @@ function normalizeApifyItem(item, { groupKey }) {
     providerPostId,
     url,
     postedAt,
-    actualLikes: finiteNonNegativeInteger(item.reactionLikeCount),
+    actualLikes: actualLikeCount(item),
     totalReactions: finiteNonNegativeInteger(item.likesCount),
     text,
     images,
@@ -339,6 +351,7 @@ function buildPublishData(candidate, photoPool) {
 module.exports = {
   DEFAULT_COLLECTION_CAP_POSTS,
   DEFAULT_COLLECTION_CAP_USD,
+  DEFAULT_VIEW_OPTION,
   DESCRIPTION_MAX,
   FRESHNESS_DAYS,
   INGESTION_ROOT,
@@ -354,6 +367,8 @@ module.exports = {
   STAGE_CHECKLIST,
   TERMINAL_REVIEW_STATES,
   TITLE_MAX,
+  VIEW_OPTIONS,
+  actualLikeCount,
   assert,
   buildPublishData,
   catalogCategory,
