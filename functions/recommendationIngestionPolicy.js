@@ -14,6 +14,10 @@ const { normalize: normalizeName } = require('./destinationIdentityService');
 // Private ingestion namespace. Everything under system/** is server-only in Rules.
 const INGESTION_ROOT = 'system/recommendationIngestion';
 const MIN_ACTUAL_LIKES = 50;
+// Engagement metric chosen by the operator on 2026-10-02: Facebook offers no
+// sort by Likes, and the reaction pre-filter only reports total reactions.
+const ENGAGEMENT_METRICS = Object.freeze(['total_reactions', 'actual_likes']);
+const DEFAULT_ENGAGEMENT_METRIC = 'total_reactions';
 const WATCH_ACTUAL_LIKES = 35;
 const FRESHNESS_DAYS = 183;
 const MIN_SOURCE_TEXT_LENGTH = 30;
@@ -142,6 +146,7 @@ function sourceImages(item) {
   const attachments = [
     ...(Array.isArray(item?.attachments) ? item.attachments : []),
     ...(Array.isArray(item?.media) ? item.media : []),
+    ...(Array.isArray(item?.imageUrls) ? item.imageUrls.map((url) => ({ __typename: 'Photo', url })) : []),
   ];
   const seen = new Set();
   const images = [];
@@ -151,7 +156,7 @@ function sourceImages(item) {
     if (typeName && /video/.test(typeName)) continue;
     const imageUrl = safeHttpsUrl(
       attachment.photo_image?.uri || attachment.image?.uri || attachment.image?.url ||
-      attachment.photo?.uri || attachment.thumbnail || attachment.uri
+      attachment.photo?.uri || attachment.thumbnail || attachment.uri || attachment.url
     );
     if (!imageUrl || seen.has(imageUrl)) continue;
     seen.add(imageUrl);
@@ -174,8 +179,8 @@ function normalizeApifyItem(item, { groupKey }) {
   assert(item && typeof item === 'object', 'invalid-argument', 'ingestion_item_invalid', 'Provider item is invalid.');
   // In provider output facebookId is the group's ID; legacyId/postId identify the post.
   const providerPostId = String(item.legacyId || item.postId || item.id || '').trim().slice(0, 200);
-  const url = safeHttpsUrl(item.url || item.facebookUrl);
-  const text = normalizeSourceText(item.text || item.message || '').slice(0, MAX_SOURCE_TEXT_LENGTH);
+  const url = safeHttpsUrl(item.postUrl || item.url || item.facebookUrl);
+  const text = normalizeSourceText(item.postText || item.text || item.message || '').slice(0, MAX_SOURCE_TEXT_LENGTH);
   const images = sourceImages(item);
   const postedAt = sourceTimestamp(item);
   const identity = providerPostId || url;
@@ -188,24 +193,31 @@ function normalizeApifyItem(item, { groupKey }) {
     url,
     postedAt,
     actualLikes: actualLikeCount(item),
-    totalReactions: finiteNonNegativeInteger(item.likesCount),
+    totalReactions: finiteNonNegativeInteger(item.reactionCount ?? item.likesCount),
     text,
     images,
     contentHash: shortHash(JSON.stringify([text, images.map((image) => image.providerMediaId || image.url)])),
   };
 }
 
-function evaluateSource(source, { now = new Date(), freshnessDays = FRESHNESS_DAYS, minLikes = MIN_ACTUAL_LIKES } = {}) {
+function engagementValue(source, metric = DEFAULT_ENGAGEMENT_METRIC) {
+  return metric === 'actual_likes' ? source?.actualLikes : source?.totalReactions;
+}
+
+function evaluateSource(source, {
+  now = new Date(), freshnessDays = FRESHNESS_DAYS, minLikes = MIN_ACTUAL_LIKES, metric = DEFAULT_ENGAGEMENT_METRIC,
+} = {}) {
   const postedAtMs = source?.postedAt instanceof Date ? source.postedAt.getTime() : NaN;
   if (!Number.isFinite(postedAtMs)) return { status: 'stale', reason: 'missing_post_date' };
   if (now.getTime() - postedAtMs > freshnessDays * 86_400_000) return { status: 'stale', reason: 'older_than_window' };
   if (String(source.text || '').length < MIN_SOURCE_TEXT_LENGTH) return { status: 'no_text', reason: 'missing_source_text' };
-  if (source.actualLikes == null) return { status: 'likes_unverifiable', reason: 'actual_like_count_missing' };
-  if (source.actualLikes < minLikes) {
+  const value = engagementValue(source, metric);
+  if (value == null) return { status: 'likes_unverifiable', reason: `${metric}_missing` };
+  if (value < minLikes) {
     return {
       status: 'below_threshold',
-      reason: 'insufficient_actual_likes',
-      watch: source.actualLikes >= WATCH_ACTUAL_LIKES,
+      reason: `insufficient_${metric}`,
+      watch: value >= WATCH_ACTUAL_LIKES,
     };
   }
   return { status: 'eligible', reason: '' };
@@ -295,7 +307,7 @@ function computeReadiness(candidate, { photoPool = [], source = null, destinatio
   const photoIds = Array.isArray(candidate?.photoIds) ? candidate.photoIds : [];
   if (!photoIds.length || photoIds.some((index) => !preparedIndexes.has(index))) missing.push('photos');
   if (source) {
-    if (!(Number(source.actualLikes) >= MIN_ACTUAL_LIKES)) missing.push('source_likes');
+    if (!(Number(engagementValue(source, source.engagementMetric || 'actual_likes')) >= MIN_ACTUAL_LIKES)) missing.push('source_likes');
     if (source.filter?.status !== 'eligible') missing.push('source_filter');
   }
   if ((candidate?.issues || []).some((issue) => issue?.severity === 'blocking')) missing.push('blocking_issue');
@@ -351,7 +363,9 @@ function buildPublishData(candidate, photoPool) {
 module.exports = {
   DEFAULT_COLLECTION_CAP_POSTS,
   DEFAULT_COLLECTION_CAP_USD,
+  DEFAULT_ENGAGEMENT_METRIC,
   DEFAULT_VIEW_OPTION,
+  ENGAGEMENT_METRICS,
   DESCRIPTION_MAX,
   FRESHNESS_DAYS,
   INGESTION_ROOT,
@@ -377,6 +391,7 @@ module.exports = {
   collectionBudgetCheck,
   computeReadiness,
   deterministicPublishRequestId,
+  engagementValue,
   evaluateSource,
   fail,
   fidelityKey,

@@ -24,13 +24,16 @@ const {
 const {
   DEFAULT_COLLECTION_CAP_POSTS,
   DEFAULT_COLLECTION_CAP_USD,
+  DEFAULT_ENGAGEMENT_METRIC,
   DEFAULT_VIEW_OPTION,
+  ENGAGEMENT_METRICS,
   DESCRIPTION_MAX,
   FRESHNESS_DAYS,
   INGESTION_ROOT,
   LOCKED_REVIEW_STATES,
   MAX_CANDIDATE_PHOTOS,
   MAX_POST_IMAGES,
+  MIN_ACTUAL_LIKES,
   NEXT_STAGE,
   RESOLVED_LOCATION_STATES,
   REVIEW_STATES,
@@ -142,6 +145,8 @@ async function readConfig(db) {
     maxImagesPerPost: Math.max(1, Math.min(MAX_POST_IMAGES, Number(data.maxImagesPerPost) || MAX_POST_IMAGES)),
     extractionModel: typeof data.extractionModel === 'string' && data.extractionModel ? data.extractionModel : EXTRACTION_MODEL,
     viewOption: VIEW_OPTIONS.includes(data.viewOption) ? data.viewOption : DEFAULT_VIEW_OPTION,
+    provider: ['crowdpull', 'apifyGroups'].includes(data.provider) ? data.provider : 'crowdpull',
+    engagementMetric: ENGAGEMENT_METRICS.includes(data.engagementMetric) ? data.engagementMetric : DEFAULT_ENGAGEMENT_METRIC,
     stageVerifications: data.stageVerifications && typeof data.stageVerifications === 'object' ? data.stageVerifications : {},
   };
 }
@@ -353,6 +358,8 @@ function sourceSummary(source) {
     url: source.url || '',
     postedAt: toDate(source.postedAt),
     actualLikes: source.actualLikes,
+    totalReactions: source.totalReactions ?? null,
+    engagementMetric: source.engagementMetric || 'actual_likes',
   };
 }
 
@@ -410,6 +417,7 @@ async function startRecommendationIngestionCollection({ admin, auth, data, apify
     });
     const created = {
       runId, groupKey, groupUrl: group.url, status: 'starting', stage: config.rolloutStage, viewOption: config.viewOption,
+      provider: config.provider, engagementMetric: config.engagementMetric,
       reservedUsd, resultsLimit, onlyPostsNewerThan, requestedBy: auth.uid, ledgerSettled: false,
       createdAt: fieldValue(admin).serverTimestamp(), updatedAt: fieldValue(admin).serverTimestamp(),
     };
@@ -427,6 +435,8 @@ async function startRecommendationIngestionCollection({ admin, auth, data, apify
       onlyPostsNewerThan,
       maxTotalChargeUsd: run.reservedUsd,
       viewOption: run.viewOption,
+      actor: run.provider,
+      minReactions: MIN_ACTUAL_LIKES,
     });
   } catch (error) {
     if (error?.details?.uncertain === true) {
@@ -498,7 +508,9 @@ async function ingestProviderItems({ admin, run, items, now }) {
       counts.invalid += 1;
       continue;
     }
-    let filter = evaluateSource(source, { now });
+    const engagementMetric = run.engagementMetric || 'actual_likes';
+    source.engagementMetric = engagementMetric;
+    let filter = evaluateSource(source, { now, metric: engagementMetric });
     if (filter.status === 'eligible') {
       // eslint-disable-next-line no-await-in-loop
       const duplicates = await db.collection(paths.sources).where('contentHash', '==', source.contentHash).limit(2).get();
@@ -513,6 +525,7 @@ async function ingestProviderItems({ admin, run, items, now }) {
       const base = {
         actualLikes: source.actualLikes,
         totalReactions: source.totalReactions,
+        engagementMetric,
         lastSeenRunId: run.runId,
         lastCollectedAt: fieldValue(admin).serverTimestamp(),
         updatedAt: fieldValue(admin).serverTimestamp(),
@@ -803,6 +816,8 @@ function candidateSummary(id, candidate, pool = []) {
     readiness: candidate.readiness || { ready: false, missing: [] },
     revision: candidate.revision,
     actualLikes: candidate.source?.actualLikes ?? null,
+    totalReactions: candidate.source?.totalReactions ?? null,
+    engagementMetric: candidate.source?.engagementMetric || 'actual_likes',
     postedAtMs: toMillis(candidate.source?.postedAt),
     thumbUrl: firstPhoto?.thumb?.url || '',
     publishedRecommendationId: candidate.published?.recommendationId || '',
@@ -924,6 +939,7 @@ async function getSystemRecommendationCandidate({ admin, auth, data }) {
       url: source.url || '',
       postedAtMs: toMillis(source.postedAt),
       actualLikes: source.actualLikes ?? null,
+      engagementMetric: source.engagementMetric || 'actual_likes',
       totalReactions: source.totalReactions ?? null,
       text: source.text || '',
       changedAfterReview: source.changedAfterReview === true,
@@ -1398,6 +1414,8 @@ async function getRecommendationIngestionStatus({ admin, auth, deps = {} }) {
     enabled: config.enabled,
     publisherConfigured: Boolean(config.publisherUid),
     rolloutStage: config.rolloutStage,
+    provider: config.provider,
+    engagementMetric: config.engagementMetric,
     stageLimits: stage,
     nextStage: NEXT_STAGE[config.rolloutStage] || null,
     stageChecklist: STAGE_CHECKLIST,
