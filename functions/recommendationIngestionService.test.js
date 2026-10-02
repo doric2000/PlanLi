@@ -551,4 +551,3 @@ test('the reaction pre-filter path qualifies posts by total reactions from the c
   assert.deepEqual(candidate.photoIds, [0], 'imageUrls become prepared photos');
   assert.deepEqual(candidate.readiness.missing, ['budget']);
 });
-

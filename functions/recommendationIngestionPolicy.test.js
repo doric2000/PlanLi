@@ -179,4 +179,3 @@ test('crowdpull output normalizes and qualifies by total reactions only when tha
   assert.equal(evaluateSource(source, { now: NOW, metric: 'actual_likes' }).status, 'likes_unverifiable');
   assert.equal(evaluateSource({ ...source, totalReactions: 49 }, { now: NOW, metric: 'total_reactions' }).status, 'below_threshold');
 });
-
