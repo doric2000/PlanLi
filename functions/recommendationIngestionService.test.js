@@ -27,7 +27,10 @@ function adminAuth(overrides = {}) {
 function seed(extra = {}) {
   return {
     'system/moderation/admins/admin-1': { active: true },
-    [`${ROOT}/config/main`]: { enabled: true, publisherUid: PUBLISHER, rolloutStage: 'trial', perRunChargeCapUsd: 0.25 },
+    [`${ROOT}/config/main`]: {
+      enabled: true, publisherUid: PUBLISHER, rolloutStage: 'trial', perRunChargeCapUsd: 0.25,
+      provider: 'apifyGroups', engagementMetric: 'actual_likes',
+    },
     [`${ROOT}/groups/${GROUP_KEY}`]: {
       groupKey: GROUP_KEY, url: GROUP_URL, label: 'פראג', enabled: true, verifiedAt: NOW,
       countryId: 'CZ', cityId: 'prague', resultsLimit: 10,
@@ -525,3 +528,27 @@ test('a changed source image is prepared again instead of reusing the old photo'
   assert.notEqual(admin.documents.get(`${sourceKey}/items/photo_0`).asset.assetId, before);
   assert.equal(deps.calls.download, 3, 'only the replaced image is downloaded again');
 });
+
+test('the reaction pre-filter path qualifies posts by total reactions from the crowdpull actor', async () => {
+  const admin = createIngestionMemoryAdmin(seed({
+    [`${ROOT}/config/main`]: { enabled: true, publisherUid: PUBLISHER, rolloutStage: 'trial', perRunChargeCapUsd: 0.25 },
+  }));
+  const deps = makeDeps();
+  deps.items = [
+    { postId: 'cp-1', postUrl: 'https://www.facebook.com/groups/327521953445426/posts/9/', postText: postText,
+      timestamp: '2026-09-20T09:00:00Z', reactionCount: 64, commentCount: 3,
+      imageUrls: ['https://scontent.xx.fbcdn.net/v/a.jpg'] },
+    { postId: 'cp-2', postUrl: 'https://www.facebook.com/groups/327521953445426/posts/10/', postText: `${postText} More.`,
+      timestamp: '2026-09-21T09:00:00Z', reactionCount: 12, imageUrls: [] },
+  ];
+  const { candidates } = await collectAndProcess(admin, deps);
+  assert.equal(deps.calls.start[0].actor, 'crowdpull');
+  assert.equal(deps.calls.start[0].minReactions, 50, 'the provider filters by reactions at the source');
+  assert.equal(candidates.length, 1);
+  const [, candidate] = candidates[0];
+  assert.equal(candidate.source.engagementMetric, 'total_reactions');
+  assert.equal(candidate.source.totalReactions, 64);
+  assert.deepEqual(candidate.photoIds, [0], 'imageUrls become prepared photos');
+  assert.deepEqual(candidate.readiness.missing, ['budget']);
+});
+

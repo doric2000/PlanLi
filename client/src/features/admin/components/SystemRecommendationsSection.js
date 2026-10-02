@@ -58,7 +58,7 @@ const MISSING_LABELS = Object.freeze({
   location: 'מיקום מדויק',
   destination: 'יעד',
   photos: 'תמונה מוכנה',
-  source_likes: 'פחות מ־50 לייקים',
+  source_likes: 'פחות מ־50 תגובות',
   source_filter: 'הפוסט לא עבר סינון',
   blocking_issue: 'בעיה חוסמת',
 });
@@ -107,6 +107,12 @@ function formFromDetail(detail) {
 // Only validated Facebook source links and PlanLi recommendation links open.
 function openExternal(url, policy) {
   openSafeExternalUrl(url, policy).catch(() => {});
+}
+
+// Shows the engagement metric the post was qualified by (total reactions or Likes).
+function engagementText(entry) {
+  if (entry?.engagementMetric === 'total_reactions') return `${entry.totalReactions ?? '–'} תגובות`;
+  return `${entry?.actualLikes ?? '–'} לייקים`;
 }
 
 function formatDate(ms) {
@@ -462,7 +468,7 @@ export default function SystemRecommendationsSection() {
         {item.thumbUrl ? <Image source={{ uri: item.thumbUrl }} style={styles.systemThumb} /> : <View style={styles.systemThumb} />}
         <View style={styles.searchResultBody}>
           <AppText style={styles.contextStrong}>{item.title || 'ללא כותרת'}</AppText>
-          <AppText style={styles.body}>{item.cityName} · {item.actualLikes ?? '–'} לייקים · {formatDate(item.postedAtMs)}</AppText>
+          <AppText style={styles.body}>{item.cityName} · {engagementText(item)} · {formatDate(item.postedAtMs)}</AppText>
           {item.readiness?.missing?.length ? (
             <AppText style={styles.helpText}>חסר: {item.readiness.missing.map((key) => MISSING_LABELS[key] || key).join(', ')}</AppText>
           ) : null}
@@ -497,7 +503,7 @@ export default function SystemRecommendationsSection() {
 
         <View style={cardStyle} testID="system-rec-source">
           <AppText style={styles.subsectionTitle}>מקור (פרטי)</AppText>
-          <AppText style={styles.body}>פורסם: {formatDate(source.postedAtMs)} · לייקים בפועל: {source.actualLikes ?? 'לא ידוע'}{source.totalReactions != null ? ` · כל התגובות: ${source.totalReactions}` : ''}</AppText>
+          <AppText style={styles.body}>פורסם: {formatDate(source.postedAtMs)} · {engagementText(source)}</AppText>
           {source.url ? <AdminAction compact label="פתיחת הפוסט המקורי" onPress={() => openExternal(source.url, 'facebookSource')} /> : null}
           {source.changedAfterReview ? <AppText style={styles.inlineError}>הפוסט המקורי השתנה אחרי הבדיקה.</AppText> : null}
           <AppText style={styles.systemSourceText} selectable>{source.text}</AppText>

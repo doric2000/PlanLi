@@ -66,7 +66,7 @@ test('provider runs carry provider-side item and charge caps', async () => {
   };
   const run = await apify.startGroupRun({
     token: 'synthetic-token', fetchImpl, groupUrl: 'https://www.facebook.com/groups/123/',
-    resultsLimit: 10, onlyPostsNewerThan: '2026-04-01', maxTotalChargeUsd: 0.25,
+    resultsLimit: 10, onlyPostsNewerThan: '2026-04-01', maxTotalChargeUsd: 0.25, actor: 'apifyGroups',
   });
   assert.equal(run.providerRunId, 'run-1');
   const { url, options } = requests[0];
@@ -87,3 +87,23 @@ test('provider runs carry provider-side item and charge caps', async () => {
     groupUrl: 'https://www.facebook.com/groups/123/', resultsLimit: 1, onlyPostsNewerThan: '2026-04-01', maxTotalChargeUsd: 0.1 }),
   (error) => error.details?.uncertain === false);
 });
+
+test('the crowdpull actor receives a source-side reaction filter and a bounded timeout', async () => {
+  const requests = [];
+  const fetchImpl = async (url, options) => {
+    requests.push({ url: new URL(url), options });
+    return new Response(JSON.stringify({ data: { id: 'run-2', status: 'RUNNING', defaultDatasetId: 'ds-2' } }), { status: 201 });
+  };
+  await apify.startGroupRun({
+    token: 't', fetchImpl, groupUrl: 'https://www.facebook.com/groups/123/', resultsLimit: 10,
+    onlyPostsNewerThan: '2026-04-01', maxTotalChargeUsd: 0.25, minReactions: 50,
+  });
+  const { url, options } = requests[0];
+  assert.equal(url.pathname, '/v2/acts/crowdpull~facebook-group-posts-scraper/runs');
+  assert.equal(url.searchParams.get('timeout'), '600');
+  assert.deepEqual(JSON.parse(options.body), {
+    startUrls: [{ url: 'https://www.facebook.com/groups/123/' }], maxPosts: 10, sortOrder: 'CHRONOLOGICAL',
+    onlyPostsNewerThan: '2026-04-01', minReactions: 50, minComments: 0, includeTopComments: false, enableDedup: false,
+  });
+});
+

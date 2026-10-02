@@ -2,6 +2,32 @@ const { HttpsError } = require('firebase-functions/v2/https');
 
 const APIFY_API = 'https://api.apify.com/v2';
 const ACTOR_ID = 'apify~facebook-groups-scraper';
+// Actors and their input mapping. crowdpull filters by minimum reactions at the
+// source and saves only matching posts, so low-engagement posts are not collected.
+const ACTORS = Object.freeze({
+  crowdpull: Object.freeze({
+    id: 'crowdpull~facebook-group-posts-scraper',
+    input: ({ groupUrl, resultsLimit, onlyPostsNewerThan, minReactions }) => ({
+      startUrls: [{ url: groupUrl }],
+      maxPosts: resultsLimit,
+      sortOrder: 'CHRONOLOGICAL',
+      onlyPostsNewerThan,
+      minReactions,
+      minComments: 0,
+      includeTopComments: false,
+      enableDedup: false,
+    }),
+  }),
+  apifyGroups: Object.freeze({
+    id: ACTOR_ID,
+    input: ({ groupUrl, resultsLimit, onlyPostsNewerThan, viewOption }) => ({
+      startUrls: [{ url: groupUrl }],
+      resultsLimit,
+      viewOption,
+      onlyPostsNewerThan,
+    }),
+  }),
+});
 const REQUEST_TIMEOUT_MS = 15_000;
 const MAX_DATASET_ITEMS = 200;
 const TERMINAL_RUN_STATUSES = new Set(['SUCCEEDED', 'FAILED', 'TIMED-OUT', 'ABORTED']);
@@ -61,23 +87,20 @@ function runSummary(run) {
   };
 }
 
-// Starts one bounded provider run. maxItems and maxTotalChargeUsd are the
-// provider-side spending caps; the application ledger reserves them first.
+// Starts one bounded provider run. maxItems and maxTotalChargeUsd cap result
+// charges; the timeout bounds compute/proxy usage that the account also pays.
 async function startGroupRun({
   token, fetchImpl, groupUrl, resultsLimit, onlyPostsNewerThan, maxTotalChargeUsd, viewOption = 'TOP_POSTS',
-  timeoutSeconds = 600,
+  minReactions = 50, actor = 'crowdpull', timeoutSeconds = 600,
 }) {
-  const run = await apifyRequest(`/acts/${ACTOR_ID}/runs`, {
+  const selected = ACTORS[actor];
+  if (!selected) throw providerError('apify_actor_invalid', 'The collection provider is not supported.');
+  const run = await apifyRequest(`/acts/${selected.id}/runs`, {
     token,
     fetchImpl,
     method: 'POST',
     query: { maxItems: resultsLimit, maxTotalChargeUsd: maxTotalChargeUsd.toFixed(2), timeout: timeoutSeconds },
-    body: {
-      startUrls: [{ url: groupUrl }],
-      resultsLimit,
-      viewOption,
-      onlyPostsNewerThan,
-    },
+    body: selected.input({ groupUrl, resultsLimit, onlyPostsNewerThan, viewOption, minReactions }),
   });
   const summary = runSummary(run);
   if (!summary.providerRunId) throw providerError('apify_run_missing', 'The provider returned no run.', { uncertain: true });
@@ -98,6 +121,7 @@ async function listDatasetItems({ token, fetchImpl, datasetId, limit }) {
 }
 
 module.exports = {
+  ACTORS,
   ACTOR_ID,
   MAX_DATASET_ITEMS,
   TERMINAL_RUN_STATUSES,

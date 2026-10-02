@@ -4,7 +4,7 @@ Admin-reviewed pipeline that turns popular posts from approved public Facebook
 groups into normal PlanLi recommendations owned by the "המלצות מערכת" publisher.
 
 ```text
-Apify run (capped) → private source → filter (fresh, ≥50 actual Likes, text, dedupe)
+Apify run (capped, ≥50 reactions filtered at the source) → private source → filter (fresh, ≥50 total reactions, text, dedupe)
 → one OpenAI gpt-4o-mini extraction per eligible post → exact-span validation
 → photo download + canonical media pipeline → place resolution
 → private candidate → admin review/edit → "אישור ופרסום" → saveRecommendation
@@ -17,12 +17,24 @@ Apify run (capped) → private source → filter (fresh, ≥50 actual Likes, tex
 | Pure policy: normalization, filters, stages, readiness, publish mapping | `functions/recommendationIngestionPolicy.js` |
 | Collection, processing, review, publication, status | `functions/recommendationIngestionService.js` |
 | OpenAI extraction and fidelity validation | `functions/recommendationExtractionService.js` |
-| Apify client (`maxItems`, `maxTotalChargeUsd`) | `functions/apifyFacebookGroupsProvider.js` |
+| Apify client (`crowdpull` reaction pre-filter by default; `maxItems`, `maxTotalChargeUsd`, timeout) | `functions/apifyFacebookGroupsProvider.js` |
 | Bounded Facebook CDN image download | `functions/ingestionImageDownloader.js` |
 | Trusted publisher option | `saveRecommendation({ trustedOwnerUid })` in `functions/recommendationService.js` |
 | Shared media core | `prepareStagedMedia` in `functions/mediaProcessor.js` |
 | Guarded setup (dry-run default) | `functions/scripts/setupRecommendationIngestion.js` |
 | Admin UI | `client/src/features/admin/components/SystemRecommendationsSection.js` |
+
+## Engagement threshold
+
+Decided by the operator on 2026-10-02: posts qualify with **≥50 total reactions**
+(`config.engagementMetric: total_reactions`). Facebook offers no sort by Likes,
+and scanning newest posts paid for many low-engagement posts (two Athens trial
+runs: 19 posts, $0.13, none above 3 reactions). The `crowdpull` actor filters by
+`minReactions` at the source and reports only the total reaction count. The
+earlier actual-Like rule remains available (`engagementMetric: actual_likes`,
+`provider: apifyGroups`). Each run also has a 600-second timeout because this
+actor's compute/proxy usage is billed to the account; the ledger records Apify's
+reported `usageTotalUsd`.
 
 ## Private data (`system/recommendationIngestion/**`, server-only)
 
@@ -31,7 +43,7 @@ Apify run (capped) → private source → filter (fresh, ≥50 actual Likes, tex
 - `state/collectionBudget`: `reservedUsd`, `spentUsd`, `reservedPosts`, `collectedPosts`.
 - `state/placesBudget`, `state/mediaBudget`: dedicated daily ingestion quotas.
 - `runs/{runId}`: provider run, reservation, settlement, filter counts.
-- `sources/{sourceId}`: post URL/date, `actualLikes` (`reactionLikeCount` only), text,
+- `sources/{sourceId}`: post URL/date, `totalReactions`, `actualLikes` (when the actor reports Likes), `engagementMetric`, text,
   images, `contentHash`, filter, processing lease, cached extraction, `reviewLocked`.
 - `sources/{sourceId}/items/photo_{n}`: prepared publisher-owned asset with
   `mediaCleanupKeys` (protects it from the 24-hour orphan cleanup).

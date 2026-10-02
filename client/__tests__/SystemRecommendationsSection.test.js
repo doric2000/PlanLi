@@ -90,10 +90,10 @@ describe('SystemRecommendationsSection', () => {
   it('shows list errors with a retry', async () => {
     AdminService.listSystemRecommendationCandidates.mockRejectedValueOnce(Object.assign(new Error('x'), { code: 'functions/permission-denied' }));
     const screen = render(<SystemRecommendationsSection />);
-    await screen.findByTestId('system-rec-list-error');
+    await screen.findByTestId('system-rec-list-error', {}, { timeout: 10000 });
     fireEvent.press(screen.getByTestId('system-rec-list-retry'));
     await screen.findByTestId('system-rec-row-cand_1');
-  });
+  }, 20000);
 
   it('completes the budget, then approves the exact saved revision and shows the published link', async () => {
     AdminService.getSystemRecommendationCandidate

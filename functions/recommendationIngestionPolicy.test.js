@@ -40,20 +40,22 @@ test('normalization uses actual Like reactions and never total reactions', () =>
 
   const withoutLikes = normalizeApifyItem(syntheticItem({ reactionLikeCount: undefined, likesCount: 900 }), { groupKey: 'g1' });
   assert.equal(withoutLikes.actualLikes, null);
-  assert.deepEqual(evaluateSource(withoutLikes, { now: NOW }), {
-    status: 'likes_unverifiable', reason: 'actual_like_count_missing',
+  assert.deepEqual(evaluateSource(withoutLikes, { now: NOW, metric: 'actual_likes' }), {
+    status: 'likes_unverifiable', reason: 'actual_likes_missing',
   });
 });
 
 test('filtering rejects stale, short, and under-threshold posts before any model call', () => {
-  const evaluate = (overrides) => evaluateSource(normalizeApifyItem(syntheticItem(overrides), { groupKey: 'g' }), { now: NOW }).status;
+  const evaluate = (overrides) => evaluateSource(normalizeApifyItem(syntheticItem(overrides), { groupKey: 'g' }),
+    { now: NOW, metric: 'actual_likes' }).status;
   assert.equal(evaluate({}), 'eligible');
   assert.equal(evaluate({ reactionLikeCount: 50 }), 'eligible');
   assert.equal(evaluate({ reactionLikeCount: 49 }), 'below_threshold');
   assert.equal(evaluate({ time: daysAgo(200) }), 'stale');
   assert.equal(evaluate({ time: undefined }), 'stale');
   assert.equal(evaluate({ text: 'short' }), 'no_text');
-  const watched = evaluateSource(normalizeApifyItem(syntheticItem({ reactionLikeCount: 40 }), { groupKey: 'g' }), { now: NOW });
+  const watched = evaluateSource(normalizeApifyItem(syntheticItem({ reactionLikeCount: 40 }), { groupKey: 'g' }),
+    { now: NOW, metric: 'actual_likes' });
   assert.equal(watched.watch, true);
 });
 
@@ -161,7 +163,20 @@ test('provider output shape: posts keep distinct identities and zero reactions a
 
   const noReactions = normalizeApifyItem(syntheticItem({ postId: 'p0', reactionLikeCount: undefined, likesCount: 0 }), { groupKey: 'g' });
   assert.equal(noReactions.actualLikes, 0);
-  assert.equal(evaluateSource(noReactions, { now: NOW }).status, 'below_threshold');
+  assert.equal(evaluateSource(noReactions, { now: NOW, metric: 'actual_likes' }).status, 'below_threshold');
   const reactionsWithoutBreakdown = normalizeApifyItem(syntheticItem({ postId: 'p1', reactionLikeCount: undefined, likesCount: 80 }), { groupKey: 'g' });
   assert.equal(reactionsWithoutBreakdown.actualLikes, null, 'total reactions never stand in for Likes');
 });
+
+test('crowdpull output normalizes and qualifies by total reactions only when that metric is chosen', () => {
+  const item = { postId: 'p9', postUrl: 'https://www.facebook.com/groups/1/posts/9/', postText: syntheticItem().text,
+    timestamp: daysAgo(5), reactionCount: 70, imageUrls: ['https://scontent.xx.fbcdn.net/v/x.jpg'] };
+  const source = normalizeApifyItem(item, { groupKey: 'g' });
+  assert.equal(source.totalReactions, 70);
+  assert.equal(source.actualLikes, null);
+  assert.equal(source.images.length, 1);
+  assert.equal(evaluateSource(source, { now: NOW, metric: 'total_reactions' }).status, 'eligible');
+  assert.equal(evaluateSource(source, { now: NOW, metric: 'actual_likes' }).status, 'likes_unverifiable');
+  assert.equal(evaluateSource({ ...source, totalReactions: 49 }, { now: NOW, metric: 'total_reactions' }).status, 'below_threshold');
+});
+
