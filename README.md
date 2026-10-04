@@ -1,6 +1,71 @@
 # PlanLi
 
-PlanLi is a photo-first travel application built with Expo and Firebase.
+> **Production cross-platform travel platform — built end-to-end with React Native / Expo and Firebase.**
+
+[![React Native](https://img.shields.io/badge/React_Native-Expo-000020?style=flat-square&logo=expo&logoColor=white)](https://reactnative.dev/)
+[![Firebase](https://img.shields.io/badge/Firebase-Auth_%C2%B7_Firestore_%C2%B7_Functions-FFCA28?style=flat-square&logo=firebase&logoColor=black)](https://firebase.google.com/)
+![Tests](https://img.shields.io/badge/validation-1004_client_%2B_458_backend_tests-success?style=flat-square)
+![Security](https://img.shields.io/badge/security-CodeQL_%C2%B7_Semgrep_%C2%B7_Gitleaks-blue?style=flat-square)
+
+PlanLi is a photo-first travel community app that I **designed, built, secured, tested, and shipped to iOS and Android**.  
+The repository covers the mobile client, Firebase backend, production security controls, release automation, operational tooling, and a standalone admin surface.
+
+## What this project demonstrates
+
+- **End-to-end product ownership** — mobile UX, backend, data model, deployment, store releases, migrations, monitoring, and production fixes.
+- **Production backend engineering** — Firebase Authentication, Firestore, Storage, App Check, and Node 22 Cloud Functions.
+- **Security by default** — deny-by-default authorization boundaries, App Check enforcement, custom Semgrep rules, CodeQL, Gitleaks, dependency review, and security-focused CI gates.
+- **Testing at scale** — **1,004 client tests + 458 backend tests**, plus Firebase Rules emulator validation.
+- **Release & operations** — Expo OTA updates, native releases, Sentry diagnostics, guarded migrations, quota/cost controls, and production verification procedures.
+- **AI-assisted engineering** — system recommendation ingestion and controlled model-backed workflows, with explicit rollout and cost safeguards.
+
+## Architecture at a glance
+
+```text
+React Native / Expo
+        │
+        ├── Firebase Authentication + App Check
+        │
+        ├── Firestore + Storage
+        │
+        ├── Cloud Functions (Node 22)
+        │       ├── feeds / content / notifications
+        │       ├── moderation & media workflows
+        │       ├── destination / recommendation pipelines
+        │       └── operational and security controls
+        │
+        ├── Admin web surface
+        └── GitHub Actions → test / security / validation gates
+```
+
+## Security & CI
+
+The repository includes a layered software-supply-chain and application-security workflow:
+
+- **CodeQL** with security-extended analysis
+- **Repository-specific Semgrep rules**
+- **Full-history Gitleaks secret scanning**
+- **Dependency review / audit gates**
+- **Firebase Rules emulator tests**
+- **App Check enforcement and replay-sensitive controls**
+- Release checks designed to fail closed when critical validation is incomplete
+
+## Repository guide
+
+- `client/` — Expo / React Native application
+- `functions/` — Firebase Cloud Functions backend
+- `firestore.rules` / `storage.rules` — authorization boundaries
+- `.github/workflows/` — CI, validation, and security automation
+- `.semgrep/` — PlanLi-specific static-analysis rules
+- `docs/` — architecture, rollout, security, migration, and operations documentation
+
+> **Recruiter / reviewer shortcut:** start with this section, then inspect `.github/workflows/security.yml`, `.semgrep/planli-security.yml`, `firestore.rules`, and the client / Functions test suites.
+
+---
+
+## Production engineering log
+
+The sections below intentionally preserve the detailed deployment, migration, validation, and incident history used while operating the production system.
 
 ### Destination publication repair (2026-09-09)
 
