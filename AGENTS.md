@@ -2,7 +2,7 @@
 
 Repository-wide guidance for PlanLi. A closer `AGENTS.md` supplements and
 overrides this file for its subtree. Keep temporary incidents, deployment state,
-and release notes in `README.md` or the current task—not in agent guidance.
+and release notes in `docs/OPERATIONS.md` or the current task—not in agent guidance.
 
 ## Project and scope
 
@@ -12,7 +12,8 @@ PlanLi is a Hebrew-first, RTL-first, photo-centric travel application.
 - `functions/`: Firebase Functions, scheduled jobs, scripts, and backend tests.
 - `server/`: local Google Places proxy for Web development.
 - Root Firebase files: Firestore/Storage rules, indexes, CORS, and lifecycle data.
-- `README.md`: operational source of truth for setup, deployment, and release state.
+- `README.md`: product overview and current maintenance summary.
+- `docs/OPERATIONS.md`: operational source of truth for setup, deployment, and release state.
 
 Read `client/AGENTS.md` for client work and `functions/AGENTS.md` for backend
 work. Prefer existing feature boundaries, services, helpers, and style tokens.

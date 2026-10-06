@@ -1,0 +1,7103 @@
+# PlanLi
+
+> **Production cross-platform travel platform — built end-to-end with React Native / Expo and Firebase.**
+
+[![React Native](https://img.shields.io/badge/React_Native-Expo-000020?style=flat-square&logo=expo&logoColor=white)](https://reactnative.dev/)
+[![Firebase](https://img.shields.io/badge/Firebase-Auth_%C2%B7_Firestore_%C2%B7_Functions-FFCA28?style=flat-square&logo=firebase&logoColor=black)](https://firebase.google.com/)
+![Tests](https://img.shields.io/badge/validation-1004_client_%2B_458_backend_tests-success?style=flat-square)
+![Security](https://img.shields.io/badge/security-CodeQL_%C2%B7_Semgrep_%C2%B7_Gitleaks-blue?style=flat-square)
+
+PlanLi is a photo-first travel community app that I **designed, built, secured, tested, and shipped to iOS and Android**.  
+The repository covers the mobile client, Firebase backend, production security controls, release automation, operational tooling, and a standalone admin surface.
+
+## What this project demonstrates
+
+- **End-to-end product ownership** — mobile UX, backend, data model, deployment, store releases, migrations, monitoring, and production fixes.
+- **Production backend engineering** — Firebase Authentication, Firestore, Storage, App Check, and Node 22 Cloud Functions.
+- **Security by default** — deny-by-default authorization boundaries, App Check enforcement, custom Semgrep rules, CodeQL, Gitleaks, dependency review, and security-focused CI gates.
+- **Testing at scale** — **1,004 client tests + 458 backend tests**, plus Firebase Rules emulator validation.
+- **Release & operations** — Expo OTA updates, native releases, Sentry diagnostics, guarded migrations, quota/cost controls, and production verification procedures.
+- **AI-assisted engineering** — system recommendation ingestion and controlled model-backed workflows, with explicit rollout and cost safeguards.
+
+## Architecture at a glance
+
+```text
+React Native / Expo
+        │
+        ├── Firebase Authentication + App Check
+        │
+        ├── Firestore + Storage
+        │
+        ├── Cloud Functions (Node 22)
+        │       ├── feeds / content / notifications
+        │       ├── moderation & media workflows
+        │       ├── destination / recommendation pipelines
+        │       └── operational and security controls
+        │
+        ├── Admin web surface
+        └── GitHub Actions → test / security / validation gates
+```
+
+## Security & CI
+
+The repository includes a layered software-supply-chain and application-security workflow:
+
+- **CodeQL** with security-extended analysis
+- **Repository-specific Semgrep rules**
+- **Full-history Gitleaks secret scanning**
+- **Dependency review / audit gates**
+- **Firebase Rules emulator tests**
+- **App Check enforcement and replay-sensitive controls**
+- Release checks designed to fail closed when critical validation is incomplete
+
+## Repository guide
+
+- `client/` — Expo / React Native application
+- `functions/` — Firebase Cloud Functions backend
+- `firestore.rules` / `storage.rules` — authorization boundaries
+- `.github/workflows/` — CI, validation, and security automation
+- `.semgrep/` — PlanLi-specific static-analysis rules
+- `docs/` — architecture, rollout, security, migration, and operations documentation
+
+> **Recruiter / reviewer shortcut:** start with this section, then inspect `.github/workflows/security.yml`, `.semgrep/planli-security.yml`, `firestore.rules`, and the client / Functions test suites.
+
+---
+
+## Production engineering log
+
+The sections below intentionally preserve the detailed deployment, migration, validation, and incident history used while operating the production system.
+
+### Destination publication repair (2026-09-09)
+
+Under explicit authorization, a fingerprinted production data repair completed at
+`2026-09-09T05:56:38Z` in `planli-f0b12` / Firestore `eur3`. Both
+destination-held recommendations were released; independent verification found
+all 42 recommendations active with approved destinations in the public catalog.
+Four destinations were added: Udawalawe National Park, Nuwara Eliya, Theth and
+Ha Long city. Five recommendation assignments/names were corrected, Ha Long Bay's
+identity was approved, and the misidentified South Coast record was retired.
+Two cases for already absent recommendations and two stale destination reviews
+were reconciled. The stale held admin search projection was refreshed.
+
+Source: `fix/destination-resolution-and-world-catalog`, based on
+`1c704dbaf351d7cbebe8cdcb8c08d92ac00c9b65`, with the reviewed destination changes.
+This was a data repair, not a backend/client deployment or store release.
+The backend release below deploys the resolver and admin projection fix; client
+distribution is tracked separately. At that release, bulk enrichment of the 3,000 research
+candidates was not applied; the September 14 catalog rollout below supersedes that state.
+The existing Text Search quota remains zero. See
+[destination resolution and repair details](../docs/destination-resolution.md).
+
+## Current environment status
+
+### System recommendation ingestion — deployed; trial not yet run (2026-10-02)
+
+PR [#458](https://github.com/doric2000/PlanLi/pull/458) merged as
+`4ef23841e4ad7cbab12e6a7822e610ccbe240148`. See
+[docs/system-recommendation-ingestion.md](../docs/system-recommendation-ingestion.md).
+
+- Deployed from `main` at `4ef2384` on 2026-10-01 (UTC): 13 new Functions in
+  `europe-west1` (all `ACTIVE`, no errors after deploy; the 5-minute poller ran
+  cleanly) and the `candidates`/`sources` composite indexes (`CREATING` at
+  deploy time). Existing Functions were not redeployed; their shared-code changes
+  are behavior-neutral for them.
+- Secrets `APIFY_TOKEN` and `OPENAI_API_KEY` exist (version 1); the CLI granted
+  the core/media Functions service accounts secret accessor on them.
+- Production data (setup script, authorized): Auth user and public profile
+  `system-recommendations-publisher` ("המלצות מערכת", no sign-in method), config
+  `enabled: true`, `rolloutStage: trial`, caps $0.25/run, $10 and 1,000 posts
+  total; Athens group verified and enabled, the other four disabled.
+- Hosting (operator-deployed 2026-10-02 12:40 Israel time, live channel) serves admin
+  bundle `index-5a731e94de3a8dd8855e790f72b16e64.js`, built from `c10fe63`
+  (PR [#460](https://github.com/doric2000/PlanLi/pull/460): admin web cards keep
+  window height so every section scrolls; system section cards no longer
+  overlap). Live HTML references that bundle (HTTP 200) and it contains the
+  system recommendations section.
+- No collection run, model call or publication has happened; ledger spend is $0.
+
+### Mobile profile/notification incident — investigation open (2026-10-01)
+
+Multiple users report empty/failing notifications and profile content on iOS and
+Android while the callable-backed feed remains available. Stage 4 acceptance and
+the remaining Places quota expansion are paused. No security enforcement was
+disabled and no production content/counters were changed during investigation.
+Read-only checks found valid mobile App Check traffic for Firestore, matching
+deployed Rules (unchanged since September 15), READY indexes for these queries,
+and existing active content and schema-v2 notification rows. These checks do not
+prove that the mobile listeners receive their responses. The cause is unconfirmed.
+
+A focused diagnostic patch reports failed profile reads, notification page reads
+and notification listeners through the existing Sentry integration, once per
+operation/error code per app session. It excludes server messages, document paths
+and query/account values and preserves the original error/retry behavior. This is
+an investigation aid, not a verified repair; it is not yet released. Current live
+OTA remains `84716ba6-7100-4277-bb6e-87f29fcabc1e` from `9290939`.
+
+### Security stage 4 — deployed; final verification in progress (2026-09-30)
+
+Implementation PR [#455](https://github.com/doric2000/PlanLi/pull/455) merged as
+`9290939390ea3502e3307bf65904da37cfa46aac`. **Stage 4 is not yet closed.**
+See [controls, allocation, capacity and response procedure](../docs/security-stage4.md).
+
+- Hosting version `a05d7c90c6acf93e`, release `1790785071371000`, went live at
+  `2026-09-30T16:17:51.371Z`. Public HTTP 200, exact candidate HTML and all 32
+  asset references were verified. Fresh admin/TOTP login, overview, destination
+  list, content search and route detail rendering passed. The hosted admin entry
+  has no mobile Places search form; provider search smoke is a mobile gate.
+- Production OTA group `84716ba6-7100-4277-bb6e-87f29fcabc1e` was published at
+  `2026-09-30T16:58:18.167Z` for both platforms, runtime `1.4.0`, channel and
+  environment `production`. Candidate inspection and public asset-hash delivery
+  passed. Native targets remain Android `1.1.0 (12)` and iOS `1.1.3 (34)`;
+  no native build or store submission was performed. Device application/smokes
+  are pending. Per-platform immutable update IDs and hashes are recorded below.
+- All nine provider consumers listed in the procedure were deployed in two
+  explicit batches and independently ACTIVE at `2026-09-30T17:05:57Z`.
+  Node 22, App Check and instance/concurrency limits were preserved. The other
+  137 Functions retained their revisions; no Rules or scheduled jobs were deployed.
+- Reviewed September and October allocations were created and read back under
+  private `system/runtime/providerUsage`. September includes observed usage plus
+  one full pre-expansion daily quota for telemetry/rollout lag. October starts
+  at `2026-10-01T07:00Z`; its pre-start baseline is zero. No existing counter was reset.
+- Nine monitoring policies are enabled: five preserved and four provider alerts.
+  A tagged synthetic event opened the 80% incident at `2026-09-30T16:25:07Z`;
+  the owner confirmed email receipt. This proves the new operational alert path,
+  not a real quota exhaustion or billing-budget email. The live project-filtered
+  ILS 75 budget and its existing thresholds were read back unchanged.
+- Routes quotas are 300/day and 30/minute, independently verified earlier at
+  `2026-09-30T15:58:33.699Z`. The four Places expansions remain pending a live
+  guarded search/selection smoke. Current Places limits are 300 Autocomplete/day,
+  150 Details/day and 30/minute each; reviewed targets are 350/300 per day and
+  60/minute each. Per-user controls and both sibling projects remain unchanged.
+
+MFA/recovery for Google, GitHub (including both additional writers), Expo and
+Apple remains owner-attested. Google project/billing and GitHub access were read
+back; direct inspection of every security screen and Expo/Apple membership is
+unverified. Doric is the sole attested Expo publisher/Apple signing operator and
+primary responder; no backup operator is designated without verified access.
+
+The 31-day moderate 200-DAU scenario models ILS 46.06 non-Maps cost and reserves
+ILS 47 for it. Maps may use the remaining ILS 28: the selected allocation models
+ILS 27.73 paid overage, for ILS 74.73 combined reserved cost. Free usage is included
+with 90% assigned to PlanLi and 10% forecast headroom for the shared account.
+Sibling future use is not bounded by PlanLi; this is not a guaranteed invoice cap.
+The full-price/no-free case is a stress scenario. Photo-heavy use exceeds ILS 345
+before Maps and blocks audience expansion. No budget increase was applied.
+
+Validation included atomic emulator admission and private Rules, 200 synthetic
+concurrent requests, month/DST boundaries, retries, bilingual requests, route
+chunks, terminal errors and draft preservation. Final release checks passed
+1,004 client tests (130 suites), 458 backend tests (three skipped), and Rules
+emulators. The reviewed client error-contract findings were fixed before release.
+The allocation CLI authentication correction passed seven focused tests and live
+read-only reuse checks for both reviewed months, without changing counters.
+
+Remaining gates: mobile search/selection, draft and existing-item save smokes;
+live counter increments; guarded Places quota expansion/read-back; and a final
+30-minute observation window. Backup/restore, deep SecureStore checks, admin
+sign-out, acknowledgement-burst repair and remaining launch checks stay in stage 5.
+Ignored evidence: `.codex_tmp/validation/security-stage4/`.
+
+### Security stage 3 — completed (2026-09-30)
+
+September 30 current checkpoint: all 103 callable Functions and Firestore,
+Storage and Firebase Authentication are enforced, and all 15 rollout groups
+have accepted runtime evidence. The final live inventory matches every journal
+post-state (`final-inventory-verification.json`). The old `moderateContent`
+endpoint is absent. Google Identity for iOS (`oauth2.googleapis.com`) remains
+explicitly excluded and UNENFORCED.
+
+The owner confirmed post-propagation email/password and Google sign-in on both
+devices and Apple on iPhone. Web TOTP sign-in and continued admin operation were
+verified. The final isolated Auth controls rejected missing, invalid and expired
+App Check tokens (401) while valid sign-in succeeded (200). A generated reset link
+was verified and used to change only the disposable fixture password, followed
+by successful fresh sign-in; reset-email delivery was not tested. The disposable
+account, private/public profiles and children, six synthetic variants and both
+staging paths were independently verified absent after self-deletion. Its
+credentials/reset link were removed locally. Real admin-form synthetic assets
+were also cleaned without changing the public destination.
+
+Closure was recorded on `fix/web-upload-blob-csp` against source checkpoint
+`555b9b4`. Hosting is the reviewed `c725a59` header-only release, and the three
+atomic replay callables retain their reviewed `f61c5a1` source; the other 100
+callables retain the prior rollout source. No new native build, OTA, store
+submission, IAM grant or Rules change accompanied the service activations.
+The final observation ran from `13:10:27Z` through `13:41:09Z` (over 30 minutes).
+The project-wide Cloud Run query, including callable and background services,
+found no ERROR/5xx events in that window. Service metrics contained only the five
+deliberate Authentication denials (two missing, two invalid and one expired token)
+alongside successful requests from all three platforms. The earlier recovered
+`13:00:52Z` allocation incident is retained in the history below, outside this
+final clean window. Atomic-ledger TTL remains ACTIVE with its index exemption.
+Stage 3 is closed; this does not approve the separate final launch gate.
+Receipts: `stage3-closure.json`, `final-inventory-verification.json`,
+`final-all-backend-health.json`, `authentication-acceptance-v2.json`,
+`service-fixture-cleanup.json`, and `final-ledger-ttl.json`.
+
+Open launch-review items are separate from App Check enforcement: deep secure
+storage migration/restore and backup/restore validation deferred from stage 2;
+operational readiness/cost limits; the missing standalone-admin sign-out control;
+and bounded retry/backoff for the acknowledgement burst described below. Exact
+installed Android version/model and device OTA IDs remain unverified. Functional
+Android continuity was exercised across the rollout with reads, favorites,
+background uploads and fresh sign-ins.
+
+#### Rollout history (earlier checkpoints superseded by the current status above)
+
+Rollout expansion stopped on September 27 after the deletion replay control failed.
+The deletion group was applied at `2026-09-27T16:41:12.201Z` and initially **not accepted**:
+101 callables passed their group gates, while both deletion callables await replay
+verification. Missing App Check returned 401 for both deletion endpoints. A fresh
+limited-use token deleted the dedicated fixture's first private empty trip; reuse
+of the same token returned 404/NOT_FOUND instead of 403/APP_CHECK_REPLAYED, reaching
+business logic. Account deletion was not attempted at that checkpoint. The disposable account,
+second private trip and synthetic upload were reserved for verified cleanup below.
+Do not rerun the initial destructive test without reconciling this partial state.
+
+Read-only revalidation at `2026-09-30T11:04:26Z` confirmed `deletecontent-00032-bot`
+and `requestaccountdeletion-00031-mox` remain ACTIVE with
+`PLANLI_ENFORCE_APP_CHECK=true`. Their downloaded source archive matches local
+`index.js`, `callableAppCheck.js`, `package.json` and `package-lock.json` exactly.
+The provider-side cause of the replay failure is unproven. At that checkpoint,
+Firestore, Storage and Authentication service enforcement remained disabled.
+Stage 3 remains open; earlier platform results are September 27 evidence unless
+explicitly updated below.
+
+September 30 isolation controls used fresh Web limited-use attestations, empty
+request data and no Auth header, so they could not authorize deletion. Both
+endpoints intermittently accepted a previously consumed token up to the
+`SIGN_IN_REQUIRED` boundary, including tokens that had already produced
+`APP_CHECK_REPLAYED`. Fourteen request traces were correlated with VALID App Check
+and MISSING Auth on the exact serving revisions; each endpoint retained the same
+instance across its passing/failing replay controls. This rules out traffic split
+between old/new revisions and confirms the current guard is not sufficient for
+the required replay guarantee. It does not identify a provider-side root cause.
+Direct verifier diagnosis under the operator account returned IAM permission
+denied; no IAM roles or impersonation permissions were added.
+
+The existing callable rejection alert was expanded to all 103 deployed enforced
+targets with guarded state hashes and independent policy read-back on September
+30 (`monitor-deletion-applied-sept30.json`). The service-level policy stays disabled
+because those services remain UNENFORCED, independently rechecked at `11:08:09Z`.
+The earlier received email remains delivery evidence; no new delivery claim is
+made. The owner explicitly approved the schema-scope change and focused deployment
+of an atomic, expiring private consumed-token ledger for guest issuance and both
+deletion callables after validation/review. The correction creates one shared
+marker from verified issuer/app/jti, stores only `expireAt`, records SDK-rejected
+tokens too and fails closed on datastore uncertainty. Unenforced/emulator behavior
+is preserved. Validation: 17 guard/HTTP-boundary tests, 33 existing auth/deletion/
+guest tests and a real Firestore emulator concurrency/privacy check passed. Twenty
+concurrent requests through two independent datastore clients produced exactly one
+admission; anonymous reads of the private marker were denied. The original guard
+admitted both requests in the equivalent false/false regression control.
+The correction was deployed only to `issueGuestSession`, `deleteContent` and
+`requestAccountDeletion` at `2026-09-30T11:36:14Z`–`11:36:17Z`, from reviewed
+Functions source `f61c5a15f68953709f5aedc8f5fb97194322da18` on
+`fix/security-stage3-app-check` (operator/monitoring commit `e0916b1`). Independent
+read-back confirmed ACTIVE, 100% traffic, Node 22, persisted enforcement and source
+marker `115fbfeece9abdab2939461d8c3c2bfea2e2bf830e83653345d154f904e08500`:
+
+| Callable | Serving revision |
+| --- | --- |
+| `issueGuestSession` | `issueguestsession-00003-vix` |
+| `deleteContent` | `deletecontent-00033-doz` |
+| `requestAccountDeletion` | `requestaccountdeletion-00032-bax` |
+
+Downloaded deployed `index.js`, `callableAppCheck.js`, package and lock files match
+the reviewed local files for all three targets. Existing runtime/service-account/
+secret settings were preserved. The `appCheckConsumedTokens.expireAt` TTL is ACTIVE,
+its operation is complete, and that field is exempt from indexing. No other index
+or rule was deployed. The final immutable review reported no actionable findings;
+8 monitoring tests also passed. The existing alert was updated with guarded
+read-back to cover the new verification-required/unavailable reasons.
+
+Live controls after this deployment: fresh guest issuance succeeded; fresh tokens
+for both deletion endpoints reached the expected sign-in boundary; all sequential,
+delayed and cross-endpoint replays returned 403/APP_CHECK_REPLAYED. Twelve concurrent
+requests sharing one token were all rejected: the SDK-consumed request can create
+the marker before the SDK-fresh request. The safety guarantee is **at most one**
+admission, not guaranteed success for a deliberate concurrent replay. The initial
+probe's exactly-one assertion was therefore too strict; its result was preserved,
+and separate fresh-token controls passed without weakening the replay check.
+
+A new empty trip was created in the existing disposable account, deleted with a
+fresh token, and all replay attempts were rejected without further business writes.
+Fresh account deletion then completed; independent reads confirmed the remaining
+trip and children, private/public profiles, Auth user, media registry and all three
+synthetic image variants were removed. The deletion job is complete and local
+fixture credentials were removed. Thirty-five probe traces match server outcomes
+and serving revisions, including 27 replay rejections; no new ERROR/5xx events were
+found for these three functions in the checked post-deployment window. The owner
+explicitly confirmed both iPhone and Android passed guest content loading and
+fresh sign-in after the correction (`native-ledger-confirmed.json`).
+At `2026-09-30T12:06:19.800Z`, a full 30-minute post-correction query over all 103
+callable services found no ERROR/5xx events (`ledger-all-callable-health.json`).
+Fresh service metrics showed VALID/ALLOW for iOS and Web; no new Android series
+appeared in that window; the owner subsequently confirmed the two-device result.
+
+Ignored receipts include `ledger-rollout.json`, `ledger-deploy-readback.json`,
+`ledger-source-files.json`, `ledger-ttl-readback.json`, `ledger-live-probe.json`,
+`ledger-live-continuation.json`, `ledger-deletion-live.json`,
+`ledger-live-observation.json` and `monitor-ledger-applied.json`. They retain
+sanitized outcomes/traces, not actual attestations. The original rollout manifest
+and failed probe remain immutable; further service rollout requires an explicit
+continuation baseline acknowledging these three corrected targets and the unchanged
+other 100 callables. This is not yet a completed Stage 3 or launch approval.
+
+The actual hosted Web upload form was exercised on September 30 after admin/TOTP
+sign-in. Selecting a synthetic JPEG failed before Storage: local `blob:` image
+loads were blocked by CSP and the client reported `normalizeImageUri failed` /
+`Error picking image`. No Storage upload or final destination-image write occurred.
+A temporary browser-only block on `setDestinationUploadedImage` protected public
+content during the test and was removed afterward. This is a failed Web preflight,
+not successful upload evidence. Under separate owner approval, the focused Hosting
+CSP correction was released at `2026-09-30T11:56:00.981Z` from
+`fix/web-upload-blob-csp`, commit `6e9430d7bdd75f23647b521fcf95d71f79abb87a`.
+It adds `blob:` only to global `img-src`; script, connection, frame and isolated
+link/account-deletion policies are unchanged. Three focused header tests passed;
+an actual local browser reproduced the old failure and decoded/normalized a
+480x480 JPEG under the corrected policy while continuing to block a blob script.
+The immutable final review found no actionable issues.
+
+Hosting version `c1e1c462b8af800d`, release
+`sites/planli-f0b12/channels/live/releases/1790769360981000`, independently matches
+the intended configuration and live `planli.cc/admin/` CSP. All 66 application
+files and both Firebase-reserved init files are hash-identical to prior version
+`06c2d958f2e664af`; no client bundle, Functions, Rules, OTA or native build changed.
+`hosting-csp-readback.json` records this intermediate release verification.
+
+The first post-release form retry exposed a second local-URI boundary:
+`useImageUploader` fetches the normalized `blob:` URI, and global `connect-src`
+still denied that local read. The completion adds `blob:` to `connect-src` only;
+no new remote origin, executable context or isolated-route policy was allowed.
+Three updated tests and a browser decode/normalize/local-fetch control passed,
+while blob script execution remained denied; the focused final review found no
+actionable issues. Under the authorized Hosting correction, commit
+`c725a59f64a8f4b7aca1ad86999473d6b3a4a87a` was released at
+`2026-09-30T12:06:03.625Z`, version `b154806a6f4d3da2`, release
+`sites/planli-f0b12/channels/live/releases/1790769963625000`. Independent read-back
+again verified the configuration, live CSP and all 68 unchanged file hashes
+(`hosting-csp-readback-2.json`). The actual hosted form then successfully decoded,
+normalized and uploaded the synthetic JPEG with App Check (Storage POST 200),
+processed it with `prepareMedia` (200), and decoded the returned 480x270 WebP.
+The final public destination update was deliberately blocked in the browser;
+the test therefore proves the upload/processing path, not final publication.
+That block and the temporary cache setting were removed. The destination was
+independently unchanged. All three synthetic variants were deleted using their
+exact generation/metageneration preconditions and verified absent; no registry
+entry had been created. Receipts: `hosted-form-upload-proof.json` and
+`hosted-synthetic-cleanup.json`.
+
+A fresh service-continuation snapshot and dry run accounted for the unchanged 100
+callables and three corrected revisions without modifying the original manifest
+or failed probes. Its intermediate snapshot was superseded before any service
+mutation by `services-continuation-v2.json`, manifest SHA-256
+`cfe7b83aced2d90b1fd3573ff42c1b47e35d9baec805b66c20ee3df75e714fc2`, pinned to
+operator source `c725a59` on `fix/web-upload-blob-csp`. Its separate journal explicitly
+imports the accepted unchanged groups and the new correction receipts; it does
+not pretend that all Functions were redeployed from this operator source.
+
+Firestore App Check was set to ENFORCED at `2026-09-30T12:15:26.209Z` with its
+previous mode/etag retained for focused rollback. Its post-window evidence was
+accepted on September 30 after the owner confirmed both-device checks.
+The minimum observation window ends at `12:30:26Z` (15:30:26 Israel); the owner
+was asked to run both-device read/favorite/update checks after 15:31. An early
+paired anonymous GET of the same public active destination returned 200 with a
+valid App Check token and 403 for missing/invalid tokens. The denial message is
+generic; acceptance used the service metrics and post-window platform evidence
+below. Firebase Authentication is now ENFORCED as recorded below; excluded
+Google Identity iOS enforcement remains UNENFORCED. Stage 3 and the final launch
+gate remain open.
+
+After the propagation window, the `12:30:36Z` paired control again returned
+200/403/403. Explicit INVALID/DENY and MISSING_UNKNOWN_ORIGIN/DENY metric counts
+each increased by one after that probe, proving the App Check boundary despite
+the generic error text. The hosted admin reloaded successfully with live
+Firestore listener and dashboard responses. A `12:30:45Z` query over all 103
+callables found no ERROR/5xx since the service change. The owner separately
+confirmed the post-15:31 two-device read/favorite/update check; the earlier
+guest/sign-in confirmation was not substituted for this later check. Receipts:
+`firestore-final-boundary-verdict.json`, `firestore-web-final.json`, and
+`firestore-callable-health.json`.
+
+Storage App Check was set to ENFORCED at `2026-09-30T12:40:20.903Z` using the
+same service-continuation manifest and prior-state safeguards. Its read-back
+state SHA-256 is `62226a8f178e7c02b0c4266e4a4c961f7afce8a61c3ffc5f6d44be456a239c09`.
+It was accepted at `2026-09-30T13:09:20.245Z`. The 15-minute propagation window ended at
+`12:55:20Z`; the owner was asked to test fresh uploads and 20-second background
+continuity on both devices after 15:56 Israel. Pre-enforcement receipts include
+the native September 27 upload tests, the September 30 hosted form proof, and
+the disposable fixture upload/display control. No Functions, Rules, Hosting or
+client release accompanied this service-setting change.
+
+The monitoring read-back required no additional change: the existing enabled
+service-denial policy already covers Storage (`monitor-storage-plan.json`). At
+`12:43:38Z`, the post-activation callable error query was empty. The first hosted
+form attempt stopped locally at the existing recent-admin-auth check, before any
+Storage upload; the owner was asked to sign in again with TOTP. Temporary network
+blocking and form text were cleared. Storage negative controls, post-window Web
+upload and both-device background upload checks are still pending; no acceptance
+or Authentication enforcement has been recorded.
+
+After fresh administrator sign-in and the Storage propagation window, the
+dedicated fixture test returned explicit App Check 401 errors for missing and
+invalid tokens, verified that neither request created an object, then uploaded
+to the same owned staging path with a valid token (200) and processed/displayed
+the image. The real hosted form also completed Storage upload and `prepareMedia`
+with App Check (200/200); all three processed variants decoded successfully.
+Its final public destination write was deliberately blocked, so this proves
+upload/processing/display, not public publication. That block was removed, the
+form cleared/reloaded, and the three synthetic admin-owned objects were deleted
+with exact generation/metageneration guards and verified absent. The destination
+remained unchanged. The dedicated service fixture's before/after test assets
+remain pending fixture cleanup after the Auth tests.
+
+At `2026-09-30T12:58:09Z`, Storage metrics showed VALID/ALLOW Web traffic and one
+explicit INVALID/DENY plus one MISSING_UNKNOWN_ORIGIN/DENY, matching the controls.
+The `12:58:10Z` callable health query was empty. Both-device post-15:56 background
+upload confirmation is still required before Storage acceptance and Authentication
+activation at that checkpoint. Receipts: `storage-after-boundary.json`, `storage-after-display.json`,
+`storage-hosted-form-proof.json`, `storage-hosted-cleanup.json`,
+`storage-service-metrics.json`, and `storage-callable-health.json`.
+
+The owner subsequently confirmed successful two-device upload/background tests.
+At `13:05:32Z`, fresh Storage VALID/ALLOW traffic was present for Android and iOS
+as well as Web. Expansion paused when the final health query found two Cloud Run
+500 responses for `acknowledgeBackgroundOperation` at `13:00:52Z`: both were
+zero-latency "no available instance" failures during a 16-request burst and
+autoscaling. The unchanged revision subsequently served 21 successful requests
+through `13:04:46Z`; there were no startup errors or App Check denials in that
+incident. The precise provider allocation decision is not observable. Recovery
+and classification were reviewed before acceptance, with the raw errors retained
+in the evidence rather than reported as a clean window. Client acknowledgement
+burst limiting/backoff is an open operational follow-up for the launch review.
+Receipts: `storage-native-confirmed.json`, `storage-acknowledge-investigation.json`,
+`storage-acknowledge-diagnosis.json`, and `storage-acceptance-v2.json`.
+
+Firebase Authentication App Check was set to ENFORCED at
+`2026-09-30T13:10:27.443Z`, with independent read-back state SHA-256
+`c9e301a817274b702b97a6446d63e57c77f0add0065e3bc687ef88fe0e572b11`.
+It is **applied, not accepted**. The minimum propagation window ends at
+`13:25:27Z`; the owner was asked to test fresh email/password, Google on both
+devices, and Apple on iPhone after 16:26 Israel. Post-window Web TOTP, isolated
+missing/invalid/expired-token controls, fixture password reset, cleanup, and the
+final 30-minute observation remain pending. `oauth2.googleapis.com` remains
+excluded. No client release, IAM or Rules change accompanied this activation.
+Monitoring read-back found the required service-denial policy already enabled
+and in scope (`monitor-authentication-plan.json`), so no duplicate alert or
+policy update was applied. The local fixture sign-in/reset probe is prepared
+with a 15-minute gate and dry-run default; it has not run yet. The built-in
+browser was returned to the login screen using the same tab-local sign-out
+workaround, and the owner was asked to complete Web TOTP after 16:26 Israel.
+The owner completed the Web sign-in early, at approximately 16:14 Israel; the
+admin dashboard rendered successfully. A paired disposable sign-in control at
+`13:15:13Z` returned explicit App Check 401 errors for missing/invalid tokens and
+200 for the same credentials with valid attestation. These are initial live
+successes, not completion of the propagation gate. Final controls, password
+reset and native provider results remain pending. Receipts:
+`authentication-web-early-confirmed.json` and `authentication-early-boundary.json`.
+The owner supplied the delivered Authentication-denial email screenshot for the
+incident starting `13:17Z`, count 2. Read-back at `13:21:33Z` showed exactly one
+INVALID/DENY and one MISSING_UNKNOWN_ORIGIN/DENY for Identity Toolkit, matching
+the two deliberate `13:15:13Z` controls, alongside valid Web ALLOW requests.
+This confirms expected alert delivery; it is not a native sign-in failure report.
+Receipt: `authentication-alert-user-confirmed.json`.
+
+The standalone hosted admin has no general sign-out control, and its root back
+button does not leave the panel. This blocks the normal recovery path when a
+sensitive action requires recent authentication. For this test only, the single
+Firebase Auth entry in this PlanLi tab's sessionStorage was removed and the page
+reloaded to allow fresh sign-in. No account, credential, MFA, server session or
+other browser data was changed. A visible sign-out/reauthentication control is an
+open admin usability gap; no client code or bundle fix has been released for it.
+
+The service-denial alert (`7465525761534131574`) was enabled with guarded
+read-back after the Firestore change. The owner confirmed receipt of the separate
+`PlanLi Error - App Check service rejected request` email from the deliberate
+15:17 Israel probes. App Check metrics explicitly recorded one INVALID/DENY and
+one MISSING_UNKNOWN_ORIGIN/DENY, alongside VALID/ALLOW traffic from iOS, Android
+and Web; the generic REST denial alone was not used as proof.
+
+A dedicated disposable service fixture completed an additional Storage baseline
+upload and `prepareMedia` processing at `2026-09-30T12:23:42.327Z`; its processed
+image decoded successfully in the hosted browser. Its private synthetic variants
+remain pending cleanup with that fixture after the service tests. This is a
+pre-enforcement control, not evidence that Storage enforcement is enabled.
+
+Stage 3 is in progress on `fix/security-stage3-app-check`, based on
+`02fdc659f33d28cc406bcfd2fb73995744491a04`. The four-function canary, seven
+public callables and the remaining groups listed below are enforced at this checkpoint.
+The obsolete `moderateContent` endpoint was removed;
+no client release occurred.
+The [stage-3 runbook](../docs/security-app-check-rollout.md) fixes the rollout order,
+evidence gates, notification proof and per-batch rollback procedure.
+At `2026-09-27T15:39Z`, the owner reported iPhone route-photo update failure.
+Expansion stopped before `remaining-7`; no rollback was applied because the
+diagnosis identified a separate existing worker contract defect, not an App Check
+rejection. Native requests and upload events succeeded, the image was prepared,
+then the worker returned `OPERATION_DRAFT_CONFLICT`. The canonical saved route
+draft exposes day/stop `id`, while its media-attachment helper compared only
+`draftId`. Read-only inspection confirmed the media slot matches the canonical
+IDs. The focused fix below is deployed and the owner confirmed successful iPhone
+route-photo update. Read-only recovery verification at `2026-09-27T16:05:15.807Z`
+found the new operation successful, the route active and the uploaded asset
+attached to the published revision. Ten worker requests on the fixed revision
+returned 204 with no worker errors. The owner subsequently confirmed photo uploads
+from both iPhone and Android, including 20 seconds on the home screen. The same
+route has further successful operations. Storage metrics since `15:59Z` show
+VALID/ALLOW for iOS (4) and Android (2) at the `16:14:40Z` read-back. A synthetic
+JPEG uploaded from the production Web origin using the dedicated fixture account
+returned 200 for resumable-session creation, upload completion and `prepareMedia`;
+the browser decoded the resulting image at 480 x 480. This controlled API probe
+does not establish hosted upload-form behavior; that manual Web check is pending.
+The fixture's missing `moderation.status` was set to `active` with an update-time
+precondition for this test only; its media is reserved for account-deletion cleanup.
+The remaining-8 monitoring update initially received a Google API 500. A guarded
+retry and independent read-back confirmed the enabled policy covers all 91
+enforced callables before continuing to remaining-9.
+The fix is isolated on `fix/route-background-media-identity`, commit
+`4d906c00e63b8e67bbb7416117d7ca624725f934`: attachment now compares canonical
+day/stop IDs while retaining stale-slot rejection. All 39 focused background
+operation and route-draft tests passed under Node 22.23.1; the regression failed
+before the fix. After explicit owner approval, only
+`onBackgroundOperationWritten` was deployed from clean source commit
+`3777a61ab3170fd937418697f64f7cbcb68ecc31`, which adds documentation only to the
+reviewed fix. The deployment completed at `2026-09-27T15:59:08.923800656Z`
+(18:59 Israel). Independent read-back at `2026-09-27T15:59:35.364Z` confirmed
+ACTIVE / Node 22 and revision `onbackgroundoperationwritten-00003-qur` serving
+100% of traffic. Trigger, service account, limits and secret references match
+the baseline. The deployed source archive's `backgroundOperationService.js`
+SHA-256 matches local source exactly:
+`c0fa1b2b2b0de9621a93effb43228ca9a55bfa9be3e7e426f0a3a1f9ba65051e`.
+The previous revision `onbackgroundoperationwritten-00002-piw` and configuration
+are retained in the ignored rollback receipt captured at `2026-09-27T15:56:19.293Z`.
+The first post-update log query returned no entries; it does not prove an upload
+completed; the subsequent operation/data verification above establishes recovery.
+No other function, service enforcement, client binary or OTA changed in this
+deployment. The final read-only review
+of `4d906c0` against `670d292` found no actionable regressions and reused the
+39-pass receipt without repeating tests. The fix and release record are local;
+no push, PR or merge has been performed for this branch.
+Storage, Firestore and Authentication enforcement remain off. Stage 3 is not closed.
+Reviewed source checkpoint: `d7a860090441631149e653e0af33020654458428`, source
+SHA-256 `5feea6f8cdc34669b22138da6643734f668a5c3491a64fa59dd8fb3f46772d33`.
+The first canary deployment stopped before mutation when Firebase CLI could not
+list Functions. Independent read-back matched all four baseline revisions and
+configuration exactly; rollback reconciliation skipped all mutations and closed
+that attempt at `2026-09-27T14:19:01Z`. A subsequent read-only CLI inventory
+succeeded. The single retry uses the unchanged reviewed source and manifest
+`62f067dee98442776d4925b94a7bc8c0affbdf88a99ba6bfc6349ff97d8a05f7`
+in ignored `security-stage3/rollout-retry1.json`. It completed with independent
+runtime environment/source and 100% serving-traffic verification at
+`2026-09-27T14:22:19.314Z` (17:22 Israel). Deployed revisions:
+
+| Callable | Serving revision |
+| --- | --- |
+| `issueGuestSession` | `issueguestsession-00002-tev` |
+| `getReactionState` | `getreactionstate-00029-guv` |
+| `setFavorite` | `setfavorite-00031-fup` |
+| `listAdminSavedViews` | `listadminsavedviews-00004-faf` |
+
+All four carry `PLANLI_ENFORCE_APP_CHECK=true` and the source SHA above.
+Canary acceptance passed on September 27 after the owner confirmed the requested
+iOS/Android guest, sign-in, favorite add/remove and shared-link smoke. The
+`14:53:40Z` log read correlated VALID App Check with HTTP 200 for 14 iOS, 12
+Android and one Web request on the new revisions. Android guest issuance was
+included. More than 31 minutes of observation showed no canary 5xx/errors and
+only the two deliberate missing/invalid probes. Email delivery was confirmed.
+The immutable receipt is `security-stage3/canary-evidence.json`; the journal now
+marks canary accepted. The seven public callables completed deployment and
+independent source/environment/serving-traffic verification at
+`2026-09-27T14:57:25.274Z`. Their post-state hash is
+`81ba8211fb6298c4f305a3cce6f0b8ffb2891b9d3b0a33c7ba0f30a8609d810f`.
+All seven controlled calls without App Check returned HTTP 401 after deployment.
+The owner confirmed the requested guest browsing/link smoke on both phones after
+this deployment. The `15:01:46Z` log read found VALID App Check / missing Auth
+with HTTP 200 on both native platforms and no server errors; all seven controlled
+negative traces correlated with MISSING App Check. Individual `getSharedTrip`
+positive traffic was not independently observed in that bounded window; shared
+link behavior is owner-confirmed. Public acceptance completed at `15:03:15Z`.
+`remaining-1` completed source/environment/100% traffic read-back at `15:10:34Z`.
+All ten endpoints passed paired valid-App-Check/no-Auth and missing-App-Check
+probes: the former reached `SIGN_IN_REQUIRED` with App VALID/Auth MISSING; the
+latter stopped at the SDK boundary. This verifies the changed security boundary,
+not every business operation. No user business data was mutated by these probes.
+All 20 traces correlated; the `15:12:05Z` read found no server errors.
+The current group ledger below supersedes this intermediate checkpoint.
+Both deletion callables are deployed, but their replay acceptance gate is blocked
+as described above.
+Firestore/Storage/Authentication service enforcement remains off.
+
+| Public callable | Serving revision |
+| --- | --- |
+| `getPersonalizedRecommendations` | `getpersonalizedrecommendations-00030-req` |
+| `getMapRecommendations` | `getmaprecommendations-00020-pew` |
+| `getPersonalizedRoutes` | `getpersonalizedroutes-00030-cek` |
+| `loadRouteDetails` | `loadroutedetails-00029-rus` |
+| `getDestinationOverview` | `getdestinationoverview-00025-gov` |
+| `searchDestinations` | `searchdestinations-00025-yep` |
+| `getSharedTrip` | `getsharedtrip-00002-koj` |
+
+<!-- stage3-batch-status:start -->
+Current verified serving inventory: **103/103 callables enforced**.
+
+| Group | Targets | Applied (UTC) | Gate | Post-state SHA-256 |
+| --- | --- | --- | --- | --- |
+| canary | 4 | 2026-09-27T14:22:19.314Z | accepted | `f6069068bf1d72015b87e9203360b5ac77c739bc9b0bcaad0b1ea42a5c076da3` |
+| public | 7 | 2026-09-27T14:57:25.274Z | accepted | `81ba8211fb6298c4f305a3cce6f0b8ffb2891b9d3b0a33c7ba0f30a8609d810f` |
+| remaining-1 | 10 | 2026-09-27T15:10:34.930Z | accepted | `c9caf1a03247522b532c49b732094178fcb46289c391c68b627130a012e76c26` |
+| remaining-2 | 10 | 2026-09-27T15:16:00.007Z | accepted | `9f63fe1cbf601e8291c07ad0f269aba1d25d5725ef41c9ef2af06ce095233484` |
+| remaining-3 | 10 | 2026-09-27T15:20:44.168Z | accepted | `b57c51e24f8169e9443fec62b1f7a7445e958faac25e7bdf3e2b9fe4d11dfce1` |
+| remaining-4 | 10 | 2026-09-27T15:25:26.179Z | accepted | `d31d14ac66ba114b5df29aecc41ef1092e21222a346a9309eec30647dcd5f4a5` |
+| remaining-5 | 10 | 2026-09-27T15:30:47.429Z | accepted | `6dc030e6bb8b2ca22e06fd7699cbed812ef87ac2f1c301ce61cd1b488151d44e` |
+| remaining-6 | 10 | 2026-09-27T15:36:02.873Z | accepted | `9ecf017c89b744552f1f37123d898d38fafa7edb88df6cc9d94be6b711028209` |
+| remaining-7 | 10 | 2026-09-27T16:09:09.474Z | accepted | `c853c9d2971dad61ae42a364896f23735a0463c456accb23b64e9db0484386e9` |
+| remaining-8 | 10 | 2026-09-27T16:14:49.875Z | accepted | `26080eee520f97eca85189d4fe211733e82a00dfcd645f7459bcf094ff81186a` |
+| remaining-9 | 10 | 2026-09-27T16:22:51.778Z | accepted | `46e88f184acd9c848b6c225c538617e7db1b564767f05dd7e5e4310e52407c18` |
+| deletion | 2 | 2026-09-27T16:41:12.201Z | applied | `e1c283cb3ba0c3020d9737c39d96b2bbca3897b4ab957d19529eae677f4883a4` |
+
+Remaining-group receipts pair valid attestation/no Auth (SIGN_IN_REQUIRED) and
+missing-attestation rejection on each target, correlated against serving-revision
+logs. These receipts validate the changed boundary; final full platform smoke is
+still required. Exact per-function revisions and prior rollback state remain in
+the ignored rollout journal. No service-level enforcement or deletion-group
+acceptance is implied by these callable checkpoints.
+<!-- stage3-batch-status:end -->
+
+Additional live proof at `15:25:59Z` / `15:26:00Z`: two private empty trips were
+created successfully through the enforced callable in a dedicated disposable
+account, with VALID Auth/App Check and HTTP 200. They are reserved for the
+authorized deletion/cascade tests; their identifiers and temporary credentials
+remain only in ignored local fixtures. Cleanup has not yet been verified.
+At `15:27:49Z`, a fresh limited-use token obtained through the existing Web
+provider succeeded at `issueGuestSession` (HTTP 200), and its immediate replay
+returned HTTP 403 / `APP_CHECK_REPLAYED`; both traces were verified on the exact
+serving revision. Receipt: `additional-positive-replay-observation.json`.
+The broad `15:29:38Z` health read found no server errors after each target's
+enforcement time. It retained the already documented pre-enforcement missing-index
+error separately rather than classifying that old revision as a new regression.
+At `15:35:30Z`, live read-only controls with valid App Check preserved admin
+authorization (`admin_required`) and trip ownership (`TRIP_NOT_OWNED`), while the
+fixture owner read succeeded (HTTP 200). At `15:36:05Z`, an actually expired token
+was rejected at the SDK boundary (HTTP 401). The first `remaining-6` operator
+probe also retained that old token in its browser helper; all ten SDK logs
+explicitly reported token expiry. Those receipts were preserved. Supplying the
+refreshed token explicitly, with an expiry precheck, passed all 20 paired probes
+at `15:38:03Z`; no production code change or redeployment was needed.
+
+The App Check rejection alert is expanded after each verified group; exact
+policy read-back passed, retaining the existing email channel and other controls.
+The ignored `functions/.env.planli-f0b12` now persists the enabled flag and source
+marker. Coordinate any further backend deployment with this manifest: a new
+callable deployment from that environment enables enforcement for its target.
+The existing callable rejection policy `17246188049842534170` is now enabled
+and scoped to the enforced services, including replay rejections. Service-level
+policy `7465525761534131574` was created disabled for the later service rollout;
+the other three policies and email channel were retained. Initial read-back
+flagged Google's omission of the numeric zero threshold. The operator comparison
+now treats omitted zero as equivalent while still rejecting nonzero drift;
+a subsequent read-only check matched all five policies, without reapplying them.
+Controlled missing/invalid guest-call probes at `2026-09-27T14:27:29Z` both
+returned HTTP 401; their traces identify MISSING/INVALID App Check on the new
+guest revision. The owner confirmed receipt of the App Check alert email.
+Web `listAdminSavedViews` returned HTTP 200 with VALID Auth/App Check on
+`listadminsavedviews-00004-faf` at `14:23:59Z`; the standard queue rendered
+successfully. At `14:28:36Z`, the bounded canary log check showed no 5xx/errors.
+The subsequent native smoke and observation results above supersede this early
+checkpoint. Operator-only
+read-back fixes are committed as `a742734`; the Functions/Firebase deployment
+tree is identical to `d7a8600`, and no canary redeployment was performed.
+The early read-only observation through `14:34:23Z` found no additional canary
+requests or errors; the later accepted native smoke is recorded above.
+The separately authorized `moderateContent` endpoint retirement completed during
+the observation window. A fresh seven-day check found no POST traffic, and the
+tracked callable/client surface had no consumer. Firebase CLI reported deletion
+of only that endpoint; independent Functions API, Cloud Run service and public
+URL checks all returned 404 at approximately `2026-09-27T14:31Z`. Internal
+`adminService.moderateContent` remains used by the supported moderation flow.
+
+Pre-existing launch gap discovered during Web smoke: filtered moderation cases
+(urgent/overdue) return `FAILED_PRECONDITION` for missing composite `cases`
+indexes. This occurred before canary enforcement. Dashboard and saved-view
+reads returned HTTP 200. The missing-index error is not an App Check rejection
+and remains a separate unresolved operational defect.
+
+The shared callable boundary now explicitly rejects a consumed App Check token
+before authorization or business execution whenever consumption is enabled.
+The installed SDK reports consumed tokens to the handler rather than rejecting
+them automatically. Existing client deletion calls already request limited-use
+tokens; guest issuance retains its existing fresh-token requirement.
+
+Prior workspace work was retained locally in separate branches without deployment:
+stage-2 evidence in `test/security-stage2-evidence` (`c6d39ef`), media metadata
+hardening in `fix/media-claim-metadata` (`8bc4c85`), and Android marker layering
+remains in its own branch/PR #453. Neither media hardening nor marker changes are
+included in this stage-3 source.
+
+Stage 2 remains closed for progression with owner-deferred validation, not fully
+verified: deep secure-storage migration/restore remains pending. Functional Android
+continuity was subsequently exercised during the September 30 rollout, as recorded
+above. Sign-out/link-return smoke on both devices was owner-confirmed
+during stage-3 canary acceptance. iPhone 16 / iOS app 1.1.3 (34)
+was owner-confirmed. Android installation from Google Play was owner-confirmed;
+the existing AAB is 1.1.0 (12), but the installed Android version/model and exact
+device OTA IDs still require confirmation. Both artifacts use runtime 1.4.0.
+Provider configuration includes the September 27 DeviceCheck key replacement;
+the earlier August entries below are historical. At the pre-rollout read-back,
+Functions enforcement and Firestore/Storage/Authentication service enforcement
+were off. Google Identity for iOS enforcement remains explicitly out of scope.
+
+Stage 3 is not closed until live smoke tests, negative controls, delivered alerts,
+all rollout acceptance receipts and the final observation window are recorded.
+Focused local validation: 56 Functions tests (including an actual local callable
+HTTP boundary with a stubbed verifier), 21 rollout/monitoring tests and six client
+tests passed under Node 22.23.1. Missing, invalid, expired and consumed-token
+requests were rejected before business dispatch; fresh tokens remained usable.
+This is boundary evidence, not live platform attestation. The monitoring dry run
+reused the three unrelated enabled policies and the existing email channel.
+The immutable candidate `66a2b43` received independent security and CLI reviews.
+Review fixes cover interrupted/uncertain rollback recovery, previously accepted
+traffic drift, and resolving the serving revision in a fresh post-rollback
+baseline. Execution tests exercise these failure paths. Cloud Run v2 rejected
+traffic-only validation for a managed revision; the official v1 replacement API
+passed `dryRun=all` for all four canary services while retaining each exact
+revision template. Production rollback itself has not been exercised.
+
+### Map presentation fixes OTA (2026-09-27, published)
+
+PR [#450](https://github.com/doric2000/PlanLi/pull/450) merged as
+`58cfbb4066d62b76140a4e1e4a214810b8362ca3` after all applicable GitHub checks
+passed. City hero photos fill their background, fullscreen map/gallery controls
+use a shared modal-local safe area, recommendation maps share category circles,
+and the city map exposes all ten catalog categories plus All in RTL order.
+
+Production group **`545d5795-a7e6-43ab-98ab-4534b9dd547f`** was published at
+`2026-09-27T09:35:14.185Z`, channel/environment `production`, runtime **1.4.0**.
+It promotes the exact inspected candidate `e503ddd3-5641-4e4d-8ee8-9a9dd7eea5fa`
+from one export. Android update `01a0e237-f909-7f93-a09a-8267a63ace54` was
+independently served at `09:35:16.12Z`; iOS update
+`01a0e237-f909-7a0e-a725-209288a6920e` at `09:35:16.336Z`, with matching asset
+hashes. Bundle sizes and SHA-256 hashes appear in the release entries below.
+
+Android remains **1.1.0 (12)**, EAS build `597752db-0fd4-4861-a8d7-a530ccf85ca7`,
+on the existing Google Play Production release. iOS remains **1.1.3 (34)**,
+EAS build `1ff27c70-6a66-4daf-b58d-bb8a3d092091`, previously owner-confirmed
+installed TestFlight binary. Existing reviewed native fingerprints matched;
+no native build, store submission, review-state change or backend deployment occurred.
+Store review state was not rechecked. Application of this OTA and physical-device
+acceptance are **unverified**; Android emulator execution remains waived.
+
+Validation: **288 tests / 28 affected client suites**, PR checks, native compatibility,
+immutable candidate inspection and public delivery passed. Mocked-data browser smoke
+covered 320/390 widths, category scrolling/selection, full-map selection and return.
+iPhone notch, keyboard, rotation and enlarged text still require device acceptance.
+
+Rollback for both platforms: **`7811a506-b37d-422a-b25c-04fddde45686`**.
+Code checkpoint: `2aba1d9e57831345222e46e49a0e75d661e29845`; local Desktop
+`PlanLi-Figma-City/map-presentation-checkpoint.json`. Release journal:
+`.codex_tmp/releases/ota-981c50d1-4630-438c-b9a2-956d1e26f481.json`.
+The unified runner performed readiness once, prepared dependencies once (265s),
+verified native fingerprints (135s/33s), exported/published once (767s) and promoted
+without re-exporting. Pinned CLI also exported Web; only two mobile bundles were
+uploaded and no hosted Web deployment occurred.
+
+### City guide OTA (2026-09-27, published)
+
+PR [#448](https://github.com/doric2000/PlanLi/pull/448) merged as
+`e4337bd23d9486a2c4037a34159c8a4a79579762` after all applicable GitHub checks
+passed. City pages now show quick facts and useful information inline, followed
+by a recommendation map with one expand control, selection and city-scoped
+search. Recommendations and routes retain separate filters. The release review's
+map/auth presentation, blocked-author filtering, deletion-cache and camera
+findings were corrected before publication.
+
+Production OTA group **`7811a506-b37d-422a-b25c-04fddde45686`** was published at
+`2026-09-27T08:09:18.663Z` on channel/environment `production`, runtime **1.4.0**.
+It promotes the exact candidate `852e4612-68d9-45e0-aaaf-ee446e6631e4`, exported
+once for both mobile platforms. The public endpoint independently served Android
+update `01a0e1e9-4e47-7e6e-aa1f-21a1e751ad64` at `08:09:19.937Z` and iOS update
+`01a0e1e9-4e47-7ce2-91da-987c1d02d2f6` at `08:09:20.168Z`, with the inspected
+candidate asset hashes. Bundle sizes and SHA-256 hashes appear in the release
+entries below.
+
+Android remains **1.1.0 (12)**, EAS build
+`597752db-0fd4-4861-a8d7-a530ccf85ca7`, targeting the existing Google Play
+Production release. iOS remains **1.1.3 (34)**, EAS build
+`1ff27c70-6a66-4daf-b58d-bb8a3d092091`, the owner-confirmed installed TestFlight
+binary. Both compatibility checks matched the existing submission-metadata review
+in `docs/eas-native-compatibility.md`; no new native exception was introduced.
+No native build, store submission or backend deployment occurred. Store review
+status was not rechecked by this OTA and is not changed by it.
+
+Validation: **325 tests / 36 affected client suites**, focused Web rendering and
+map navigation with mocked data, candidate inspection and public delivery checks
+passed. Physical-device application of this OTA and live city/map acceptance
+remain **unverified** on both platforms; Android emulator execution remains waived.
+
+Rollback for both platforms: **`45fde4ae-12bf-40e6-bc3a-eb9efe3251d1`**.
+The code checkpoint before this design is `3076b0f36ab9588399442bb275a569bbabad7cfb`;
+see [city guide implementation](../docs/city-guide-redesign.md). Journal and timings:
+`.codex_tmp/releases/ota-dc32f3a6-58a8-4845-8295-1b63597a586e{,-metrics}.json`.
+
+Release timing note: one dependency preparation took 250s, native checks 133s/33s,
+the single candidate export/publication 740s and exact-asset promotion 43s. The
+pinned CLI also exported Web during `--platform all`; only the two mobile bundles
+were uploaded. An earlier standalone readiness pass was repeated after checkout
+changed file bytes through line-ending normalization. Use the unified runner as
+the single release-readiness entry point for this workflow; do not add another
+pre-export or independent readiness run. These measurements describe this release,
+not a reason to skip compatibility or provider-result verification.
+
+### Notification timestamp and held-review rollout (2026-09-27, deployed)
+
+Under explicit production authorization, the notification backend from merged PR
+[#439](https://github.com/doric2000/PlanLi/pull/439) was deployed from clean
+`main` source `51c8fe8a33c80c6d092d0ae4d97c6c1e733e2ca0` to project
+`planli-f0b12`. Between `2026-09-26T22:00:00Z` and
+`2026-09-26T22:00:28.749Z`, 18 exact Node.js 22 Functions in
+`europe-west1` became `ACTIVE`: `saveRecommendation`,
+`publishRecommendationDraft`, `onBackgroundOperationWritten`,
+`maintainBackgroundOperationsScheduled`, `setReaction`, `saveComment`,
+`submitReport`, `resolveModerationCase`, `bulkUpdateModerationCases`,
+`setUserSuspension`, `expireModerationSuspensionsScheduled`,
+`approveDestination`, `deactivateDestination`,
+`reconcileDestinationApprovalReleasesScheduled`,
+`onModerationCaseNotificationWritten`, `onOwnerNotificationOutboxWritten`,
+`onContentReviewNotificationWritten`, and `onNotificationPushWritten`. The last
+target is the new retry-enabled, idempotent held-recommendation review trigger.
+
+The post-deploy production dry-run scanned 194 notification documents and found
+99 schema-v2 personal/admin rows whose `createdAt` was the legacy malformed empty
+map. Manifest fingerprint
+`64fdbddcd31a9b81b66435557e204ac426eb2170774d972bfd601c257e9a0a5d` was
+applied with project confirmation; the tool updated and transactionally verified
+all 99 rows. An independent collection-group read found 178 in-scope schema-v2
+notifications, all 178 with valid Firestore Timestamps and zero malformed values.
+A second dry-run found zero repair candidates, and the production error-log query
+from `2026-09-26T21:55:00Z` returned no errors. No Rules, indexes, Hosting,
+Storage, OTA, native build, store submission, IAM, or unrelated production data
+changed in this rollout. Firebase CLI reported the existing `firebase-functions`
+dependency as outdated; it was intentionally not upgraded during the incident
+rollout.
+
+### Community sharing OTA (2026-09-26, published)
+
+PR [#440](https://github.com/doric2000/PlanLi/pull/440) merged as
+`30d88e01159b183f9f7bc8119e3a7cdd48f2c776` after all applicable PR checks passed.
+Recommendation and route cards now expose icon-only native sharing using the
+existing `planli.cc` links, with the same validation and duplicate-tap guard as
+detail screens. Recommendations retain share beside add-to-trip; routes do not
+expose add-to-trip. Read more sits in the excerpt and long counters retain exact
+accessibility labels.
+
+Production OTA group **`5a6a57cf-79d3-41ca-b609-354a57cfb4af`** was published at
+`2026-09-26T18:41:37.137Z` from that merge. Android **1.1.0 (12)** and iOS
+**1.1.3 (34)** remain on runtime **1.4.0**, channel/environment `production`.
+The existing EAS builds are Android `597752db-0fd4-4861-a8d7-a530ccf85ca7` and
+iOS `1ff27c70-6a66-4daf-b58d-bb8a3d092091`; no native build, store submission,
+version increment or backend deployment was performed. Store-review state is
+unchanged from the records below.
+
+The public update endpoint independently served the verified candidate assets:
+Android update `01a0df05-d771-7479-aa47-b4c432c45abc` at `18:41:38.294Z`, and
+iOS update `01a0df05-d771-714d-8c0b-0e8b3725a8f7` at `18:41:38.598Z`.
+Staging group `d46ca981-0f1f-4cb9-a3d0-53511bcc1160` was exported once for both
+platforms and promoted without rebuilding. Both native fingerprints matched the
+exact submission-metadata reviews in `docs/eas-native-compatibility.md`; no new
+native exception was introduced.
+
+Validation passed: 18 feature suites / 112 tests, release readiness with 26
+affected client suites / 222 tests, 37 Functions test files / 500 tests, and the
+Functions dependency audit. Read-only review found no actionable regressions.
+Actual card/action-bar Web previews passed at 320px/390px, including RTL order,
+44px targets, long counters, isolated presses and canonical URL payloads. Native
+share sheets were mocked. Physical-device OTA installation and sharing acceptance
+remain **unverified**; the earlier Android emulator waiver was respected.
+
+Rollback targets: Android `879f6607-3360-4523-9c46-eb7184e231c6`; iOS
+`f1a97566-0195-4955-87b9-eb6b6a728757`. Any rollback must be explicitly authorized
+and scoped to the appropriate platform/runtime. Release journal and timings:
+`.codex_tmp/releases/ota-73178521-38b6-4932-a1be-ec0ea646f63b{,-metrics}.json`.
+Immutable bundle sizes and SHA-256 hashes are recorded in the release entries below.
+
+### Android Production promotion and unified OTA (2026-09-26, published)
+
+Android **1.1.0 (12)** is the release target, EAS build
+`597752db-0fd4-4861-a8d7-a530ccf85ca7`, native source
+`1eae24ccf94072490d766202f2ad4f9478d2ce22`, runtime **1.4.0**, channel
+`production`, fingerprint `64d77fc362e400f5754e05a9886052a2e88eeb45`.
+EAS reports FINISHED/STORE. The existing AAB SHA-256 is
+`A611BB619758ECA498034854C4D35623CE67568013F2E883B9FAD185323777A7`.
+
+The same Play artifact was promoted from Internal testing into a Production
+draft (track `4697581935490668054`, release `2`), with 100% rollout across the
+already targeted countries. No new AAB upload or versionCode increment was made.
+The Production change was submitted on September 26 around 17:43 Asia/Jerusalem;
+Publishing overview initially showed **Changes in review**, build 12,
+**Start full rollout**. A later independent console check around 18:47
+Asia/Jerusalem confirmed **Latest production release: 12 (1.1.0) - planli.cc links**,
+**100%** rollout and **no unpublished changes**, plus the app-update-published
+notification. Google has approved and published build 12; the console's exact
+publication timestamp was not captured. Managed publishing remains off.
+The console reports a non-blocking missing deobfuscation-file warning.
+
+PR [#437](https://github.com/doric2000/PlanLi/pull/437), merged as
+`1cb218a2756850d9da22b71f7d856d9602dfa696`, adds the both-platform `release:ota`
+workflow and separates Google Play `production` from explicitly named
+`internal-testing`. Android production OTA group
+`879f6607-3360-4523-9c46-eb7184e231c6` was published at
+`2026-09-26T15:47:22.114Z`; the public endpoint served its verified bundle at
+`15:47:27.204Z`. iOS was skipped because its deployed application inputs already
+match; group `f1a97566-0195-4955-87b9-eb6b6a728757` remains unchanged.
+Exact native fingerprint comparisons prove only store-submission metadata changed;
+the reviewed pairs are recorded in `docs/eas-native-compatibility.md`.
+
+The shared-link → guest gate → email login → shared trip flow passed by direct
+UI interaction on the existing Android development APK in `PlanLi_E2E_API34`,
+against seeded `demo-planli-e2e` services. The shared trip remained visible after
+background/foreground, and explicit Back returned to Home. The automated Maestro
+attempt reached Login but its device server died during `inputText`; this is
+recorded as an automation failure, not a passing Maestro run. The manual proof
+verifies unchanged source inputs and is saved separately. Physical installation
+and acceptance of the Google Play binary/OTA remain unverified; build 10 users
+must install the store update to receive runtime 1.4.0 fixes.
+
+Validation: 107 affected client suites / 819 tests passed through one batch plus
+a focused retry of its sole 5-second timeout (106 passing suites were reused).
+Release readiness reused that evidence after source/dependency/command/environment
+verification. Release-helper tests, the final 15 lock/cache tests, and all required
+PR checks passed. CodeQL's lock-race finding was fixed with atomic exclusive lock
+creation. The one CLI `/review` attempt was blocked by the installed CLI's model
+support; the final diff was inspected directly without a second review run.
+
+The production command prepared dependencies once, exported/uploaded one Android
+bundle, downloaded/inspected it once and republished the same assets. It performed
+19 read-only EAS CLI calls plus fingerprint, candidate and republish commands
+(22 total); zero native builds, zero AAB uploads and zero iOS publications.
+Measured stages: cached validation 3s, preparation 257s, native proof 172s,
+candidate publication 549s, candidate inspection 108s, fresh-state checks 126s,
+promotion 48s and public delivery verification 1s. These timings include local
+CLI/file-system overhead; they are not token-usage measurements. The one-time
+submission-metadata investigation is separate from this production-run record.
+Resumable journal and metrics: `.codex_tmp/releases/ota-86b7c17b-4fd0-4efd-ba69-87cf8202cb1a{,-metrics}.json`.
+
+### Custom-domain migration in progress (2026-09-26)
+
+PR [#429](https://github.com/doric2000/PlanLi/pull/429), merged as
+`1eae24ccf94072490d766202f2ad4f9478d2ce22`, implements canonical `planli.cc`
+trip/route/recommendation sharing, scoped native app links, browser landing pages,
+native Auth domain alignment and a dry-run-first email callback configuration tool.
+Source runtime is now **1.4.0**. The owner confirmed installed TestFlight
+**1.1.3 (34)** on September 26; the iOS baseline now matches its signed build and
+runtime. The Android release baseline is now build **12 / 1.4.0**, with physical
+installation unverified; users of build 10 / 1.3.0 need the store update.
+Hosting and `createTripShare` are deployed from that merge; no migration OTA was
+published at this checkpoint. Auth limitations are below.
+
+Cloudflare Email Routing was activated on September 21. On September 26 the
+`support@planli.cc` rule was independently verified active, forwarding to the
+verified `planli.travel.il@gmail.com` destination. A real message from a separate
+mailbox arrived at 11:54 Asia/Jerusalem (in Gmail Spam); its reply was independently
+received at 11:59:42. Public DNS has three Cloudflare MX
+records and one combined SPF record preserving Firebase mail authorization.
+
+The production Google OAuth client now permits `https://planli.cc` and
+`https://planli.cc/__/auth/handler`, preserving the previous Firebase callback.
+Google consent branding now links to the canonical home, privacy and terms pages.
+Its support identity remains the existing Google account: Google only offers
+account/group identities, so email forwarding alone cannot select `support@planli.cc`.
+Apple Services ID `com.planli.planlitravels.auth` now registers `planli.cc` and the
+same callback, independently read back after saving; legacy registration retained.
+The Apple team is `C22ZFVA6M6`. Google Play's generated association JSON confirms
+the committed `BA:C9:7A:1A:...:19:5D` app-signing fingerprint.
+Google Play contact email `support@planli.cc` and website `https://planli.cc` were
+published. App Store 1.1.3 is **Prepare for Submission**, with canonical support,
+marketing and review-note links; public 1.1.1 still has its old support URL until
+a new version is released. Apple's published privacy URL already uses planli.cc.
+
+Public native release remains gated on physical-device acceptance.
+Firebase rejects the email-action callback change with
+`EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED` (HTTP 400), both through its API and console.
+The callback remains `https://planli-f0b12.firebaseapp.com/__/auth/action`.
+All four template Reply-To fields were independently updated/read back as
+`support@planli.cc` at `2026-09-26T09:52:22Z`, preserving template content.
+A real password-reset email reached the designated test inbox at 12:56
+Asia/Jerusalem: sender, mailed-by and signed-by use planli.cc, Reply-To uses
+support@planli.cc, but the action link still uses firebaseapp.com. No password
+was changed. Verification-email delivery and completed OAuth login remain unverified.
+The pre-existing untracked root `app.json` remains untouched and is already
+excluded by `.easignore`; guarded OTA checks still reject it in the checkout.
+The Codex 0.155.1 review completed; its cold-start back-navigation finding was
+fixed and covered by router and Auth tests. SDK 57 patch alignment is complete:
+Expo Doctor 21/21, package compatibility, native configuration, production EAS
+environment and admin export passed. The full client run passed 223/226 suites;
+the three failures were then resolved/verified by a focused 5-suite / 55-test pass
+(stale version expectations, existing font-family policy violation, and transient
+5-second integration timeouts). The font correction uses the existing Assistant
+bold family. No SDK major upgrade or Doctor exclusion was introduced.
+See the [rollout and acceptance checklist](../docs/custom-domain-rollout.md).
+
+PR #429's first validation run passed client/Functions/Rules, CodeQL, Semgrep and secret
+checks, but the locked audit correctly stopped on the newly fixable navigation
+advisory. A targeted transitive update to `@react-navigation/core@7.22.1` and
+`@react-navigation/routers@7.6.4` removes query-string/decode-uri-component.
+The old audit exception was removed: all workspaces now require zero advisories.
+The live client audit is clean and all 34 focused Auth/navigation/share tests pass.
+The final CI run on `bf4eb7850e4818cc07e0dc52251d106654690547` passed the full
+client suite, Functions/Rules, native/admin checks, audits and security scans.
+Play privacy (`https://planli.cc/privacy/`) and Data Safety account-deletion
+(`https://planli.cc/account-deletion`) changes were submitted together and are
+**in review**. Contact email/website changes are already published.
+
+#### September 26 deployment and native build record
+
+- Hosting release `sites/planli-f0b12/releases/1790415669255000`, version
+  `sites/planli-f0b12/versions/06c2d958f2e664af`, deployed at
+  `2026-09-26T09:41:09.255Z`. Independent verification passed 27 HTTP checks over
+  planli.cc and both Firebase aliases, including deployed byte equality,
+  association JSON, share/legal/admin assets and security headers.
+  Live browser smoke verified canonical/legacy share landings, invalid-link
+  handling and the admin login in a clean browser with no console warnings/errors.
+- `createTripShare` is ACTIVE on revision `createtripshare-00002-rom`, Node 22,
+  europe-west1, updated at `2026-09-26T09:51:59.383138627Z`. Exact-target CLI
+  deployment succeeded after increasing local discovery timeout from 10 to 60
+  seconds. No post-deploy ERROR logs were found in the focused read. Authenticated
+  share creation on a physical device remains unverified.
+- Android production build `597752db-0fd4-4861-a8d7-a530ccf85ca7`, app 1.1.0,
+  versionCode 12, runtime 1.4.0, channel production: **finished** at
+  `2026-09-26T09:59:59.210Z`. The signed AAB is 88,454,451 bytes, SHA-256
+  `a611bb619758eca498034854c4d35623ce67568013f2e883b9fad185323777a7`.
+  Bundletool confirmed versionCode/versionName, runtime resource 1.4.0 and HTTPS
+  autoVerify filters for exactly the three planli.cc share paths. EAS submission
+  stopped before scheduling because no Google service-account key is configured;
+  the verified AAB was instead uploaded through Play Console. Internal release 9,
+  `12 (1.1.0) - planli.cc links`, is **Available to internal testers**, released
+  September 26 at 13:23 Asia/Jerusalem on track `4701742858558783307`.
+  Installation and physical-device acceptance remain unverified.
+- iOS production attempt `20ff7d90-e056-42fa-805a-5e89343671ff`, build 33:
+  **failed** because provisioning profile `NGZ4V8B72H` lacked Associated Domains.
+  Apple App ID `C3896WLGP2` now enables that capability and the same profile was
+  regenerated with the existing August 21 distribution certificate. After the
+  owner refreshed the Apple session, the profile was synchronized to EAS at
+  `2026-09-26T10:17:22.748Z`; independent read-back confirmed UUID
+  `93b0bc6a-fdec-45e4-a31a-0db66a9dc377`, Associated Domains capability and an
+  unchanged signing certificate. A fresh ASC API request with the existing
+  submission key succeeded (HTTP 200) at `2026-09-26T10:25:05.196Z`; the earlier
+  Developer Portal validation 401 is not an established submission blocker.
+  EAS metadata reports top-level appVersion 1.1.0; the successful IPA independently
+  confirms the actual iOS version is 1.1.3.
+- iOS retry `1ff27c70-6a66-4daf-b58d-bb8a3d092091`, build 34, uses the refreshed
+  profile, source `1eae24c`, production channel and runtime 1.4.0. It **finished**
+  at `2026-09-26T10:30:24.420Z`. The 40,762,208-byte IPA has SHA-256
+  `c002942a645774777332b0f41f26d8d6336b003220a2ce0f94bd06fc53931783`.
+  Inspection confirmed version 1.1.3/build 34, runtime 1.4.0, production channel,
+  signed `applinks:planli.cc` entitlement, expected application identifier and
+  refreshed profile UUID. EAS submission `ef8bd5ac-f870-4d0b-9fd9-f7687d5a52a8`
+  **finished** at `2026-09-26T10:33:29.821Z`. Apple processing is **Complete**;
+  ASC build `4b085cf0-48cd-4816-a915-de004d2b8e82` is assigned to existing internal
+  group **Team (Expo)** with one tester. Hebrew test instructions were saved.
+  The owner subsequently confirmed installation of 1.1.3 (34) and opened a shared
+  trip from WhatsApp. The first load displayed an error; manual retry succeeded.
+  This establishes installation and link dispatch, not complete device acceptance.
+  No public App Review submission was made. Both original builds also used source
+  `1eae24c`. Older baseline/release sections below are historical.
+
+#### Shared-trip first-open correction (2026-09-26; iOS OTA published)
+
+The shared-trip error screen omitted safe-area insets and reported every unknown
+read failure as an unavailable link. The owner reproduced this in build 34.
+Focused production logs show two successful reads with valid Auth/App Check;
+they do not establish the exact client-side error behind the first-load failure.
+The correction retries only a transient, side-effect-free shared-trip read once,
+keeps definitive failures final, distinguishes temporary errors from revoked links,
+and places loading/error content inside the device's safe areas. Copy/write calls
+are not retried. Focused service/screen/consumer tests and an isolated rendering
+of the real screen passed; that browser proof uses synthetic data and iPhone
+insets, not physical iOS. Corrected behavior on the installed iPhone is unverified.
+
+PR #431 merged as `b763f9e2a7318110b7476bf409e053f0e0eccb9c`; release readiness
+passed 91 client test suites / 672 tests, baseline tests and the focused runtime
+proof. CI and final review passed. The initial OTA preflight stopped before upload
+on an archive/build fingerprint mismatch; PR #432 aligned dependency layout and
+plist line endings. A later candidate was also withheld because EAS CLI 22.6 did
+not forward the production Firebase project to its update fingerprint calculation.
+Supplying that public project identity before CLI startup restored exact parity.
+
+The correction is now published for installed TestFlight **1.1.3 (34)**:
+source `2aab25fe0b685a2a13871f95f82bc66859372f7a`, iOS production/runtime **1.4.0**,
+OTA group `f54aca26-f3fa-4015-afc6-b733f179cff3`, published at
+`2026-09-26T12:26:59.989Z`. The candidate and production bundles are byte-identical,
+and native fingerprint `976661b4a04d2165ecd571430564b16b5f86fc13` exactly matches
+build 34 before and after publication. The public production update endpoint
+independently served the expected update at `2026-09-26T12:27:40.177Z`.
+Device download/application and post-update cold-link behavior remain unverified.
+No new native build, store submission, Android update, Hosting or backend release
+accompanied this correction. The release record below contains immutable IDs/hash.
+
+#### Shared destination after authentication (2026-09-26; current iOS OTA)
+
+The current iOS production OTA is group
+`f1a97566-0195-4955-87b9-eb6b6a728757`, source
+`859f313571761d740fed85b7070d0f64ebd25fda`, runtime **1.4.0**, published at
+`2026-09-26T13:35:44.730Z` for owner-confirmed TestFlight **1.1.3 (34)** / EAS
+build `1ff27c70-6a66-4daf-b58d-bb8a3d092091`. It supersedes the preceding OTA
+while retaining its first-open retry and safe-area corrections. No new binary or
+store submission was needed; Android, Hosting and backend were not released.
+
+PR #434 centralizes successful authentication navigation in AuthProvider. A
+server-confirmed profile can no longer restore a shared destination before a
+slower sign-in callback resets Home. Shared trip, route and recommendation
+destinations survive required account steps and optional onboarding, and are
+consumed once at completion. Cancellation/sign-out clear pending navigation.
+Normal and admin sign-in retain their respective default destinations.
+
+Release readiness passed **49 related client suites / 460 tests**. An isolated
+browser using the actual LoginScreen, AuthProvider and React Navigation verified
+slow bootstrap, restoration of the shared trip, token refresh without leaving it,
+and explicit Back to Main. Auth/profile services in that proof were synthetic.
+Final code review and applicable PR checks passed. These results were retained
+after merging because client source, configuration and dependency locks matched.
+
+PR #435 adds guarded `--source-record` reuse and updates release guidance.
+All **46 release guard tests** passed, as did commit review and applicable CI.
+This release prepared the archive once (357 seconds) and successfully reused it
+for production promotion, avoiding a second dependency copy or bundle export.
+The first candidate `bdccabb0-4896-4264-b029-81a3a0e54dac` matched the installed
+native fingerprint `976661b4a04d2165ecd571430564b16b5f86fc13` before and after
+upload. The production launch bundle is byte-identical to that candidate.
+
+The public production endpoint independently served update
+`01a0dded-ce5a-788c-8bda-d2a54d8a78cb` with the expected group/runtime/launch hash
+at `2026-09-26T13:36:40.200Z`. Device download/application and the signed-out
+link → sign-in → retained destination flow on the physical iPhone are **pending
+owner confirmation**. Public store review state is unchanged. See the latest
+immutable release record below for bundle size/hash and rollback group.
+
+### Public store links on the landing page (2026-09-21)
+
+The landing page now links to the public PlanLi Travels listings on
+[App Store](https://apps.apple.com/il/app/planli-travels/id6801453067) and
+[Google Play](https://play.google.com/store/apps/details?id=com.planli.planlitravels).
+The former Google Play “coming soon” state was replaced by a Hebrew download
+badge matching the App Store treatment. The first Hosting-only deployment,
+release `sites/planli-f0b12/releases/1790016313580000` / version
+`sites/planli-f0b12/versions/355bd285475f40ee`, completed at
+`2026-09-21T18:45:13.580Z`. Browser verification exposed the prior one-hour CSS
+cache, so the stylesheet URL was versioned and a superseding Hosting-only
+release `sites/planli-f0b12/releases/1790016706728000` / version
+`sites/planli-f0b12/versions/4230070d6657972a` completed at
+`2026-09-21T18:51:46.728Z`; the CLI found 58 Hosting files.
+
+Both `planli.cc` and the Firebase fallback host matched the local landing HTML,
+stylesheet, Google Play badge, Admin, trip landing and named public pages
+byte-for-byte. A fresh live browser load displayed both active store links, the
+Hebrew `להורדה ב־` Google Play label, no “coming soon” text, no horizontal
+overflow, and no console warnings or errors. Source is committed as
+`1fa9eb8bea68d0cbad164304f0dbbdb383c224ad` in
+[PR #427](https://github.com/doric2000/PlanLi/pull/427), based on
+`e799e8aef756e0246afa81b8ed16dd103d8b85d9`.
+No Functions, Rules, indexes, Storage, Auth, IAM, native build, store submission
+or OTA action accompanied these Hosting releases.
+
+### Trip map layout iOS OTA (2026-09-21)
+
+PR [#425](https://github.com/doric2000/PlanLi/pull/425) merged the correction as
+`e799e8aef756e0246afa81b8ed16dd103d8b85d9`. The removed React Native
+`StyleSheet.absoluteFillObject` left the map host at zero height; supported fill
+styles restore its dimensions. The fullscreen header now occupies normal layout,
+with a compact failure/retry banner below the safe area.
+
+The current iOS production OTA is
+[group 6bf13a9e](https://expo.dev/accounts/doric2000/projects/client/updates/6bf13a9e-24c0-46ae-a7b0-e34cc752fe91),
+update `01a0c543-c41c-70f6-a1d7-5205374a6c48`, published at
+`2026-09-21T18:39:07.804Z`; runtime `1.3.0`, channel/environment `production`.
+Staging group `3e6d504d-70e0-41f4-b4da-204261658fba` was republished without
+another export. Both remote bundles and the local export are 10,912,684 bytes,
+SHA-256 `87E03667A766EB98883BE991E1B5ABC52A06C8E530DF3AA38AE957906B090995`.
+Independent public-channel delivery matched the new update at
+`2026-09-21T18:39:38.714Z`.
+
+Last confirmed tester installation: TestFlight **1.1.2 (32)**, EAS build
+`6ae60b3a-b0a6-4659-a054-68a044004a35`, native source
+`eb9770bc12c5accf16a8cb184e473d25d3f0b619`. On September 21 the tester confirmed
+the map works; supplied iPhone screenshots show streets, route lines and stop
+markers in both Roadtrip and the private trip planner. The exact installed OTA
+ID was not read back from that device. Retry/rotation and Android device checks
+remain unverified. No native build or Apple submission was created.
+
+Follow-up on `fix/trip-map-ui-consistency`: private/shared trip maps now reuse
+Roadtrip numbered/photo pins and a common selected-stop card. Numbering follows
+the complete day list, including gaps for stops without coordinates. This UI
+follow-up has not been published as an OTA; the production IDs above
+still describe the loading fix. Native iPhone/Android validation of the new pins
+is pending.
+
+The follow-up passed 11 focused client test suites across native-map event
+handling, editor/shared-trip selection, Roadtrip, discovery, custom pins, camera
+and Web consumers. A local browser fixture using the real marker, Web map and
+detail-card components verified photos, numbering gaps, reordering, selection,
+closing details and unclipped compact markers. Native map events in Jest remain
+mocked. The subsequent review identified two regressions, now corrected:
+Web marker coordinates interpolate within the padded map area instead of
+collapsing at a clamped edge, and shared-trip map timeouts pause whenever the
+screen loses navigation focus, for both inline and fullscreen maps.
+
+Post-review validation passed 18 tests across the Web map, shared-trip screen
+and map-card suites. These cover short previews, equal/nearby coordinates,
+numbering, blur/refocus and readiness while away. A real-component browser
+fixture confirmed all three stops selectable at 220px and 142px heights and
+distinct positions after resizing to 440px. Existing Web style/extension console
+messages remain; this is focused behavior evidence, not a clean full-app console
+claim. The CLI review attempt could not start because the installed CLI is too
+old for its configured model; the two findings came from the later read-only
+review. No native-device validation or OTA of this follow-up has occurred.
+
+Validation: 137 related client suites / 940 tests, 21 client helper/configuration
+checks, 42 release guard tests and the final focused 41-test map/editor/Web run
+passed. Browser proof verified marker selection, positive map dimensions and the
+48px retry banner below a 62px safe area. PR checks passed and release review
+found no blocker. Expo Doctor's 19 patch recommendations remain unresolved;
+manifest, lockfile and native dependencies are unchanged from the preceding OTA.
+
+The native guard retained build 30 and reviewed fingerprint
+`f9c26614b2ebac29b63ee6df9d097175b6cfa036`. During publication, concurrent Hosting
+work changed the checkout branch. Under explicit user authorization to publish
+in parallel, promotion used the existing immutable candidate and verified all
+1,216 archived files against the merged commit. Only Hosting/README divergence
+was permitted; source lineage, account/project, native compatibility, production
+environment and downloaded bundle checks remained enforced. The tracked release
+guards were not changed, and the landing-page files/branch were preserved.
+
+This workflow released iOS only. Android remains on group
+`482b54f6-c7a7-4144-83fa-b8d7f9ee6d48`; no backend or Hosting deployment was
+performed by this workflow. Immediate iOS rollback:
+`24b4da73-475d-40cb-856b-e361b90bcb13`, source
+`5edb740372b6e9c031aec39f22510bc9451e1b6c`.
+
+### Trip map layout root cause and Sentry access (2026-09-20)
+
+Sentry access is restored: disabling Chrome's Allow CORS extension restored the
+site, and the account owner replaced the invalid Windows user `SENTRY_AUTH_TOKEN`
+with `org:read`, `project:read`, `event:read` access at 13:43:47 UTC. Organization
+`planli-t2`, project `planli-mobile`, API `https://de.sentry.io`, environment
+`testflight`. Expiry is unknown. Read-only issue/event queries and a fresh process
+with a stale inherited value passed using the local wrapper
+`%USERPROFILE%\.codex\tools\sentry-access\Invoke-Sentry.ps1`. Use `-Check` before
+diagnosing and `event-detail EVENT_ID --include-entries` for breadcrumbs. The
+wrapper reads the current Windows user value each time and fails immediately on
+401; replace the token locally instead of retrying it. Local setup/details are in
+the adjacent README and Set-SentryToken.ps1. Keep Allow CORS off. The EAS build
+credential is separate. A full Codex application restart has not been tested.
+
+[PLANLI-MOBILE-1C](https://planli-t2.sentry.io/issues/148207399/) confirms the
+iPhone applied update `01a0bebf-7a47-7a0c-81bb-8bb3a0336461` on TestFlight
+`1.1.2 (32)`, runtime `1.3.0`, and failed at `layout_pending` three times.
+The root cause is the removed `StyleSheet.absoluteFillObject` API: it leaves
+the trip map host with an empty style and zero height. The correction restores
+fill styles and places the fullscreen error below the header. A failing regression
+reproduced the empty host style. The correction is now merged and published in
+the September 21 OTA above; physical rendering remains unverified. See
+[the investigation](../docs/trip-map-initialization.md).
+
+### Trip map initialization iOS OTA (2026-09-20)
+
+PR [#420](https://github.com/doric2000/PlanLi/pull/420) was merged to `main` as
+`5edb740372b6e9c031aec39f22510bc9451e1b6c`. The trip map now waits for measurable
+layout, initializes its camera after native readiness without waiting for tiles,
+and isolates inline, fullscreen, day and retry loading attempts. Direct map
+consumers retain their existing overlays. This earlier release did not correct
+the map host's zero-height style and is superseded by the layout correction above.
+
+The previous iOS production OTA was
+[group 24b4da73](https://expo.dev/accounts/doric2000/projects/client/updates/24b4da73-475d-40cb-856b-e361b90bcb13),
+full ID `24b4da73-475d-40cb-856b-e361b90bcb13`, update
+`01a0bebf-7a47-7a0c-81bb-8bb3a0336461`, published at
+`2026-09-20T12:16:54.855Z` from the merged source above. Runtime, channel and
+environment are `1.3.0`, `production` and `production`. Verified staging group
+`f5613811-b540-4fbf-9e87-17cb85891c6f` was republished without another export.
+Both groups contain the same 10,910,800-byte bundle, SHA-256
+`E3DDF983EA05A4CE3EA29DE169C6081F45F5966C82546C086B5F9D7A09D92D17`.
+Independent public-channel delivery matched the production update at
+`2026-09-20T12:17:22.959Z`; a separate EAS read-back confirmed source, branch,
+runtime and publication time. This supersedes the earlier iOS OTA records below.
+
+The tester's installed binary remains TestFlight **1.1.2 (32)**, EAS build
+`6ae60b3a-b0a6-4659-a054-68a044004a35`, source
+`eb9770bc12c5accf16a8cb184e473d25d3f0b619`. No new binary or Apple submission was
+created. Application of this OTA was subsequently verified by Sentry; it still
+failed to render. Visible streets/markers after the new layout fix remain
+**unverified**; keep the map incident open until that check.
+Acceptance steps and diagnostic limits are in
+[the map investigation](../docs/trip-map-initialization.md).
+
+Validation passed 55 focused tests and the final iOS OTA readiness run of
+91 affected client suites / 635 tests. All applicable PR checks passed. The
+release review's direct-consumer overlay finding was corrected before merge.
+The native guard retained build 30 and its existing reviewed optional-module
+fingerprint `f5fac23f11fb1f2c0b1adbaf545b164644c461d3`; build 32's existing map API
+contract was separately source-reviewed. An initial preflight blocked leftover
+native dependency patches before upload. Those two generated files were backed
+up and restored from the integrity-verified locked package, after which the
+unchanged guard passed. No fingerprint bypass, dependency upgrade or native
+source change was made. The preserved build-32 patch branch remains available.
+
+This workflow published iOS only. Android remains on group
+`482b54f6-c7a7-4144-83fa-b8d7f9ee6d48`; no Firebase or Hosting deployment occurred.
+The immediate iOS rollback group is
+`586f1ad9-7715-450a-8e12-9720d9b789e3`, source
+`dd72177d4739b2b84987c3f2ef68cfe80fa8b292`.
+
+### Android permission-video preparation (2026-09-20)
+
+Play Console was inspected for this recording task: production serves `1.1.0 (10)`;
+internal testing serves `1.1.0 (11)`. Version 11 corresponds to EAS build
+`bc52a84a-61b9-43dc-8b07-95992c41322f`, runtime `1.3.0`, production channel,
+reported source commit `431d382229a39d457575ccab31df49e900c16b7a`.
+The Google-signed universal APK downloaded from Play Console was installed on
+`PlanLi_E2E_API34` at `2026-09-20T09:35:08Z`. Its SHA-256 is
+`5D07955F686B1D982281F0253466EF38EF4C374DA6D4F59D8EC9633662F3354D`.
+Launch was blocked by the Play installer/license check because that emulator lacks
+the Play Store. Logs also reported `API_KEY_SERVICE_BLOCKED` for Firebase
+Installations and an HTTP 403 for the App Check challenge API; the later approved
+API allowlist correction is recorded below. Native uploads and the applied OTA
+group remain unverified.
+
+The old emulator was stopped. A separate `PlanLi_Play_API33` / `emulator-5582`
+was created with the official Android 13 Google Play system image (revision 9),
+software graphics, Vulkan disabled, two CPU cores, 2048 MB guest RAM, 540x960
+display and 30 Hz refresh. It booted successfully and contains the Play Store.
+Play Store initially stopped responding; restarting that app reached its sign-in
+screen. The user subsequently signed into Google Play. On 2026-09-20 the store
+installed `1.1.0 (10)` with installer `com.android.vending`. Updating with the
+Google-signed version 11 APK succeeded at `2026-09-20T10:56:23Z`, but launch
+displayed "Get this app from Play". The internal-testing invitation was opened in Chrome and
+initially showed "Accept invite". After the user accepted, Play recognized the
+account as an internal tester and installed version 11 at
+`2026-09-20T11:01:04Z`, verified with installer `com.android.vending`. The app
+passed the installer gate and reached the PlanLi sign-in screen; notification
+permission was granted. Read-only inspection confirmed the APK's
+`google_api_key` matches `planli-android-maps-sdk`, which initially allowed only
+`maps-android-backend.googleapis.com`. With explicit user approval, at
+`2026-09-20T11:13:38.451762Z` its API targets were updated to exactly Maps Android,
+`firebaseappcheck.googleapis.com`, and `firebaseinstallations.googleapis.com`.
+Independent read-back confirmed these three targets and preserved package
+`com.planli.planlitravels` with both existing signing-certificate restrictions.
+Operation: `akmf.p10-633543026638-f8b31632-fa1b-4a89-b7e5-89864b25ea3d`.
+The user signed into PlanLi successfully before this change. After restarting the
+app, native App Check reached Play Integrity but returned HTTP 403
+`App attestation failed` at `2026-09-20T11:14:21Z` and `11:14:26Z`, followed by
+`Too many attempts`. The original API service restriction is resolved; emulator
+attestation remains blocked and upload recording could not proceed. App Check
+enforcement and integrity requirements were not weakened. No APK/source change
+was needed for the API allowlist update.
+An authorized temporary recommendation test reached the server at
+`2026-09-20T11:29:30Z`, but failed before its photo uploaded. The 179.339-second
+diagnostic recording is `.codex_tmp/validation/play-permission-video/planli-upload-demo-attempt.mp4`;
+it is not a successful permission demonstration. No public recommendation was
+created. Operation `47f70e7b-b1d6-46bb-82d0-31ae05c9e9b8` timed out and was discarded
+through the app at `2026-09-20T12:10:42.151Z`; its metadata cleanup is scheduled
+for the following day. Saved draft `65a668b8-a020-4357-8ee9-7a15a0a937d2` and its
+version were deleted through the app and independently returned HTTP 404.
+Cleanup retries are paused. The applied OTA group and production native upload
+completion remain unverified; no Play declaration or store submission was made
+during this production recording attempt.
+
+### Isolated Android development demo (2026-09-20, recording verified)
+
+The user authorized a separate test environment and Android development build
+after the Play binary failed emulator attestation. Project `planli-staging-demo`
+(`326511814867`) is billing-enabled, with a Standard Firestore database in `eur3`
+and bucket `planli-staging-demo-media-eu` in `europe-west1`. Repository Firestore
+and Storage rules were deployed unchanged; all 138 indexes reached READY.
+Only a synthetic test account and London destination were seeded. No production
+data was copied, and this setup has not changed production services.
+
+The separate package is `com.planli.planlitravels.demo`, Android Firebase app
+`1:326511814867:android:d8b8f6a9258dddf69b8c26`, with SDK bridge app
+`1:326511814867:web:73ecd103ffe521af9b8c26`. Its configuration uses dedicated
+`PLANLI_DEMO_*` file variables in EAS's development environment. The existing
+development-only debug App Check provider is retained, and OTA is disabled for
+the demo package. Runtime remains `1.3.0`, app version `1.1.0`, Android build `1`.
+EAS build `899e1e60-5eef-47c0-bd32-5c0f5d4e5aca` was created at
+`2026-09-20T12:32:35.690Z` and finished successfully at
+`2026-09-20T12:55:12.685Z`. ADB installed it on `emulator-5582` at
+`2026-09-20T12:57:10Z`; package readback confirms `1.1.0` / `1`.
+The development bundle loaded; the user accepted notification permission and signed
+in as the synthetic demo account. At `2026-09-20T13:24:33Z`, operation
+`6f7e9480-59fe-417e-8c49-fdfa4e4e8d3e` successfully published temporary recommendation
+`rec_i1agDBxsPa-K_NNspaou` with its processed photo. The UI nevertheless reported
+failure: the Android WorkManager scheduling branch implicitly returned
+`Operation.State.SUCCESS`, which the Expo bridge cannot serialize. The local native
+fix now returns `Unit` after awaiting scheduling; nine related JavaScript tests
+passed. Replacement demo build `5188cb24-f061-4104-8b38-1665d960209c` was created
+at `2026-09-20T13:33:35.152Z` (same app version/build `1.1.0` / `1`) and finished
+successfully at `2026-09-20T13:55:50.363Z`. Its APK SHA-256 is
+`53221c0d564b4c1534b56a8b140df6be8a5bef52be4c622459442a561c541b9e`;
+ADB installed the replacement on `emulator-5582` at `2026-09-20T13:59:33Z`,
+preserving notification permission. Package readback confirms `1.1.0` / `1` and
+target SDK 36. Native runtime verification passed: operation
+`27b94dae-eb9a-479b-8413-68b3552879a1` published `rec_-Gr6XynUwlbh03mmVTPF`
+with client and server success; the WorkManager bridge error did not recur.
+The first demo video is diagnostic only; it did not clearly capture the foreground
+notification. The temporary recommendation was removed through `deleteContent`
+after the demo media account's App Check token-verifier permission propagated.
+Independent readback returned 404, the processed media prefix contains zero objects,
+and the current recommendation draft is null.
+The final unedited recording is
+`.codex_tmp/validation/play-permission-video/planli-upload-notification-success.mp4`
+(168.347 seconds, 540 x 960). Frame inspection confirmed photo selection/save,
+the actual Android upload notification around 115-132 seconds, and successful
+publication around 155 seconds. Final operation
+`9b984c7c-5364-4a60-83c5-5c90184cbf03` transferred 363,575 bytes and completed
+successfully; the recommendation updated at `2026-09-20T14:32:40.661Z`.
+Android deferred the notification for short transfers. A temporary loopback
+HTTP CONNECT limiter slowed encrypted Storage upload bytes without intercepting
+TLS or changing app behavior. It was stopped and the emulator proxy removed;
+Wi-Fi and unrestricted network speed/zero added latency were restored.
+
+The final temporary post was deleted through `deleteContent` at
+`2026-09-20T14:35:15Z`. Its saved draft is null and both temporary recommendation
+IDs independently returned 404. Two superseded test-photo versions remained
+because the optional recommendation media cleanup trigger was not in the selected
+demo deployment. A dry-run checked their exact six object paths, synthetic owner,
+creation times, missing asset registry entries, and lack of live content/profile
+references; generation-conditional deletion completed at `2026-09-20T14:39:28Z`.
+At `2026-09-20T14:40:14Z`, both `media/android-permission-demo/` and
+`media-staging/android-permission-demo/` contained zero objects. Operation history
+remains available. No store submission or review had been requested at cleanup
+completion; the subsequent Play Console submission is recorded below.
+
+#### Google Play declaration and store-listing review (2026-09-20)
+
+The verified recording was edited to 30.000 seconds (H.264, 540 x 960, 30 fps;
+SHA-256 `84130a8cf7d1f3c160833c0c9867184a7d5e3f42182d4bf7b886f3812e0f6371`).
+It shows photo selection/save, the real upload notification, and return to the
+successfully published recommendation. The original recording remains unchanged.
+The review copy is stored in the existing demo bucket at
+`review-evidence/2026-09-20/planli-foreground-service-demo-30s-84130a8c.mp4`.
+Its shareable download link returned anonymous HTTP 200 with `video/mp4` and
+the matching checksum at `2026-09-20T15:17:35Z`. Bucket IAM, public-access
+prevention, Storage rules, and App Check settings were not changed. Keep this
+review-evidence object available while Google reviews the submission; its link
+and upload receipt are in ignored local validation artifacts.
+
+The `FOREGROUND_SERVICE_DATA_SYNC` declaration was saved with
+**Network processing > Other (uploading/downloading)** and that video URL.
+The user-authorized review request also includes the already-pending Hebrew
+(`iw-IL`) phone-screenshot store-listing change. At `2026-09-20T15:19Z`, Play
+Console showed **Changes in review**, with automated quick checks still running
+and a notice that forwarding to review follows successful checks. Managed
+publishing remains off. Review approval and publication are not yet verified;
+this request contains no new APK/AAB or native-fix release.
+
+The demo was built from the then-uncommitted `chore/android-permission-demo` working tree based on
+`f255030b730f5a7ad051d178c9710b70c12fb3ea`. Nineteen configuration guard tests and
+seven focused Firebase/App Check tests passed. The initial 19 selected demo Functions
+finished deployment at `2026-09-20T12:49:00Z`; independent inventory confirmed all
+19 ACTIVE, the demo media bucket, and `PLANLI_ENFORCE_APP_CHECK=true`. Supporting
+`getCurrentRouteDraft`, `resolveRecommendationDestination`, and `getReactionState`
+were subsequently deployed for the signed-in home/composer/detail flow. The last
+endpoint updated at `2026-09-20T13:39:19.761Z`; independent inventory at
+`2026-09-20T13:43Z` confirmed all 22 demo Functions ACTIVE. Firestore
+and Storage App Check enforcement is enabled. The emulator debug token is registered
+only in the demo project; its token exchange succeeded. Initial failed creation
+left 12 callable transport IAM bindings missing; these were restored to the standard
+Firebase callable configuration, with Auth/App Check checks retained. The demo core
+service account also received the specific App Check token-verifier role required
+by the existing guest-session replay protection. An authenticated draft read returned
+200 with no draft, an unauthenticated read returned 401, and authenticated London
+catalog search returned the approved synthetic destination. Its catalog entry was
+derived using the existing `catalogData` helper. Upload, foreground-service
+notification, successful publication, and temporary-content cleanup were exercised
+on Android 13 with the corrected demo native module. This is demo-build evidence;
+the production Play binary and Android 14+ transfer branch were not revalidated.
+Logs and environment receipts are
+ignored under `.codex_tmp/android-demo/`. No production build, OTA or deployment
+is part of this demo setup.
+
+### Background-upload rollout and Narguila recovery (2026-09-20)
+
+The installed TestFlight client enables native background transfers, but the nine
+background-operation Functions were absent from production. The user authorized
+completion of that backend rollout while retaining the existing iPhone binary and
+the failed Cusco/Narguila draft. Recovery is not yet device-verified.
+
+Source: `fix/background-upload-rollout`, commit
+`4cd18be85e9eded4278fca1b4d224a771a2af568`, based on main commit
+`f2a6de131f9bb84256d12c7ca9c6a76582618392`. Deployment ran from the reviewed
+working tree before this matching source commit was created. The prior map branch
+and unrelated root `app.json` remain preserved. The security review snapshot is
+`9b9eef348563762b36b680ebc43c469d0ece977d3b0c281e627b7efab86fe831`;
+the completed diff review found no reportable issues.
+
+At `2026-09-20T09:31Z`, the existing media runtime account was granted accessor
+access to only `REST_COUNTRIES_KEY` and `PUBLIC_RATE_LIMIT_KEY`, plus project
+Service Usage Consumer. The project's Cloud Storage service agent was initialized
+and granted Pub/Sub Publisher. The scoped index deploy submitted
+`jobs.cleanupAfter` (collection ascending) and `stops.mediaCleanupKeys`
+(collection-group array-contains, preserving the existing collection indexes).
+Both new index configurations were verified READY at `2026-09-20T09:36Z`. Existing
+`items.mediaCleanupKeys` is READY and the shared `jobs.expireAt` TTL remains ACTIVE;
+background jobs now use recursive scheduled retention through `cleanupAfter`.
+
+The existing `cleanupPreparedMediaScheduled` (media account) and
+`onNotificationPushWritten` (core account) were deployed with explicit Firebase
+CLI targets and independently verified ACTIVE, with update timestamps
+`2026-09-20T09:38:02Z`. The three workers were then independently verified ACTIVE:
+`onBackgroundMediaUploaded` at `09:43:02Z`, `onBackgroundOperationWritten` at
+`09:43:04Z`, and `maintainBackgroundOperationsScheduled` at `09:42:43Z`.
+Their media identities, EU bucket finalization filter, `eur3` Firestore job-path
+filter, retry policies, provider-secret bindings and enabled UTC five-minute
+schedule match the source. The five recovery callables
+`getBackgroundOperations`, `retryBackgroundOperation`,
+`acknowledgeBackgroundOperation`, `discardBackgroundOperation`, and
+`reportBackgroundTransferFailure` were deployed and independently verified ACTIVE,
+with update timestamps `2026-09-20T09:46:38Z`–`09:46:39Z`.
+Retry uses the Auth-capable media account; the other callables use the core account.
+Maintenance returned HTTP 200 on its scheduled `2026-09-20T09:47:00Z` run.
+Admission (`startBackgroundOperation`) was deployed last and verified ACTIVE at
+`2026-09-20T09:50:38Z`. All eleven targeted functions are now ACTIVE on Node.js 22
+in `europe-west1`, with minimum instances zero. The deployed worker archive
+`onBackgroundOperationWritten/function-source.zip`, generation
+`1789897306451099` in `gcf-v2-sources-633543026638-europe-west1`, exactly matches
+the reviewed local runtime, cleanup/deletion consumers and dependency lock.
+All six live callables returned HTTP 401 / `UNAUTHENTICATED` to identity-free
+requests at `2026-09-20T09:51:21Z`. The scoped runtime error read since the first
+consumer deployment returned zero errors; this does not prove device completion.
+
+Validation passed 266 focused backend tests and the isolated demo backend smoke:
+recommendation, route and avatar publication, interrupted transfer, explicit
+retry, duplicate events, ownership rejection and account deletion. Production
+source inspection confirms both deployed account-deletion functions already
+include background-job cleanup. A bounded read at `2026-09-20T09:32:35Z` checked
+all 71 recommendations and found no Narguila name match before recovery. The
+same pre-retry check at `2026-09-20T09:51:44Z` still found zero matches. The user
+has been asked to use the existing failed-job Retry control (retaining its
+operation ID), or Edit and resubmit the preserved draft when Retry is absent.
+
+Target device binary: TestFlight **1.1.2 (32)**, runtime/channel `1.3.0` /
+`production`, EAS build `6ae60b3a-b0a6-4659-a054-68a044004a35`, source
+`eb9770bc12c5accf16a8cb184e473d25d3f0b619`. The preserved map-branch release record
+reports Apple `VALID` / `IN_BETA_TESTING` on September 19 and submission
+`ddab3d31-1121-4310-905a-5cd3e4a06d9f`. The user confirmed the installed build as
+**1.1.2 (32)** and a retained failed draft. Photo rendering, Activity outcome,
+app-switch/lock recovery and single publication still require device evidence.
+This workflow creates no native build, OTA group or store submission.
+
+### Trip planner map, numbering and spacing OTA (2026-09-19)
+
+PR [#414](https://github.com/doric2000/PlanLi/pull/414) fixes the
+device-reported `NaN` stop number by using the draggable-list index contract
+with an identity fallback. The inline trip map is now a stable, non-interactive
+viewport on iPhone, while pan and zoom remain available in the full-screen map.
+Map timeouts no longer cover the stop list, and the list has explicit spacing
+below the map. PR [#415](https://github.com/doric2000/PlanLi/pull/415)
+records the independently verified iOS release.
+
+The iOS production channel now serves group
+`2936ac5c-4570-46cb-87ae-3934385cc215`, update
+`01a0ba24-99cd-78b1-aa7c-88f78af7f78c`, from source
+`9459ecaf5262d031ccd603eaed7decfa1c22dd53`. It was published at
+`2026-09-19T14:49:15.981Z` for runtime `1.3.0` and targets TestFlight
+**1.1.1 (30)**. Verified staging group
+`4ceeebdf-98b9-43b8-99cd-0508af76fc93` and production contain the same
+10,947,820-byte bundle with SHA-256
+`41797F009110FF8E2D2B8185B341CF94299B4EF037CAAFF468AD9E60435F470D`.
+
+The Android production channel now serves group
+`482b54f6-c7a7-4144-83fa-b8d7f9ee6d48`, update
+`01a0ba2c-9287-7f95-941a-90e07715966c`, from source
+`6d99be09f6cee218ac67385115a14896cefdd48b` (the same client code plus the
+iOS release record). It was published at `2026-09-19T14:57:58.407Z` for
+runtime `1.3.0` and targets Google Play internal-test **1.1.0 (10)**.
+Verified staging group `2a05be38-1de2-41b4-b701-7937b5b87a9e` and
+production contain the same 10,949,308-byte bundle with SHA-256
+`B87D6B726B5590AF26C66843A2C2EEA30121BF182A7892959BAF2E1B085BA5E7`.
+
+Focused map/editor regression coverage passed 22 tests, and release readiness
+passed all 89 affected client suites for both platforms. GitHub affected-client,
+CodeQL, Semgrep, secret and project-security checks passed before merge. Both
+platforms passed production-candidate, native-compatibility, immutable-artifact
+and production read-back verification. No native build, dependency/runtime/version
+change, store submission, Firebase or Hosting deployment occurred. Installed-device
+download and physical iPhone/Android rendering remain unverified. Immediate rollback
+targets are the preceding verified groups
+`e81e1c26-e9b5-4b3d-b331-b77c3e74e349` for iOS and
+`fb38f97f-d7ba-460b-92d3-d0e90450951a` for Android.
+
+### Trip planner stop-list and map-readiness OTA (2026-09-19)
+
+PR [#410](https://github.com/doric2000/PlanLi/pull/410) fixes the two
+device-only failures reported after the first map recovery release. The draggable
+stop list now gives its native outer container real flex height, so a trip whose
+counter reports stops cannot collapse to an invisible list. Map fitting now waits
+for the native map readiness event, with a deduplicated iOS region-ready fallback,
+instead of issuing an imperative camera command while MapKit is still starting.
+
+The iOS production channel now serves group
+`e81e1c26-e9b5-4b3d-b331-b77c3e74e349`, update
+`01a0b9ef-5dfb-7e50-82f3-967832ff0df6`, from source
+`101327917ebc680e942271814fb0bfa32bd1c5fe`. It was published at
+`2026-09-19T13:51:07.259Z` for runtime `1.3.0` and targets TestFlight
+**1.1.1 (30)**. Verified staging group
+`40c64744-73f3-444c-a65f-621cacaf7b89` and production contain the same
+10,947,020-byte bundle with SHA-256
+`817F10DB73D4F4E3048AAA9FFC2C887812AA99E264E483A2872E0C39BDEE3B8B`.
+
+The Android production channel now serves group
+`fb38f97f-d7ba-460b-92d3-d0e90450951a`, update
+`01a0b9f9-a76c-70b8-a09a-df76310d3173`, from source
+`5a30b3ccf4332f60e00b6e4473304a52b2a03b4f` (the same client code plus the
+iOS release record). It was published at `2026-09-19T14:02:21.420Z` for
+runtime `1.3.0` and targets Google Play internal-test **1.1.0 (10)**.
+Verified staging group `a31bf945-de80-46bf-a10f-5a05e63826f3` and production
+contain the same 10,948,120-byte bundle with SHA-256
+`50C2D90BFEECE0366183091B0A43E899031A898AB564D559D8FB29FBFF5DD9F5`.
+
+Focused map/editor regression coverage passed 19 tests, and release readiness
+passed all 89 affected client suites for both platforms. GitHub affected-client,
+CodeQL, Semgrep, secret and project-security checks passed before merge. Both
+platforms passed production-candidate, native-compatibility, immutable-artifact
+and production read-back verification. No native build, dependency/runtime/version
+change, store submission, Firebase or Hosting deployment occurred. Installed-device
+download and physical iPhone/Android rendering remain unverified. Immediate rollback
+targets are the preceding verified groups
+`86ae251a-3751-4950-a2da-e3247e22add2` for iOS and
+`55ec4021-f017-4d00-9470-f65c301f7d16` for Android.
+
+### Trip planner iPhone map recovery OTA (2026-09-19)
+
+PR [#405](https://github.com/doric2000/PlanLi/pull/405) restores the
+personal-trip map on iPhone by using Apple Maps on iOS, retaining Google Maps
+on Android, and waiting for each platform's reliable native readiness event.
+The trip editor now shows explicit loading and retry states instead of a silent
+gray map, resets map state when a day gains its first located stop, and keeps
+the inline map usable after closing full-screen mode. PR
+[#406](https://github.com/doric2000/PlanLi/pull/406), merged before release,
+also stabilizes place-search results across parent re-renders.
+
+The iOS production channel now serves group
+`86ae251a-3751-4950-a2da-e3247e22add2`, update
+`01a0b96e-8d3b-70e3-a609-bdb83a3a3a6c`, from source
+`64f88c15d04e89cfe90c04105c57a418bf1c7a45`. It was published at
+`2026-09-19T11:30:25.211Z` for runtime `1.3.0` and targets TestFlight
+**1.1.1 (30)**. Verified staging group
+`312ba1c4-68b1-49e0-87e3-452b6c488a64` and production contain the same
+10,970,300-byte bundle with SHA-256
+`28D840C8119AD12B19864D3C5AE253B97D128C5AA7675FE078F1BEC2323CCC09`.
+
+The Android production channel now serves group
+`55ec4021-f017-4d00-9470-f65c301f7d16`, update
+`01a0b97b-2293-758b-8043-2f8f4612cc24`, from source
+`015c085115ef10fda71727c02e3b7b3cdbda30c4` (the same client code plus the
+iOS release record). It was published at `2026-09-19T11:44:09.875Z` for
+runtime `1.3.0` and targets Google Play internal-test **1.1.0 (10)**.
+Verified staging group `0669fd0e-f4b3-4387-810e-3bca60364753` and production
+contain the same 10,888,088-byte bundle with SHA-256
+`59D5A2AD33A00DB22CF8A15291E2587EFA9880B7A42A87065BB198D7D5F6EFCC`.
+
+Release readiness passed 89 affected client suites for both platforms; the
+implementation's focused map/editor selection passed 17 tests. GitHub client,
+CodeQL, Semgrep, secret and project-security checks passed before merge. EAS
+build metadata, reviewed optional-native compatibility, staging/production
+source identity and immutable bundle hashes were independently verified for
+both platforms. No native build, dependency/runtime/version change, store
+submission, Firebase or Hosting deployment occurred. Installed-device download
+and physical iPhone/Android behavior remain unverified. Immediate rollback
+targets are the preceding verified groups
+`68ed932b-5146-43c8-a97f-2b3511d5eb9d` for iOS and
+`37a0acef-ad5b-4b0a-b744-9df4c02c951d` for Android.
+
+### Personal trip operation compatibility deployment (2026-09-19)
+
+Under explicit release authorization, Firebase CLI **15.30.2** deployed only the
+Node.js 22 v2 callable `applyPrivateTripOperations` to `planli-f0b12` in
+`europe-west1`. The deployment source was commit
+`d3f7f515a2213ef1530ab2a2a28ef855fcd6720d`; it completed at
+`2026-09-19T07:28:31.738552803Z` as active Cloud Run revision
+`applyprivatetripoperations-00002-yuh`. This server change preserves validated
+client stop IDs for batched recommendation additions so queued follow-up edits can
+address the same stops deterministically.
+
+Independent inventory verification confirmed the callable is active with 512 MB
+memory on Node.js 22, and the production log window from deployment start at
+`2026-09-19T07:26:52Z` contained no `ERROR` entries for the function. No other
+Function, Rules, index, Hosting target, native build or OTA was deployed in this
+step. The affected validation passed 92 client suites and three Functions test
+files before deployment. Authenticated device execution remains unverified. The
+client OTA completed afterward and is summarized below. The unrelated untracked
+root `app.json` was preserved and excluded.
+
+### Reliable personal trip planning OTA (2026-09-19)
+
+PR [#400](https://github.com/doric2000/PlanLi/pull/400) delivered the list-first
+trip workspace, identifiable saved/search selection, day and ideas targeting,
+custom stops, stable queued stop IDs, and explicit loading, empty, offline,
+conflict and map-failure recovery. PR
+[#401](https://github.com/doric2000/PlanLi/pull/401) renewed the fail-closed
+optional-native compatibility evidence after verifying that the changed operation
+recovery paths do not enable `PlanLiTransfers` in the installed binaries.
+
+The iOS production channel now serves group
+`68ed932b-5146-43c8-a97f-2b3511d5eb9d`, update
+`01a0b91c-d946-73d7-a4c5-5d678df89f71`, from source
+`48b683489f6aa7ab05afa6bba91885f5b98a587d`. It was published at
+`2026-09-19T10:01:10.726Z` for runtime `1.3.0` and targets TestFlight
+**1.1.1 (30)**. Verified staging candidate
+`802bd485-3ec4-4794-8dfb-213661f775a2` and production contain the same
+10,946,036-byte bundle with SHA-256
+`53800755F19EF526C6985A0BC35283B4DF0B9B3402627361D2BB889AAB7A3906`.
+
+The Android production channel now serves group
+`37a0acef-ad5b-4b0a-b744-9df4c02c951d`, update
+`01a0b927-dae0-7c85-ba08-6b0bd8c16f2b`, from source
+`280039f5618dd9647a26e49755aec027b78c7578`. It was published at
+`2026-09-19T10:13:12.032Z` for runtime `1.3.0` and targets Google Play
+internal-test **1.1.0 (10)**. Verified staging candidate
+`d398bda3-7ac5-477e-96f3-33fe0e9ebdac` and production contain the same
+10,946,988-byte bundle with SHA-256
+`6CC3A52EF4B842446FBE6CE2DCDEF1AAB382D005C5CD5E82BB0F0F11FFC07AED`.
+
+Release readiness passed 123 affected client suites and 12 Functions test files;
+the optional-native review additionally passed five focused suites / 55 tests.
+GitHub validation and security checks passed for the implementation and release
+evidence PRs. EAS readback and immutable-bundle verification passed for both
+platforms. No native build, dependency/runtime/version change, App Store or Play
+submission/review occurred. Installed-device application and post-update security
+smoke tests remain pending. The preceding verified rollback groups are
+`55bfcf70-1b1a-4320-aabd-a1939c83bbcb` for iOS and
+`e7a9dcf4-074b-4ed5-9d6d-3ba983ec2f20` for Android.
+
+### Android cumulative app and modal safe-area OTA (2026-09-18)
+
+The Android production channel now delivers the current application, including
+the photo-gallery and expanded-map safe-area fix. This is the first Android OTA
+for runtime `1.3.0`, so it includes the accumulated app changes since build 10.
+PR [#396](https://github.com/doric2000/PlanLi/pull/396) added Android support to the
+guarded publication workflow and merged after all applicable GitHub checks passed.
+Release source is `0c2a1013b9d22ac7ba7a654b81a470c3f4bcc3c4`.
+
+Verified staging candidate `59d68146-a933-4673-ba65-72ad22f9ffbc` was republished
+unchanged to [production group e7a9dcf4](https://expo.dev/accounts/doric2000/projects/client/updates/e7a9dcf4-074b-4ed5-9d6d-3ba983ec2f20)
+at `2026-09-18T19:17:21.715Z`, update `01a0b5f3-b0b3-7996-9164-2f879ce9795f`.
+Platform is Android, channel/environment `production`, runtime `1.3.0`. The
+10,845,096-byte bundle has SHA-256
+`E4DAD6359D3FCD70AE3B703B5BF86ABBF747525EA23045BC3F44DF7239E23916`.
+Independent EAS readback, public Android-channel delivery and immutable-bundle
+verification passed at `2026-09-18T19:18:09.435Z`. The same readback confirmed iOS
+still receives group `55bfcf70-1b1a-4320-aabd-a1939c83bbcb`; no iOS republish occurred.
+
+Target remains Google Play internal-test Android **1.1.0 (10)**, EAS build
+`b0648036-61d6-4af6-b659-442a22b603dc`. Fresh EAS metadata confirms the finished
+production build, runtime/channel and reviewed source
+`890d70110de37ad1814b79c7c1b2106e42b74a54`. The Play track's last recorded status
+is available to internal testers (September 9); no new Play submission, store
+review, native build, version change or Firebase deployment occurred. Installed
+tester OTA and physical Android rendering/touch behavior remain unverified.
+
+Native compatibility accepted only the reviewed fingerprint
+`acae1d5dac2ec822e7b09bcb8ebdac44dfe66220` against build fingerprint
+`ffa38603c423e70296ac74e695750ff8d59701db`. EAS comparison found only the optional
+PlanLiTransfers Android source/registration and the iOS-only version field.
+The absent module stays disabled and foreground queues remain available; see
+[Android compatibility review](../docs/eas-native-compatibility.md#android-ota-compatibility).
+
+Validation passed 155 affected client suites / 1,050 tests against build-10 source,
+42 release-tool tests, and 39 focused fallback/foreground-queue tests (overlapping
+selections). Selected Functions tests, Rules and Android config checks also passed.
+Build-style readiness was not fully green: `expo install --check` recommends newer
+SDK patch versions. The package manifest/lock and native dependencies are unchanged
+from build 10; no dependency upgrade was applied. Runtime UI validation remains
+unverified after the earlier Maestro startup/file-lock failure. Manual final review
+completed; CLI review could not start because its configured model requires a newer
+CLI. The unrelated untracked root `app.json` was preserved and excluded from release.
+
+There is no preceding Android OTA for runtime 1.3.0. An authorized rollback would
+target the embedded build for Android only; no rollback occurred.
+
+### Photo gallery and location map safe-area OTA (2026-09-18)
+
+The photo gallery and expanded location map now measure safe areas within their
+own native modal hierarchy, keeping close controls clear of system UI. Gallery
+pages fit the measured content viewport and preserve the active photo on resize.
+
+PR [#394](https://github.com/doric2000/PlanLi/pull/394) merged after all applicable
+GitHub checks passed, as release source
+`e9a911a3c292d92b8cf3dc6ebde059fb2543815c`. Verified staging candidate
+`b2981700-a3a4-4d29-a092-8de645c433d2` was republished unchanged to
+[production group 55bfcf70](https://expo.dev/accounts/doric2000/projects/client/updates/55bfcf70-1b1a-4320-aabd-a1939c83bbcb)
+at `2026-09-18T18:42:31.889Z`, update `01a0b5d3-cd51-728a-9fa0-9827047c0953`.
+Channel/environment is `production`, runtime `1.3.0`. The 10,843,748-byte bundle
+has SHA-256 `64E76F79FC7D4B829BC85558E67A49CC209E8350A9AEB38ABB77A9C9B44DF4F3`.
+Independent EAS readback, public production-channel delivery and immutable bundle
+verification passed at `2026-09-18T18:43:24.572Z`.
+
+Target remains TestFlight **1.1.1 (30)**, build
+`b16eca67-6291-4520-82b6-10cb1af190f5`. Native compatibility passed the existing
+reviewed fingerprint `f5fac23f11fb1f2c0b1adbaf545b164644c461d3`, with
+`PlanLiTransfers` disabled. No new native build, app-version change, Apple
+submission/review, Android OTA or Firebase deployment occurred. Installed tester
+OTA and physical iPhone safe-area rendering/touch behavior remain unverified.
+
+Validation: iOS OTA readiness passed 83 affected client suites / 571 tests against
+prior deployed source `d6a628de07d4a037c62c5848338749de58da68a4`, including the 22
+focused tests. Android gallery/location validation was attempted using the existing
+local development binary; it was stopped during app startup while Maestro reported
+Windows file-lock errors, before either flow completed. Android runtime behavior
+is unverified. Manual final diff review passed; CLI review could not start because
+the installed CLI does not support its configured model. Previous production group
+`5bcc513c-93de-4c26-83f2-afb4c59df47c` is the rollback target; no rollback occurred.
+The unrelated untracked root `app.json` was preserved and excluded from release.
+
+### Profile content scroll preservation OTA (2026-09-18)
+
+Switching between profile recommendations, routes and pending content preserves
+the scroll position, including short or empty categories. The list no longer
+remounts or explicitly scrolls to the top on a category change. Main-tab re-press
+continues to scroll to the top or refresh; window resizing clears preserved space.
+
+PR [#392](https://github.com/doric2000/PlanLi/pull/392) merged as release source
+`d6a628de07d4a037c62c5848338749de58da68a4` after all applicable GitHub checks passed.
+Verified staging candidate `2d5c7234-186f-4f7c-811a-f0985734b924` was republished
+without changing its bundle to
+[production group 5bcc513c](https://expo.dev/accounts/doric2000/projects/client/updates/5bcc513c-93de-4c26-83f2-afb4c59df47c)
+at `2026-09-18T17:44:56.312Z`, update `01a0b59f-12f8-780f-93a7-e9b6e53e777d`.
+Channel/environment is `production`, runtime `1.3.0`. The 10,901,832-byte bundle
+has SHA-256 `2D61E6EABC1F4286221D24D6E1F647AFA89D27E8896A714C8507EFBA19FF6353`.
+Independent EAS readback, public production-channel delivery and immutable bundle
+verification passed at `2026-09-18T17:45:35.380Z`.
+
+Target remains TestFlight **1.1.1 (30)**, build
+`b16eca67-6291-4520-82b6-10cb1af190f5`. Native compatibility passed the existing
+reviewed fingerprint `f5fac23f11fb1f2c0b1adbaf545b164644c461d3`, with
+`PlanLiTransfers` disabled. No new native build, version change, Apple submission
+or review, Android OTA, or Firebase deployment occurred. Installed tester OTA,
+physical iPhone rendering/scroll preservation and Android runtime remain unverified.
+
+Validation: 28 focused tests passed; iOS OTA readiness passed 6 affected suites /
+54 tests against prior deployed source `1af4bcde8586c04b7d5a26cc7da274ff7ba9fb7c`.
+These selections overlap. The final diff was reviewed manually; CLI review could
+not start because the installed CLI does not support its configured model.
+Previous production group `11aee9ca-cb5a-4f15-baf3-7cc962150a71` is the rollback
+target; no rollback occurred. The unrelated untracked root `app.json` was preserved
+and excluded from the release archive.
+
+### Branded recommendation markers OTA (2026-09-18)
+
+The community map now uses fixed-size navy PlanLi badges with white category
+icons and an orange selection outline. Missing marker container styles caused
+recommendations to resemble ordinary map icons. Google POI and transit labels
+are hidden on this map while streets, cities and park geometry remain visible.
+The Web recommendation list is unchanged.
+
+PR [#390](https://github.com/doric2000/PlanLi/pull/390) merged as release source
+`1af4bcde8586c04b7d5a26cc7da274ff7ba9fb7c` after all applicable GitHub checks passed.
+The guarded workflow verified candidate `730aac69-17ca-46e5-be74-fb505b4e6726`
+and republished its identical iOS bundle to
+[production group 11aee9ca](https://expo.dev/accounts/doric2000/projects/client/updates/11aee9ca-cb5a-4f15-baf3-7cc962150a71)
+at `2026-09-18T17:19:49.114Z`, update `01a0b588-137a-79d6-90f7-c31192bc6f41`.
+Channel/environment is `production`, runtime `1.3.0`. The bundle is 10,901,636
+bytes, SHA-256 `DDF93AF87F972F1E566E27DE629449F936935A98CB5410470D23C1C33583CEBA`.
+Independent EAS readback, public channel manifest and immutable bundle verification
+passed at `2026-09-18T17:20:37.815Z`.
+
+Target remains TestFlight **1.1.1 (30)**, build
+`b16eca67-6291-4520-82b6-10cb1af190f5`. Native compatibility passed the existing
+reviewed optional-module fingerprint `f5fac23f11fb1f2c0b1adbaf545b164644c461d3`;
+`PlanLiTransfers` remains disabled. No new native build, app-version change,
+Apple submission/review, Android OTA or Firebase deployment occurred.
+
+Validation passed **82 affected client suites / 563 tests**, including marker
+selection, accessibility, preview interaction and the Web list regression.
+iOS release readiness reused that unchanged receipt against the prior deployed
+source `afcaf386f54f06dda61c3808e1966f1841f4032d`. Final diff review was manual;
+the automated CLI review could not start because its installed version did not
+support the configured model. Physical iPhone application/rendering and Android
+runtime checks remain unverified. The previous production group
+`cab8b637-1885-4130-9e74-41a2de1934d4` is the rollback target; no rollback occurred.
+The unrelated untracked root `app.json` was preserved and excluded from release.
+
+### Map recommendation index production repair (2026-09-18)
+
+The production missing-index failure is corrected at the Firestore query layer.
+The latest pre-deploy app failures at `2026-09-18T14:05:29Z` were
+`FAILED_PRECONDITION: The query requires an index`. Under explicit release
+authorization, Firebase CLI **15.30.2** deployed only `firestore:indexes` from
+synchronized `main` source `ee963f8be1a74039eb25d626d1d6923d707013a9` to
+`planli-f0b12`, database `(default)`, Standard edition, `eur3`. The CLI completion
+receipt is `2026-09-18T16:22:50Z`; both new indexes were independently observed
+**READY** at `2026-09-18T16:27:59.806Z`:
+
+- Global approved/active geohash query: `CICAgLjohJMK`.
+- Regional approved/active geohash query: `CICAgLiKqYoK`.
+
+The live inventory now matches all **138** declared composite indexes. The
+previous 136 indexes were preserved, with no index removals or field-override/TTL
+changes. No Functions, Rules, Hosting, native build or additional OTA was deployed.
+At this index deployment, the iOS update was `cab8b637-1885-4130-9e74-41a2de1934d4`, targeting
+TestFlight **1.1.1 (30)** / runtime `1.3.0`, as recorded below.
+
+At `2026-09-18T16:28:15Z`, read-only queries against the live database passed all
+**22 geohash subqueries** across Tirana/global, Albania/global, Albania/regional
+and an empty Pacific viewport. Nonempty scenarios returned candidates and the
+empty scenario returned zero; active/approved filters and existing query bounds
+were retained. Only document-name projections were read and aggregate counts
+were recorded. This verifies actual index availability, not the callable's
+device authentication or the final map rendering.
+
+The post-READY log window through `2026-09-18T16:29:29Z` contained no new index
+errors and no new `getMapRecommendations` requests. The user subsequently
+confirmed that recommendations load again and supplied an iPhone screenshot with
+markers. This is user-reported recovery; the exact OTA applied on the device and
+Android runtime behavior remain unverified. The screenshot also identified poor
+visual distinction between PlanLi recommendations and Google places.
+Existing focused tests and release receipts were unchanged and reused. The
+unrelated untracked root `app.json` remains untouched.
+
+### Immediate map opening and explicit refresh OTA (2026-09-18)
+
+The iOS map opens immediately while location is acquired in the background.
+Recent, sufficiently accurate cached locations are checked alongside a Balanced
+measurement and a High-accuracy watcher. Location feedback is nonblocking, retry
+is available after eight seconds, and late fixes do not recenter a map that the
+user has moved or a focused recommendation. Explicit recommendation refresh now
+bypasses cache/backoff, deduplicates concurrent requests and retains existing
+markers when a refresh fails.
+
+PR [#387](https://github.com/doric2000/PlanLi/pull/387) merged as release source
+`afcaf386f54f06dda61c3808e1966f1841f4032d` after all applicable GitHub checks passed.
+The guarded EAS workflow verified candidate
+`e4349d73-6c29-42d7-9800-2478da4adc99` and republished the identical iOS launch
+bundle to [production group cab8b637](https://expo.dev/accounts/doric2000/projects/client/updates/cab8b637-1885-4130-9e74-41a2de1934d4)
+at `2026-09-18T13:57:54.801Z`, update
+`01a0b4cf-39f1-7d57-8701-a2c1f5ea35bd`, channel/environment `production`, runtime
+`1.3.0`. The bundle is 10,900,968 bytes with SHA-256
+`907C97545FFB3EC0A4E485BDA166475E58C349A6AACBBD49C8BEB24903C41E05`.
+At `2026-09-18T13:59:19.468Z`, independent EAS readback and the public production
+channel manifest returned the exact source, update, runtime and group above;
+the authenticated immutable bundle download matched that SHA-256.
+
+Target remains TestFlight **1.1.1 (30)**, EAS build
+`b16eca67-6291-4520-82b6-10cb1af190f5`. Native compatibility passed the existing
+reviewed optional-module fingerprint
+`f5fac23f11fb1f2c0b1adbaf545b164644c461d3`; `PlanLiTransfers` remains disabled on
+that binary. No new native build, app-version change, Apple submission/review,
+Android OTA, Hosting or Firebase deployment occurred. Physical iPhone download,
+application and map smoke testing remain pending; Android runtime testing is
+also unverified. The unrelated untracked root `app.json` was preserved and
+excluded from the release archive.
+
+At OTA publication, the missing active/approved geohash indexes had not yet been
+deployed, so the recommendation-loading incident remained open. The subsequent
+authorized index repair above verifies both indexes READY and successful live
+queries. The user subsequently confirmed loading recovery, as recorded above;
+the exact OTA installed on the device and location behavior remain unverified.
+
+Validation passed 59 selected client suites / 557 tests and two Functions suites /
+21 tests, including query/index correspondence. iOS OTA readiness reused the
+unchanged successful client receipt against deployed source
+`ef8ecccd1793d75e2fcc6da611aae380f28d2ad8`. The Web list regression test passed.
+Final diff review was manual; the CLI review could not start because the installed
+CLI did not support its configured model. The previous production group
+`8a22bdda-c841-43a8-8d8b-4bf73725cac9` is the whole-client rollback target; no
+rollback occurred.
+
+### Private live Trip Planner flagship rollout (2026-09-15)
+
+PlanLi's private live Trip Planner is implemented and released for iOS. The
+centered floating plus now opens three focused actions: publish a route, publish
+a recommendation, or create a personal trip; notifications remain available in
+the existing Profile overflow. A signed-in user can create and resume private
+trips, discover and add existing PlanLi recommendations, mix in custom stops,
+organize days and drag stops into order, switch driving/walking route calculation,
+inspect the route and numbered stops on the map, autosave, recover queued edits,
+share a revocable read-only trip, and copy a shared trip into an independent
+private plan. The interaction system covers loading, empty, retry, conflict,
+offline, route-unavailable and read-only states. Limits are 14 days, 150 stops
+per trip and 40 stops per day.
+
+The approved Figma source is
+[Trip Planner / Flagship](https://www.figma.com/design/tBs3j3G9lD12Q1qlpaLpSK?node-id=106-2)
+with the reusable component set at node `208:2`. It follows the current PlanLi
+RTL visual system and the 390 x 844 iPhone surface, with the planner's map,
+three-snap itinerary sheet, day rail, stop cards, creation/discovery/custom-stop
+flows, share/copy states and My Trips library reviewed for overflow and 44-point
+targets.
+
+PR [#382](https://github.com/doric2000/PlanLi/pull/382) delivered the system and
+merged as `431a804a800f9fc8b504590a8685f6e3aec25a86`. PR
+[#383](https://github.com/doric2000/PlanLi/pull/383), merged as
+`28e601d87ff3af1e49f5d5867153bf2b4fbd6946`, completed account-deletion cleanup.
+PR [#384](https://github.com/doric2000/PlanLi/pull/384), merged as
+`f71c5ace60854df6f194b78c14ad1e5582581657`, isolated all legacy public-trip
+triggers from private planner autosaves. PR
+[#385](https://github.com/doric2000/PlanLi/pull/385), merged as the release source
+`ef8ecccd1793d75e2fcc6da611aae380f28d2ad8`, renewed the fail-closed optional-native
+receipt without enabling `PlanLiTransfers`. All required GitHub validation and
+security checks passed. The unrelated untracked root `app.json` was preserved and
+excluded from every commit and release archive.
+
+Backend rollout completed in Firebase project `planli-f0b12`, Firestore `eur3`,
+at `2026-09-15T01:42:32Z`-`01:42:43Z`. All 18 selected v2 Functions are ACTIVE on
+Node.js 22 in `europe-west1`, default `minInstances: 0`, Firebase source hash
+`2c384e5dfe797b02df4abbb4728ebfaaf4e1699a`. They are `createPrivateTrip`,
+`listMyTrips`, `getPrivateTrip`, `applyPrivateTripOperations`, `deletePrivateTrip`,
+`createTripShare`, `revokeTripShare`, `getSharedTrip`, `copySharedTrip`,
+`discoverTripRecommendations`, `computePrivateTripRoute`, decommissioned legacy
+`saveTrip`, three isolated legacy trip triggers, daily runtime cleanup, and both
+account-deletion entry points. The representative planner revision is
+`createprivatetrip-00001-lok`. Google Routes API is enabled; route computation is
+server-owned, authenticated, rate-limited, bounded and returns only normalized
+route data. Unauthenticated planner probes returned 401 and the post-deploy query
+found zero relevant production errors.
+
+Firestore Rules release `cloud.firestore` uses ruleset
+`2fdfdde6-d1b3-491c-9f17-53e83f7fbf66`, updated at
+`2026-09-15T01:34:40Z`. Private trip roots and descendants deny all direct client
+access; writes and reads use the authenticated callable boundary. Composite index
+`CICAgLio34IK` for `trips(ownerId,state,updatedAt)` is READY. TTL on
+`tripOperationReceipts.expireAt` and `tripShareTokens.expireAt` is ACTIVE, with a
+scheduled cleanup fallback. Active-trip quota state and all private trip receipts,
+share tokens and descendants are included in account deletion. Hosting version
+`491a7389342af206`, release `1789436604543000`, went live at
+`2026-09-15T01:43:24Z` on [Firebase Hosting](https://planli-f0b12.web.app). Its
+`/trip/<token>` landing page returned 200, carried `noindex`, and exposed no token
+or trip content in the HTML.
+
+iOS production OTA was published at `2026-09-15T02:10:08.598Z` from release
+source `ef8ecccd1793d75e2fcc6da611aae380f28d2ad8`. Verified staging candidate
+`b3c8f31c-b59b-4793-83a2-87342604c909` was republished without another export to
+[production group 8a22bdda](https://expo.dev/accounts/doric2000/projects/client/updates/8a22bdda-c841-43a8-8d8b-4bf73725cac9), update
+`01a0a2d4-2a56-7760-9856-6ff65b8a8e67`, channel/environment `production`, runtime
+`1.3.0`. The immutable iOS launch bundle is 10,898,884 bytes, SHA-256
+`D052DECFB1E1D3E7899723A885BEEE3CFE03D2EE50A82C1321D147657D2A7983`.
+EAS independently returned the same group, update, runtime, iOS platform and clean
+Git commit. Target remains TestFlight **1.1.1 (30)**, build
+`b16eca67-6291-4520-82b6-10cb1af190f5`. No native build, app-version change,
+Apple submission/review or Android OTA was performed. Physical iPhone download,
+application and map/drag/share smoke testing remain unverified.
+
+Release validation passed the 128-test unchanged client receipt, 53 related
+Functions tests, Functions production audit and Firestore Rules emulator. The
+follow-up release guard passed six fallback suites / 48 tests and 23 EAS workflow
+tests; final GitHub affected-client, validation, secret scan and security
+invariants passed. A pre-merge security review found trip-count exhaustion,
+expired operation/share retention and unbounded shared-copy storage; the released
+system closes them with transactional 50-trip quotas, seven-day TTL plus scheduled
+cleanup, capped copies, complete deletion and trigger isolation. No auth bypass,
+private-data exposure, IDOR, provider credential leak or client-write path was
+found after remediation.
+
+Whole-client OTA rollback target is the preceding verified production group
+`61dfaa40-3579-4bde-b875-ff23081f3953`, source
+`9e499bbc2a31aacd7ebec836fa5bc56817c05e77`. OTA rollback does not revert the
+deployed Functions, Rules, indexes, TTL configuration or Hosting; those require a
+separate reviewed backend rollback. No rollback occurred.
+
+### Destination resolution and reviewed catalog rollout (2026-09-14)
+
+PR [#377](https://github.com/doric2000/PlanLi/pull/377) merged as
+`9e499bbc2a31aacd7ebec836fa5bc56817c05e77` after all applicable GitHub checks passed.
+This is the current production iOS runtime `1.3.0` update and the source of the
+destination backend rollout. The earlier Profile crash hotfix remains included.
+
+The Ksamil failure combined a stale country-registry cache with a fallback that
+treated a boolean as a destination record. The resolver now keeps the actual
+record and checks an atomic country revision before reusing registry data.
+Verified venues survive recoverable classification failures; a verified locality
+missing only Hebrew asks for its name without requiring venue reselection.
+Catalog identities are supported by classification, manual selection, publication,
+public search and admin quality/naming. Publication still requires a current
+approved destination and all existing ownership/moderation checks. See
+[destination flow, catalog policy and import procedure](../docs/destination-catalog-rollout.md).
+
+Backend: all 23 selected Functions were independently verified ACTIVE at
+`2026-09-14T17:58:47.307Z`, Node.js 22, `europe-west1`, `minInstances: 0`, with all
+traffic on their new revisions. Targets: `resolvePlaceSelection`,
+`resolveRecommendationDestination`, `saveRecommendation`, `publishRecommendationDraft`,
+`saveRoute`, `publishRouteDraft`, `getDestinationOverview`, `searchDestinations`,
+`getDestinationReview`, `recheckDestination`, `approveDestination`,
+`updateDestinationPolicy`, `deactivateDestination`, `setDestinationHebrewName`,
+`setDestinationAirport`, `selectDestinationImageCandidate`, `setDestinationUploadedImage`,
+`onDestinationImageCreated`, `auditDestinationQualityScheduled`,
+`onDestinationCatalogSync`, `onCountryDestinationCatalogSync`,
+`onDestinationRenameJobWritten` and `onCityFavoriteProjection`.
+The resolver/save/publication group has Firebase source hash
+`3b644d3ed089ba46db39ca04697fcdf02d4e1879`; resolver revision is
+`resolveplaceselection-00038-cir`. Unauthenticated resolver/save/publication probes
+returned 401, and the post-deploy error query returned no errors at verification.
+The first CLI attempt stopped before upload at its local discovery timeout;
+the bounded retry succeeded. No Rules, indexes, Hosting, IAM or quotas changed.
+
+iOS: published `2026-09-14T18:27:51.010Z`, channel/environment `production`, group
+[61dfaa40](https://expo.dev/accounts/doric2000/projects/client/updates/61dfaa40-3579-4bde-b875-ff23081f3953),
+update `01a0a12c-ec62-7466-a6dc-81384ed40a79`. Verified candidate
+`4f74b46d-fa82-4e19-8d4a-47c23a9e664f` was republished without another export.
+The immutable launch bundle is 10,710,412 bytes, SHA-256
+`D4F073F56AAFDF7780FE466F83AB7BB44588CAE13342699FC4021E500FF4FC45`.
+The public production-channel manifest independently served that exact update
+and hash at `2026-09-14T18:29:29.294Z`.
+
+Target remains TestFlight **1.1.1 (30)**, build
+`b16eca67-6291-4520-82b6-10cb1af190f5`, runtime `1.3.0`. Native compatibility passed
+the unchanged reviewed optional-module fingerprint
+`f5fac23f11fb1f2c0b1adbaf545b164644c461d3`; the optional background-transfer feature
+remains disabled on build 30. No new EAS/native production build, app version,
+Apple submission/review or Android OTA was performed. Physical iPhone download,
+application, location selection and map gestures remain unverified.
+
+Catalog: the authorized production apply finished on September 14 at 18:46 UTC:
+**2,961 new destinations, 37 links to existing destinations, two preserved
+restrictions and zero conflicts** across the existing 3,000-candidate list.
+The excluded records are the misidentified Sri Lanka South Coast and the already
+inactive Modi'in-Maccabim-Re'ut destination. Neither was reactivated.
+The catalog digest is
+`c827295a60609b5503d3cf415ab8fb250f1126d32489f9e9b1248fc2be525d9c`;
+the reviewed live-plan digest is
+`856498b6b74030fea1891eb9b597eca1907ea28d3462a089db0843d1d97574cf`.
+No bulk Google enrichment was run and the import created no new image-provider jobs.
+
+Independent production verification at `2026-09-14T19:07:59.587Z` checked all
+**2,998 eligible candidate bindings**, canonical policies, Hebrew names, public
+catalog entries and admin quality. The public catalog contains **3,012 active
+destinations** including destinations outside this candidate list. All **50
+recommendations** are active with valid references; destination holds, pending
+destination reviews and stale held admin projections are zero. The Absolute Hotel
+coordinates/locality evidence resolve to Ksamil, and Hoi An Dong ward evidence
+resolves to Hoi An, using the live registry without additional provider requests.
+The two inactive restrictions were independently checked again after the rollout.
+
+The import's background airport enrichment exposed a separate memory defect:
+the airport CSV parser retained all rows before filtering and the default
+256 MiB trigger exceeded its limit. PR [#378](https://github.com/doric2000/PlanLi/pull/378),
+merged as `2ebc8116e2d2eb465ff30d899ff6cb21375f41c6`, filters rows incrementally.
+The event function now has **512 MiB, concurrency 1, maxInstances 3, minInstances 0**.
+Only `onDestinationImageCreated`, `getAirportCandidates` and `setDestinationAirport`
+were updated in this follow-up. Independent verification at
+`2026-09-14T19:06:53.498Z` confirmed all three ACTIVE and observed successful real
+production events on `ondestinationimagecreated-00026-pig`, with no errors on
+that new revision in the complete queried window. Its Firebase source hash is
+`07b187bb8949734fa19c4670b6e9192237006b20`; the two airport callables use
+`f280807778f88e8d63a117cd9b0e96a56f7c546b`. The prior revision's memory errors are
+historical; this does not assert that every Eventarc retry has already drained.
+
+Validation: the main repair passed **17 client suites / 272 tests** and **54
+backend files / 567 tests**, focused manual-choice regression assertions, iOS OTA
+readiness and final defect review. The airport follow-up passed **124 related
+backend tests**. Its 14.6 MB / 200,000-row regression input exhausted a 64 MiB heap
+before the fix and passed afterward; local process RSS was about 53 MB. The
+public OTA manifest and immutable bundle hash were independently verified.
+
+The isolated `demo-planli-e2e` callable publication smoke passed on the final
+application source and the Android debug APK built successfully. A conditional
+Android Back fallback in the test bootstrap was exercised: it dismissed an Expo
+SDK 57 developer menu left open by the Close accessibility tap. The native flow
+then reached the recommendation composer and visibly rendered the synthetic
+London provider result, but Maestro could not locate its expected result ID.
+The complete map expansion/retry/confirmation flow therefore remains unverified;
+no native map or physical iPhone pass is claimed. No additional native production
+build or OTA was needed for the airport parser or test-helper changes.
+
+Whole-OTA rollback target: the preceding verified Profile hotfix group
+`5df5a17d-d574-415f-968d-7d8a747b55db`, source
+`0940c79062e9fdf099a3ddeb2af2f14690ba4281`. It preserves the Profile crash fix but
+removes this release's client recovery. Backend/catalog changes require their
+own scoped review; OTA rollback does not revert data or Functions. No rollback occurred.
+
+### Profile entry crash hotfix (2026-09-13 local / 2026-09-12 UTC)
+
+Historical release, superseded by the destination rollout above; its fix remains included.
+
+PR [#375](https://github.com/doric2000/PlanLi/pull/375) merged as
+`0940c79062e9fdf099a3ddeb2af2f14690ba4281` after all applicable GitHub checks passed.
+This was the production iOS runtime `1.3.0` update. The Community design
+below is preserved. The crash came from PR #371's avatar synchronization hook:
+before the user snapshot arrives, both IDs are undefined, so the old equality
+check passed and dereferenced a null saved upload. The hook now requires a user
+ID, matching saved owner and a usable avatar URL before applying the photo.
+
+Published `2026-09-12T23:36:31.039Z`, channel/environment `production`, group
+[5df5a17d](https://expo.dev/accounts/doric2000/projects/client/updates/5df5a17d-d574-415f-968d-7d8a747b55db),
+update `01a097fa-cc3f-7589-9d5b-7b2bdcbb82c6`. Verified staging candidate
+`9b0dff2f-5318-45b1-acbe-84a1db48f401` (production environment) was republished
+without another export. The immutable launch bundle is 10,768,320 bytes, SHA-256
+`88DF83F7717EEA5D9ECCF0996A847EE9DCB8D0DB914BDADE658F7F38EAA4CE6D`.
+The public channel manifest independently served that exact update and hash at
+`2026-09-12T23:36:55.952Z`; public iOS runtime `1.2.0` and Android runtime `1.3.0`
+responses were unchanged.
+
+Target remains TestFlight **1.1.1 (30)**, build
+`b16eca67-6291-4520-82b6-10cb1af190f5`, runtime `1.3.0`. The pre-upload native
+guard passed with the unchanged reviewed optional-module fingerprint `f5fac23f11fb1f2c0b1adbaf545b164644c461d3`;
+the optional background-transfer feature remains disabled on build 30. No native
+build, version change, Apple submission/review, Android OTA or backend deployment
+was performed. Download/application of this hotfix on the physical iPhone is
+pending verification; the preceding Community OTA was reported to crash on Profile entry.
+
+Validation: the new real-screen/delayed-user regression reproduced the null-asset
+exception before the fix. After the fix, 35 focused profile/photo tests and the
+45-test related navigation/profile OTA readiness selection passed (overlapping
+selections). A production-mode browser fixture exercised the real ProfileScreen,
+useCurrentUser and photo hook with held user snapshots, repeated tab entry and
+direct own/public profile entry without console errors; presentation and external
+data services were mocked. Final defect review found no actionable findings.
+Physical iPhone entry/re-entry and avatar display checks remain pending; Android
+emulator testing remains waived.
+
+Rollback: retain this source commit and the Codex checkpoint at `10561229c854aa2cd1997332d2a26a45bd59a072`
+for source comparison. **Do not restore the immediately preceding OTA
+`638d125b-fa3a-47c7-9d78-c8c3d767229f` as a stability rollback: it contains this crash.**
+The earlier artifact-verified emergency rollback group is
+`05fe7bdd-4153-43b3-a24b-14d49b3fd5c7` (iOS only, runtime `1.3.0`, source `c6ea08e063e3f5365de598c0b2138df3316ff1d1`);
+republishing it would also remove the Community redesign and operation-feedback
+JavaScript. Its physical-device validation remains unverified. No rollback was performed.
+
+The repeated iOS fingerprint warnings are addressed by a tracked, pre-upload
+native compatibility guard and deterministic Git-archive packaging. See
+[native compatibility findings and release commands](../docs/eas-native-compatibility.md).
+The release-tooling change itself did not publish an OTA or change the installed build;
+the hotfix above used that guarded workflow.
+
+### Community redesign iPhone OTA (2026-09-11 local / 2026-09-10 UTC)
+
+Historical release, superseded by the Profile entry hotfix above.
+
+PR [#372](https://github.com/doric2000/PlanLi/pull/372) merged as
+`7c420beef68f9b61c41f9bf544e5891af99ba29e` after all applicable GitHub checks passed.
+The approved Figma Community redesign is now published for iOS: compact shared
+header, Recommendations/Routes tabs, 16:10 photos, two-line excerpts and Read more,
+independent search/filter/sort choices, destination suggestions and loading/empty/retry
+states. Kosher/accessibility filters remain; unused route audience/experience fields
+were removed from the UI and request only. Existing navigation and card actions remain.
+
+Published `2026-09-10T21:31:02.981Z`, channel/environment `production`,
+runtime `1.3.0`, group [638d125b](https://expo.dev/accounts/doric2000/projects/client/updates/638d125b-fa3a-47c7-9d78-c8c3d767229f),
+update `01a08d3b-35c5-71bd-aaff-5bcf2574c891`. Candidate group
+`65908052-d5e3-4dbf-be40-5cab871957fd` used production variables on staging;
+the identical artifact was republished without a second export. Independent verification
+at `2026-09-10T21:31:39.938Z` checked the immutable launch bundle, production
+environment, source commit and public channel manifest. Bundle: 10,768,092 bytes;
+SHA-256 `59351ccd5c0c702ad574368813c6569d6536b02dee71fb57087a027e39c27fb2`. All 1140 archived tracked files matched Git
+blobs, allowing text CRLF normalization. The unrelated root app.json was preserved
+and excluded from the release archive.
+
+Target remains TestFlight **1.1.1 (30)**, EAS build
+`b16eca67-6291-4520-82b6-10cb1af190f5`, runtime `1.3.0`.
+No build, version change, Apple submission/review, Android OTA or backend deployment
+was performed. Public iOS runtime 1.2.0 and Android runtime 1.3.0 responses were unchanged.
+Actual download/application on the user's iPhone remains unverified.
+
+The source also includes PR #371's previously merged JavaScript operation feedback,
+Activity history and avatar queue. Its native/server background-transfer rollout remains
+pending. The candidate fingerprint `f5fac23f11fb1f2c0b1adbaf545b164644c461d3`
+differs from build 30's `0b5dd5996352ba381e65fc1a036a28eae3000516`.
+Server fingerprint comparison found exactly two deltas: the optional PlanLiTransfers
+iOS directory and its autolinking registration. Removing only that registration made
+the existing autolinking configuration identical; existing native inputs and dependency
+hashes match. An isolated execution of the actual bridge/service with the native module
+absent confirmed a null optional import and disabled background transfers. Legacy
+recommendation/avatar paths were covered by the release tests. This is a documented
+backward-compatibility assessment, not a claim that fingerprints match or that a physical
+iPhone native test passed. No new native module is delivered by this OTA.
+
+Validation: iOS OTA readiness against previous production commit
+`c6ea08e063e3f5365de598c0b2138df3316ff1d1` passed **85 suites / 731 tests**.
+The final read-only review found no remaining actionable findings. A mocked Web preview
+using real components/navigators covered search, per-tab state, filter cancellation,
+map/list and preserved scrolling, error recovery and 320/390px layouts. Physical iPhone
+keyboard, map gestures, VoiceOver and rendering checks remain pending; Android emulator
+testing was waived. See [iPhone checklist](../docs/community-redesign-implementation.md).
+
+Immediate whole-OTA rollback: republish group
+`05fe7bdd-4153-43b3-a24b-14d49b3fd5c7` to production for iOS/runtime 1.3.0.
+That also rolls back the operation-feedback JavaScript included in this release. A
+Community-only source rollback uses the scoped Codex checkpoint at
+`C:/Users/doric/Desktop/PlanLi-Community-Figma/implementation-checkpoint`, baseline
+`888b97a87231e90d3bf15e06740c468eb31d62c8`, preserving unrelated changes.
+Local artifact/proof records use `.codex_tmp/validation/community-design-*`.
+
+### Operation feedback — JavaScript published; native rollout pending
+
+The implementation on `feat/operation-feedback`, based on `161270d`, adds
+shared progress/outcome feedback, private Activity history, a root-owned avatar
+queue, and optional native transfers with server-owned completion. See
+[operation feedback and release requirements](../docs/operation-feedback.md).
+Focused client/recovery tests and a browser fixture passed. Automated CLI review
+was unavailable because CLI 0.151.0 does not support its configured model; the
+diff was reviewed manually.
+
+The local Android candidate is `com.planli.planlitravels.e2e`, version `1.1.0 (1)`,
+runtime `1.3.0`, using `demo-planli-e2e` and disabled OTA. Its debug APK built at
+`2026-09-10T15:03:03.307Z`; the native receipt matches the current inputs.
+The Firebase emulators confirmed autonomous avatar processing/save and recommendation
+publication. The APK was installed on the local Android emulator and its JavaScript
+bundle compiled. At `2026-09-10T15:24Z`, the device flow failed in the existing Expo
+developer-menu Close step, before reaching app assertions; System UI had also
+reported an ANR under host memory pressure. The publication-to-Activity device flow
+remains unverified. The Community OTA above now distributes the JavaScript feedback,
+Activity history and root-owned avatar queue from merged PR #371. Build 30 uses the
+existing JavaScript transfer path. No physical iPhone native test, new EAS build,
+submission, backend/index deployment, IAM change or production-data write has occurred.
+Native background transfers and server completion remain unreleased.
+
+### Consistent profile-menu transitions iPhone OTA (2026-09-10)
+
+PR [#369](https://github.com/doric2000/PlanLi/pull/369) merged as
+`c6ea08e063e3f5365de598c0b2138df3316ff1d1` after all applicable CI checks passed.
+The profile destinations and their account/settings subpages now share the
+existing iOS horizontal slide, RTL gesture direction and opening/closing timing.
+Screen-mode navigation headers move with their page; Android retains platform
+defaults. Drawer actions wait for actual closing completion, ignore repeated taps,
+and cancel when the account changes, the drawer reopens or the flow unmounts.
+Support remains a dialog. The installed Drawer 7.7 targets completion events at
+the navigator key, so a small adapter observes the public DrawerView emitter and
+preserves its normal delivery. Routes, parameters and native dependencies are unchanged.
+
+The authorized iOS OTA was published at `2026-09-10T12:22:18.594Z`, channel/environment
+`production`, runtime `1.3.0`, group
+[05fe7bdd](https://expo.dev/accounts/doric2000/projects/client/updates/05fe7bdd-4153-43b3-a24b-14d49b3fd5c7),
+update `01a08b44-d2e2-7e0b-ae93-e402fb1a6895`. Candidate group
+`a343533f-96eb-4b10-8375-7832327e3887` used production variables on staging;
+the identical artifact was promoted without another export. At
+`2026-09-10T12:22:48.487Z`, the downloaded immutable launch bundle,
+server environment, native fingerprint and public production-channel manifest
+were independently verified. Bundle: 10,622,340 bytes; SHA-256
+`ff1444bff1ee25f7db63d1b95132622e4585364775c31160c6e5f29affe9f5cc`.
+
+All 1098 archived files matched their Git blobs, allowing only
+CRLF normalization for text. Native metadata bytes and source inputs match the
+installed TestFlight **1.1.1 (30)**, EAS build
+`b16eca67-6291-4520-82b6-10cb1af190f5`, fingerprint
+`0b5dd5996352ba381e65fc1a036a28eae3000516`. No native build, app-version change,
+Apple submission/review, Android OTA or backend deployment occurred.
+Public iOS runtime 1.2.0 and Android runtime 1.3.0 responses were unchanged.
+The unrelated root app.json was preserved and excluded from the archive.
+This supersedes the badge/avatar OTA below while retaining its fixes.
+
+Validation: iOS OTA readiness against
+`2a26b5521c042d4e0763deda8d5c31125cd0ee4e` passed 6 suites / 40 tests,
+including transition configuration, drawer sequencing/cancellation and Edit
+Profile's unsaved-change back/POP guard. A browser fixture used the real stack,
+drawer, headers and leave guard with mocked data, a loading state, and iOS
+interpolation forced on Web. At 390px, Edit Profile, Settings, Change Name,
+Notifications and Notification Settings each had zero relative header/body
+drift during opening and returning (387-390px travel). Observation used a
+slower linear timing in the fixture only. Discard-dialog cancel/confirm worked.
+Manual final diff review completed; the previously recorded CLI/model
+incompatibility prevents automated CLI review. Android emulator testing remains
+waived. Physical iPhone download/application, native spring timing, interactive
+and cancelled swipe gestures, and absence of device-only flashes remain unverified.
+
+Immediate rollback group: `5829a5e8-1041-4ab2-9b91-f75784f0d297`.
+Source checkpoint: `d77095674f435b0b0b68ee46ffb19892ded7d1e7`;
+local record: `.codex_tmp/design-backups/profile-transitions-20260910/checkpoint.json`.
+See [iPhone checks and rollback details](../docs/navigation-refresh-iphone-checklist.md).
+
+### Profile unread badge and Home avatar iPhone OTA (2026-09-10)
+
+The user's iPhone feedback on the integrated navigation requested a notification
+count in place of the Profile dot and exposed an offset Home header avatar.
+PR [#367](https://github.com/doric2000/PlanLi/pull/367) merged as
+`2a26b5521c042d4e0763deda8d5c31125cd0ee4e` after all applicable CI checks passed.
+The Profile badge uses the existing unread count, hides at zero, displays 99+
+above 99 and exposes the full count to screen readers. Home now uses Avatar's
+existing insideRing mode, removing its native side margin inside the 44px frame
+for both photos and placeholders. Shared header geometry is unchanged.
+
+Continuing the authorized iPhone/TestFlight production update workflow, this iOS
+OTA was published at `2026-09-10T11:14:13.069Z`, channel/environment
+`production`, runtime `1.3.0`, group
+[5829a5e8](https://expo.dev/accounts/doric2000/projects/client/updates/5829a5e8-1041-4ab2-9b91-f75784f0d297),
+update `01a08b06-7bcd-78ec-8fb2-e41b12af0063`. Candidate group
+`c7399b9d-7a42-4429-aee8-1471aaa03e82` used production variables on staging;
+the identical artifact was promoted without another export. At
+`2026-09-10T11:14:39.167Z`, the downloaded immutable launch bundle,
+server environment, native fingerprint and public production-channel manifest
+were independently verified. Bundle: 10,677,040 bytes; SHA-256
+`50c4a413863c7b57dffd422fb7ed53a77da2bb4c92715283a631ceded4f3ad38`.
+
+All 1096 archived files matched their Git blobs, allowing only
+CRLF normalization for text. Native metadata bytes match the installed binary;
+native source inputs are unchanged. TestFlight remains **1.1.1 (30)**,
+EAS build `b16eca67-6291-4520-82b6-10cb1af190f5`, fingerprint
+`0b5dd5996352ba381e65fc1a036a28eae3000516`. No native build, app-version
+change, Apple submission/review, Android OTA or backend deployment occurred.
+The unrelated root app.json was preserved and excluded from the archive. Public
+iOS runtime 1.2.0 and Android runtime 1.3.0 responses were unchanged after release.
+This supersedes the navigation OTA below while retaining that implementation.
+
+Validation: 9 related suites / 72 tests passed; iOS OTA readiness against
+`193f98b77f128068ecb27d580757243997765ca0` reused matching receipts.
+A browser fixture with the native Avatar style branch exercised 320/390px,
+counts 0/1/12/123, guest state, photo/placeholder alignment and accessible labels.
+Manual final diff review completed; the previously recorded CLI/model
+incompatibility prevents automated CLI review. Android emulator testing remains
+waived by the user. The supplied screenshot confirms the preceding navigation
+update was rendered on the user's iPhone; this new OTA's download, application,
+rendering and live notification-count changes remain pending device verification.
+
+Immediate rollback group: `ed896780-d9d1-47b8-bf26-848a035f0616`.
+Source checkpoint before these two changes:
+`69aef03d9d85a0061181f5ebc595e1236c17b75e`; local record:
+`.codex_tmp/design-backups/profile-badge-avatar-20260910/checkpoint.json`.
+See [iPhone checks and rollback details](../docs/navigation-refresh-iphone-checklist.md).
+
+### Integrated navigation iPhone OTA (2026-09-10)
+
+PR [#365](https://github.com/doric2000/PlanLi/pull/365) merged as
+`193f98b77f128068ecb27d580757243997765ca0` after all applicable CI checks passed.
+The main bar now has five equal slots: Home, Community, integrated center plus,
+Favorites and Profile (RTL). The plus opens the existing recommendation/public
+route composers. Private trip planning is explicitly Coming soon. Community
+retains separate recommendation/route search, filters, scroll and map state;
+notifications open through the authenticated Profile drawer/root stack.
+
+The user explicitly requested this iOS EAS Update for their TestFlight build on
+the production channel. Published at `2026-09-10T10:36:06.773Z`, channel/environment
+`production`, runtime `1.3.0`, group
+[ed896780](https://expo.dev/accounts/doric2000/projects/client/updates/ed896780-d9d1-47b8-bf26-848a035f0616),
+update `01a08ae3-98f5-7932-85cd-4ccbd7b8e3e6`. Candidate group
+`23109828-9705-4ba1-8790-ab883d31e2f5` used production variables on staging; its
+identical artifact was promoted without another export. At
+`2026-09-10T10:36:24.673Z`, the immutable launch bundle, server environment,
+native fingerprint and public production-channel manifest were independently
+verified. Bundle: 10,631,696 bytes; SHA-256
+`358d24ffb24fe8c9caba91d8f2c0446953fc285343860f0e003bd89bcc80adf2`.
+
+All 1096 archived files matched their Git blobs (normalizing line endings for
+three native metadata files). An initial staging candidate had a fingerprint
+mismatch caused solely by LF/CRLF differences in .gitignore, eas.json and the
+iOS Firebase plist. Those files were restored to the existing binary's exact
+bytes; the same exported bundle was reused and its fingerprint revalidated.
+First staging group `20c6c374-a1e8-4d2c-bd49-af8413844992` was never
+promoted to production. The unrelated root
+`app.json` was preserved and excluded. Native inputs match the installed
+TestFlight **1.1.1 (30)**, EAS build `b16eca67-6291-4520-82b6-10cb1af190f5`;
+fingerprint `0b5dd5996352ba381e65fc1a036a28eae3000516`.
+No native build, version change, Apple submission/review, Android OTA or backend
+deployment occurred. The public iOS runtime 1.2.0 manifest and Android runtime
+1.3.0 response were unchanged before/after promotion. This record supersedes the
+Home/Profile correction below while retaining those fixes.
+
+OTA readiness against `d5dfb305` passed 57 related suites / 492 tests.
+The navigation/create/community-switch components were exercised at 320/390px
+widths in a browser fixture. Android emulator testing was explicitly waived by
+the user; physical iPhone application, rendering, auth and push behavior for
+this update remain pending. Manual final diff review completed; the previously
+recorded CLI/model incompatibility prevented automated CLI review.
+
+Immediate rollback group: `7950ae31-5993-4795-aabf-39506c72939c`.
+The Codex source checkpoint remains `213065097abcb7c4d399851cb610db8732cab769`.
+See [iPhone checks and rollback details](../docs/navigation-refresh-iphone-checklist.md).
+
+### iPhone Home/Profile layout correction (2026-09-10)
+
+The user's first iPhone screenshots of the refresh revealed a navy strip below
+the floating profile tab bar and a Home region photo that did not fill its card.
+PR [#363](https://github.com/doric2000/PlanLi/pull/363) merged as
+`d5dfb30589b2c89952a1cf5c44386efbb16c1730` after all applicable CI checks passed.
+Profile now excludes the bottom safe-area padding from its navy container,
+allowing the sand list surface to continue behind the navigation. Existing list
+clearance is retained. Home moves content padding into an inner view so the
+photo and gradient fill the entire clipped card.
+
+The iOS OTA was published at `2026-09-10T08:40:47.784Z`, channel/environment
+`production`, runtime `1.3.0`, group
+[7950ae31](https://expo.dev/accounts/doric2000/projects/client/updates/7950ae31-5993-4795-aabf-39506c72939c),
+update `01a08a7a-05a8-7d90-b3f2-5b5d972944b4`. Candidate group
+`83d5f17b-8140-42ed-a703-26aa7ad100a7` used production variables on staging;
+the same artifact was promoted without another export. At
+`2026-09-10T08:41:13.751Z`, the downloaded immutable bundle and public
+production-channel manifest matched the source and update. Bundle: 10,668,412
+bytes; SHA-256 `3b84d9358e0d45c63488d208777f2a112436c3e003a1705e29b0cda459f700aa`.
+The archive matched all 1,083 tracked Git blobs and preserved/excluded the
+unrelated untracked root `app.json`. Release identity, environment, main lineage
+and native compatibility checks were retained.
+
+Native fingerprint `0b5dd5996352ba381e65fc1a036a28eae3000516` matches existing
+TestFlight **1.1.1 (30)**, EAS build `b16eca67-6291-4520-82b6-10cb1af190f5`.
+No native build, app version change, Apple submission/review, Android OTA or
+backend deployment was performed. The user's screenshots establish that the
+refresh was displayed on their iPhone; the exact installed update ID and
+application of this correction remain unverified.
+
+OTA readiness against deployed `b6c46f1` passed 45 tests in six affected suites.
+A real-component React Native Web fixture with a 34px bottom inset and floating
+navigation verified matching photo/card bounds at 320/390px widths, retained
+global recommendation navigation, and a profile list reaching the bottom with
+zero navy bottom padding. These checks do not replace physical iPhone validation.
+The final diff was directly reviewed; the previously recorded CLI/model mismatch
+still prevents automated CLI review. Immediate rollback group:
+`514b2a9b-6ff8-49fb-bb5a-8acb9926aa1c`. The pre-redesign source checkpoint is
+also preserved. See [refresh and rollback details](../docs/home-profile-design-refresh.md).
+
+### Home, Profile and drawer iPhone update (2026-09-10)
+
+The layout correction above supersedes this OTA and retains the refresh below.
+
+PR [#361](https://github.com/doric2000/PlanLi/pull/361) merged as
+`b6c46f1caead3c3a47a6f406f9c09a2c0b2f47f3` after all applicable CI checks passed.
+Home now uses the approved photo dashboard and quick actions; the profile keeps
+the full avatar visible; the right drawer separates icons, labels and badges.
+Existing Atlas, route editor, data services and authorization remain connected.
+
+The user explicitly selected TestFlight on the production channel. The iOS OTA
+was published at `2026-09-10T08:18:00.331Z`, channel/environment `production`,
+runtime `1.3.0`, group
+[514b2a9b](https://expo.dev/accounts/doric2000/projects/client/updates/514b2a9b-6ff8-49fb-bb5a-8acb9926aa1c),
+update `01a08a65-280b-7cd5-8b61-619d14adf0f5`.
+Candidate group `fe0aa846-07d2-47a5-a7b1-94db167ff024` used the production
+environment on staging; the identical artifact was promoted without another export.
+At `2026-09-10T08:18:42.568Z`, the immutable update, downloaded launch bundle
+and public production-channel manifest independently matched the source and update.
+Bundle: 10,611,820 bytes; SHA-256
+`99fe37cdb38afea98c450c685663f39f889af760c9b95d11d5c866f3272166d7`.
+
+The native fingerprint `0b5dd5996352ba381e65fc1a036a28eae3000516` matches
+existing iOS TestFlight **1.1.1 (30)**, EAS build
+`b16eca67-6291-4520-82b6-10cb1af190f5`. Fresh Apple status reported that build
+VALID / IN_BETA_TESTING. The public App Store version remains 1.1.0 (28), runtime
+1.2.0, READY_FOR_DISTRIBUTION. At `2026-09-10T08:19:20.979Z`, its public
+manifest/update `01a085cb-9dad-7568-9594-49f06866f57c` was unchanged;
+Android runtime 1.3.0 still returned no OTA (HTTP 204). No new native build,
+Apple submission/review, Android OTA or backend deployment was performed.
+
+OTA readiness against deployed source `872642e` passed 16 affected client
+suites / 120 tests. Browser checks covered 320/390px layouts, long names, guest
+content, profile tabs and the drawer. The automated CLI review could not start
+because its installed version does not support the configured model; a direct
+diff review was completed. Physical iPhone download/application, native RTL,
+enlarged text, photo upload and real authenticated flows remain unverified.
+The existing TestFlight installation has not been independently inspected.
+
+The immutable release archive matched all 1,083 tracked Git blobs. The unrelated
+untracked root `app.json` was preserved and excluded; account, project,
+production environment, lineage, native compatibility and artifact checks were
+retained. Archive mode supplied verified commit metadata and one export worker.
+The source checkpoint and verified backup remain available for Codex-only,
+per-surface restoration; there is no in-app design switch. Immediate OTA rollback
+group: `619dddfc-7bd4-4efe-a432-98d75e16f61d`.
+Open PlanLi from TestFlight 1.1.1 (30) online, then close and reopen if needed to
+apply the update. See [refresh and rollback details](../docs/home-profile-design-refresh.md).
+
+### Route editor usability iPhone update (2026-09-10)
+
+The iOS OTA below is superseded by the Home/Profile/drawer update above; the
+route editor changes and deployed indexes remain included.
+
+PR [#359](https://github.com/doric2000/PlanLi/pull/359) merged as
+`872642e261eb52eb5b3fb248caa04bd4e0925481` after all applicable CI checks passed.
+The update adds explicit completion and collapse actions, one main editing scroll
+surface, RTL day tabs, a separate bounded stop sorter and destination-scoped,
+searchable PlanLi recommendation selection. Draft text and media remain mounted
+when switching modes.
+
+Release readiness against the previous deployed source `3b4473c` passed:
+604 client tests in 87 affected suites and 14 Firestore index tests. Final review
+found no actionable issues. A 360x740 React Native Web harness exercised scrolling,
+RTL, collapse/focus, sorting arrows, recommendation search, selection and cancel.
+The CLI review attempt was unavailable because its installed version does not
+support the selected model; a direct review was completed instead.
+
+Six new recommendation indexes were deployed with the exact
+`--only firestore:indexes` target to `planli-f0b12` / `(default)` / `eur3`.
+At `2026-09-10T05:54:51.388Z`, independent inventory verification found
+all six READY and all 128 previous indexes preserved (134 total).
+
+The iOS OTA is available on channel/environment `production`, runtime `1.3.0`:
+group `619dddfc-7bd4-4efe-a432-98d75e16f61d`, update
+`01a089e5-b9ed-7ee6-891f-8d6c19ea2399`, published `2026-09-10T05:58:49.069Z`.
+Candidate group `d0cfaff3-d836-4425-8b35-a007e4f49064` used the production
+environment on staging. The identical artifact was promoted without rebuilding.
+At `2026-09-10T05:59:18.016Z`, the immutable manifest, authenticated
+launch bundle and public production-channel manifest matched the source and update.
+Bundle: 10,597,800 bytes; SHA-256
+`35cd5abed54ba7554a78f94badae914b14f86fc9e69affabd62c603708667b04`.
+
+The release archive matched all 1,078 tracked Git blobs and excluded the unrelated
+untracked root `app.json`. Only verified source-commit metadata and a one-worker
+export limit were supplied to EAS archive mode; account, project, production
+environment, lineage, native compatibility and artifact checks were retained.
+Node used a 2 GiB heap limit without an emulator or parallel heavy tests.
+Native fingerprint `0b5dd5996352ba381e65fc1a036a28eae3000516` matches existing
+iOS TestFlight 1.1.1 (30), EAS build `b16eca67-6291-4520-82b6-10cb1af190f5`.
+
+Physical iPhone download/application, touch dragging, keyboard, enlarged text,
+gallery/crops and end-to-end route publication remain unverified. No new native
+build, Apple submission/review, Android OTA, Functions, Rules, Hosting, IAM or data
+mutation accompanied this release. The previous runtime-1.3.0 production group
+`8112578f-96f8-4eb9-861c-00e3ccb5a42e` is the rollback baseline.
+Open TestFlight 1.1.1 (30) online, then force-close and reopen up to twice to
+download and apply the update. See [route editor release details](../docs/route-composer.md).
+
+### Route composer iPhone release (2026-09-09)
+
+The user requested iPhone distribution of the route composer. Preparation passed
+568 related client tests, 244 backend tests, three Metro checks and 20 release
+guard tests. EAS account/project and the readable production environment were
+verified. The candidate's native inputs match iOS 1.1.1 (30), runtime 1.3.0,
+source `263fccd283fa86ef9b52077232a8dbdfc02ab6cb`; no new native build is needed.
+
+PR [#357](https://github.com/doric2000/PlanLi/pull/357) merged as
+`3b4473c60e9bce43660513426c4a0c4ec4ce4c30`; all applicable PR checks passed.
+The release uses an immutable archive of that source, verified against all 1,073
+tracked Git blobs. The unrelated local root `app.json` is preserved and excluded.
+
+Seven existing Functions were deployed to `planli-f0b12` / `europe-west1` between
+`2026-09-09T20:57:52Z` and `2026-09-09T20:57:55Z`: `saveRouteDraft`,
+`publishRouteDraft`, `saveRoute`, `saveRecommendation`, `publishRecommendationDraft`,
+`saveTrip` and `updateProfile`. Independent readback at
+`2026-09-09T20:58:30.123Z` confirmed all seven ACTIVE, Node.js 22 v2,
+minInstances 0 and latest-revision traffic, preserving secret bindings and the
+EU media bucket. Three unauthenticated route callable probes returned HTTP 401;
+the post-deploy Error-severity scan returned zero entries.
+
+The iOS-only OTA is available on the `production` channel / environment, runtime
+1.3.0, group [8112578f](https://expo.dev/accounts/doric2000/projects/client/updates/8112578f-96f8-4eb9-861c-00e3ccb5a42e),
+update `01a087ff-11cd-722a-97ea-6e2263711124`, published at
+`2026-09-09T21:07:15.533Z`. EAS metadata and the public channel
+manifest independently verified delivery at `2026-09-09T21:08:00.518Z`.
+The identical candidate was first published to staging group
+`cf42a744-579c-4217-971b-a36c2dbd52f3` using the production environment.
+The immutable 10,578,996-byte iOS bundle matches the local artifact, SHA-256
+`65bb3605ac73854de3288fe45fae2a2f6cd7f9139a90852dd7e0d0773e9638da`.
+Its native fingerprint `0b5dd5996352ba381e65fc1a036a28eae3000516` exactly matches
+build 30. The archive workflow supplied only verified source-commit metadata
+and a one-worker export limit; all tracked source blobs remained unchanged.
+
+The iOS binary remains 1.1.1 (30) in the existing internal TestFlight group.
+No new EAS build, Apple submission, Android OTA, runtime 1.2.0 update, Hosting,
+Rules, IAM or data migration was performed. The rollback baseline for runtime
+1.3.0 is build 30's embedded update. Physical iPhone application and route
+acceptance remain unverified; the user will exercise the installed update.
+All owned Android test helpers remained stopped during distribution.
+See [candidate, revisions and rollout details](../docs/route-composer.md).
+
+### Atlas native release (2026-09-09)
+
+**Current distribution:** Android **1.1.0 (10)** is available to the existing
+Google Play internal testers. iOS **1.1.1 (30)** is VALID / IN_BETA_TESTING in the
+existing **Team (Expo)** internal TestFlight group, independently verified at
+`2026-09-09T16:35:58.616Z`. Both use runtime **1.3.0**. Apple's public App Store
+version remains 1.1.0/build 28; no new public App Store review was submitted.
+
+PR [#354](https://github.com/doric2000/PlanLi/pull/354) merged as
+`890d70110de37ad1814b79c7c1b2106e42b74a54`. The initial builds used marketing
+version `1.1.0` and runtime `1.3.0` for the new native WebView. Release input
+was an immutable archive of that merged source: all 1,067 tracked blobs matched,
+allowing only Git's Windows newline conversion. The inspected EAS source contained
+565 files / 19,945,787 unpacked bytes (15.4 MB uploaded), without local native
+outputs, private environment files, backend workspaces or unrelated local edits.
+EAS used explicit archive-root/no-VCS mode; provider Git SHA is therefore null.
+Its build message records the independently verified source commit above.
+
+Only `setDiscoveryRegion` was deployed to production `planli-f0b12` /
+`europe-west1`. Readback at `2026-09-09T14:44:32.453Z` confirmed
+Node.js 22 v2, ACTIVE, minInstances 0 and all traffic on revision
+`setdiscoveryregion-00003-xet`, updated at `2026-09-09T14:44:11.069Z`.
+Source hash: `89c211863f405a7d83240eab0231c17f0201becd`.
+An unauthenticated global-selection request returned HTTP 401; the post-deploy
+error scan found zero entries. The first attempt stopped during local source
+discovery before deployment; the unchanged source loaded successfully and the
+documented 60-second discovery timeout allowed the subsequent deployment.
+
+EAS accepted both production-profile/environment/channel, store-distribution builds:
+
+- Android `1.1.0 (10)`: [build b0648036](https://expo.dev/accounts/doric2000/projects/client/builds/b0648036-61d6-4af6-b659-442a22b603dc), accepted
+  `2026-09-09T14:44:16.736Z`, package `com.planli.planlitravels`.
+- iOS `1.1.0 (29)`: [build 1fb1b645](https://expo.dev/accounts/doric2000/projects/client/builds/1fb1b645-c200-481f-ba51-58df217a3096), accepted
+  `2026-09-09T14:45:00.291Z`, bundle ID `com.planli.planlitravels`.
+
+The iOS build completed at `2026-09-09T14:53:50.673Z`. The downloaded IPA
+(40,538,116 bytes) has SHA-256
+`cfc698fb33236c4c39e9cd5b0149c13d5df5c57aad2b0a0a4ca6ee79f22a792c`.
+Inspection confirmed version/build, production identifier/channel, runtime 1.3.0,
+native WebView and all nine Atlas hero/fallback photos matching source bytes.
+EAS accepted iOS submission `f5bc00ae-db99-4a80-89a9-f6e4e32fb498` at
+`2026-09-09T14:55:08.672Z` for the existing `Team (Expo)` internal group
+(`2939d99e-114f-468d-865b-dce7183b5856`, access to all builds). The first scheduling
+attempt was rejected before creating a submission because EAS automatic changelog
+submission requires Enterprise; the regular submission was accepted.
+EAS marked the iOS transfer FINISHED at `2026-09-09T15:59:18.356Z`, but Apple
+subsequently rejected build 29 with ITMS-90186 and ITMS-90062: the approved
+marketing version 1.1.0 is closed to additional binary submissions. The user
+supplied the rejection notice; App Store Connect readback still lists build 28
+as the latest valid TestFlight build. Build 29 is not available to testers.
+The pre-build readback already showed 1.1.0 READY_FOR_DISTRIBUTION; failing to
+block that submission was a release-preflight error. EAS transport completion
+is not Apple acceptance. The prior 1.1.0 releases used compatible OTA updates
+on build 28; the Atlas WebView addition requires a new native binary.
+The user subsequently approved an iOS-only 1.1.1 correction and a new native
+build for the existing internal TestFlight group. Android remains 1.1.0.
+Before the replacement build, compare the evaluated iOS version with fresh
+`eas submit:status --platform ios --profile production --json --non-interactive`
+App Store Connect output; a closed/approved version must not be resubmitted.
+After transfer, verify Apple processing and internal-group availability before
+reporting TestFlight distribution complete.
+Android build 10 completed at `2026-09-09T16:04:17.327Z`. The 88,168,860-byte
+AAB has SHA-256 `af7a1b3ca7f68fe7c4c88afa9410008aebe838b24dc149daeac2ce3ac1e3057e`.
+Bundletool validation, JAR signature verification, the production identifier/channel,
+version 1.1.0/build 10, compiled runtime 1.3.0, native WebView and all nine Atlas
+photos passed. The upload certificate matches accepted build 9 (SHA-256
+`648c5b2dc5fbd29afe0e8ee83d8215c578459912a3a92cb022d055e0daf55f54`).
+Google Play internal release 7, **PlanLi 1.1.0 (10) – Atlas**, was published on
+2026-09-09 at 19:07 Israel time (16:07Z). Independent track readback reported
+**Available to internal testers**, version code 10, with no lost supported devices.
+The single non-blocking warning concerns the absent deobfuscation mapping file.
+[Internal-test install link](https://play.google.com/apps/internaltest/4701742858558783307).
+
+Replacement iOS build [b16eca67](https://expo.dev/accounts/doric2000/projects/client/builds/b16eca67-6291-4520-82b6-10cb1af190f5)
+was accepted at `2026-09-09T16:17:22.090Z` with build number 30, from merged
+PR [#355](https://github.com/doric2000/PlanLi/pull/355), source
+`263fccd283fa86ef9b52077232a8dbdfc02ab6cb`. All 1,067 archived source blobs
+matched; all 565 inspected upload files (19,951,230 bytes) matched the archive.
+The only client change from the initial Atlas release is `expo.ios.version: 1.1.1`.
+Native Info.plist introspection and iOS release configuration checks pass.
+Fresh Apple readback at `2026-09-09T16:10:35.242Z` verified candidate 1.1.1 is
+higher than approved 1.1.0. All applicable #355 CI checks passed.
+EAS CLI 22.6.0 reads the root `exp.version` for managed-build display metadata,
+so its `appVersion` field remains 1.1.0; the installed native config plugin
+resolves `ios.version` first, and the job overrides only the build number.
+The replacement build completed at `2026-09-09T16:25:27.975Z`. Independent
+inspection of its 40,537,721-byte IPA confirmed **1.1.1 (30)**, production
+identifier/channel, runtime 1.3.0, native WebView and all nine Atlas photos.
+IPA SHA-256: `afbcb6e6b37e0e72040501a1b5bd6de48ca166cc2c2606cbde9a323fbb8f78b4`.
+The verified IPA was delivered through Apple's official Build Upload API using
+the existing App Store Connect credentials, without another EAS Submit job.
+Apple upload ID: `666e1b3f-b965-4a56-980e-c0e4a18ad7cf`; file reservation:
+`2e7120b5-0b19-45f5-afad-0e5271dfdd03`. All eight parts uploaded; commit at
+`2026-09-09T16:31:43.373Z` returned file state COMPLETE with no errors/warnings.
+The accepted file-upload checksum is MD5; the independent local proof uses
+SHA-256. Apple upload processing reached **COMPLETE** at readback
+`2026-09-09T16:35:23.259Z`, identifying 1.1.1/build 30 with no errors, warnings
+or informational issues. App Store Connect readback confirmed marketing
+version **1.1.1**, build **30**, processing state **VALID**, internal state
+**IN_BETA_TESTING**, not expired. External state is READY_FOR_BETA_SUBMISSION;
+no external beta review was requested. Group readback at
+`2026-09-09T16:35:58.616Z` confirmed Apple build ID
+`666e1b3f-b965-4a56-980e-c0e4a18ad7cf` in the existing **Team (Expo)** internal
+group. The build inherited that group's access-to-all-builds setting; no groups
+or testers were created. The direct upload has no EAS submission ID.
+[App Store Connect TestFlight](https://appstoreconnect.apple.com/apps/6801453067/testflight/ios).
+No Atlas OTA was published to runtime 1.2.0. Physical-device installation and
+final store-artifact UI remain unverified.
+
+Release readiness passed for Android and iOS: 1,118 client tests in 189 suites,
+native configuration/package checks, Expo Doctor/dependency compatibility,
+13 focused backend tests, 12 configuration security checks and Atlas bundle
+reproducibility. All applicable PR checks passed, including dependency review,
+fresh locked audit, CodeQL, Semgrep and secrets scanning. Final static review
+found no actionable issues. Twelve required Expo SDK 57 patch dependencies were
+aligned for release compatibility; the final client suite covers that lockfile.
+The earlier Android 14 UI receipt below predates that native patch alignment and
+runtime change. A final-dependency local development APK subsequently rebuilt in
+12m53s, completing at `2026-09-09T15:16:33.247Z`, native signature
+`740e1133ad3be7d89ee1900ec6eaf2e9d7e40274875c568b93dc98c955507d7c`.
+It was installed on the dedicated Android 14 AVD as `1.1.0 (1)`, runtime `1.3.0`,
+package `com.planli.planlitravels.e2e`, with OTA disabled. Metro is running on
+8081 against the preserved demo services. The final focused Atlas flow passed
+at `2026-09-09T15:25:41.677Z`: 287.443 seconds for the scenario, 320.384 seconds
+including CLI startup. Globe drag, cancel, global confirmation and restoration
+from Community passed; the rendered Europe/global screens were inspected.
+APK SHA-256: `9aa62bf7d0a22234fa1ba05ddf4e1c5f5408ebc42f9905bff27628a909a461ed`.
+Evidence is in ignored `.codex_tmp/validation/android/atlas-final-device/`,
+including `atlas-final.xml` and `observed-result.json`. Existing demo services
+were attached, so this is observed device evidence, not a reusable fresh-backend
+receipt. The visible emulator and Metro remain running for manual inspection.
+
+App Store Connect API readback before this release reports existing version
+1.1.0/build 28 as READY_FOR_DISTRIBUTION, with TestFlight VALID,
+IN_BETA_TESTING / BETA_APPROVED. This supersedes earlier README statements that
+the Apple release was only a beta; public listing availability was not checked.
+The authorized Atlas distribution here targets the existing Android internal-test
+and iPhone TestFlight tracks.
+
+### Hoi An classification and location-map release (2026-09-09)
+
+PR [#352](https://github.com/doric2000/PlanLi/pull/352) merged as
+`09ee5f1d6e6996e864b726aca5d0d69527243fa0`. The resolver now recognizes Hoi An's
+reviewed ward names, retains address hierarchy, and folds Vietnamese Đ correctly.
+The map opens into an interactive full-screen view. No destination records or
+recommendations were created, changed, or published by this follow-up.
+
+Seven Node.js 22 v2 Functions were deployed to `planli-f0b12` / `europe-west1`:
+`resolvePlaceSelection`, `resolveRecommendationDestination`, `saveRecommendation`,
+`publishRecommendationDraft`, `saveRoute`, `publishRouteDraft`, and
+`searchDestinations`. Readback at `2026-09-09T10:37:52.781Z` confirmed all seven
+`ACTIVE`, `minInstances: 0`, and latest-revision traffic. The deployed
+`resolveRecommendationDestination` hash is
+`7bfc30691087083be27d097f2a3ba56f79441d71`. Three unauthenticated callable probes
+returned HTTP 401. The error-log check at `2026-09-09T10:42:37.972Z` found no
+Error-severity entries for these services since rollout began.
+
+The iOS update retains version `1.1.0`, runtime `1.2.0`, and TestFlight build 28.
+Staging group `dec1243f-7c9b-4f21-b641-818ac9424632` was published with the actual
+production environment, then the identical artifact was republished at
+`2026-09-09T10:51:49.037Z` to production group
+`7c5d6402-be86-49b6-a517-43946c5b14b1`, update
+`01a085cb-9dad-7568-9594-49f06866f57c`. EAS readback and the public channel
+manifest verified delivery at `2026-09-09T10:54:05.329Z`. The 8,455,528-byte bundle
+has SHA-256 `c74c551ed56dd8a006a9eab2b189f028ddba8a59f216c94dfd399ebe585ee2b7`.
+The previous rollback group is `efee7462-1560-4b8e-a0b3-01f3d162a64d`.
+
+Release input was an immutable archive of merged main, verified against all 1,035
+tracked Git blobs. The documented archive workflow pinned only EAS's commit
+metadata; account/project, source ancestry, evaluated production configuration,
+locked native dependencies, environment, runtime, and artifact checks remained
+enforced. The evaluated production app configuration and native dependencies
+matched the preceding iOS release. All 788 related client tests in 123 suites
+passed on the archive, as did 83 focused resolver tests; pre-release checks and
+the read-only review are recorded in [the resolution report](../docs/destination-resolution.md).
+
+Physical iPhone installation and native rendering remain unverified. Web map
+tiles, labels, pan/zoom, expand, and close were exercised at desktop and phone
+widths. The local Android map-flow run was blocked by occupied emulator ports;
+no unrelated process was stopped. Android remains on internal-test build 9;
+no Android OTA, native build, store submission, Hosting, Rules, or IAM change was
+performed by this follow-up.
+
+### Earlier destination resolver production release (2026-09-09)
+
+Under explicit release authorization, ten existing Node.js 22 v2 Functions were
+deployed to `planli-f0b12` / `europe-west1` from the verified source archive of
+merged `main` commit `297624eeace6abc7042bd9711c6c83bf6de6981a`:
+`resolveRecommendationDestination`, `resolvePlaceSelection`, `saveRecommendation`,
+`publishRecommendationDraft`, `saveRoute`, `publishRouteDraft`,
+`onRecommendationAdminSearchWritten`, `approveDestination`,
+`updateDestinationPolicy`, and `setDestinationHebrewName`.
+Updates completed between `2026-09-09T08:11:21Z` and `2026-09-09T08:11:31Z`.
+Independent Cloud Functions readback at `2026-09-09T08:12:49Z` confirmed all ten
+`ACTIVE`, `minInstances: 0`, and all traffic on the latest revisions. Three
+unauthenticated resolve/save/draft-publication requests returned HTTP 401.
+
+The archive matched all 990 tracked source files after Git's Windows newline
+conversion. Its SHA-256 is
+`f7493d1362fd19d72d000e1a5852a0fb6ca3f4bba4e477922e2f65c15b45736f`.
+All 227 focused backend tests and 524 related client tests passed against the
+isolated release source and locked dependencies. A fresh Google Places check
+confirmed seven reviewed identities, including Udawalawe, Ella and Little Adam's
+Peak, with the expected destination assignments. All 49 active destinations
+satisfied publication policy; all 42 recommendations remained active with no
+held records or stale admin views. No bulk catalog import, Rules, IAM, Hosting
+or native build was performed by this destination release. Post-deploy Cloud
+Logging returned zero Error-severity entries for the ten deployed services.
+
+### Earlier destination client distribution (2026-09-09)
+
+The compatible iOS OTA retains marketing version `1.1.0`, runtime `1.2.0`, and
+the existing production/TestFlight binary (build 28). Reviewed native config and
+native dependencies were unchanged from the prior production source `03b5b53`;
+the dependency change is MapLibre's Web-only package. Production Firebase,
+App Check and Sentry environment verification passed. The verified candidate
+was published to `staging` with environment `production`, group
+`d1a73da7-3770-4180-9cda-9ab99339e064`, update
+`01a0853e-30d1-7f72-afe5-450600768b67`. Its immutable bundle matched the local
+8,447,244-byte artifact, SHA-256
+`150a723e21c08ebcf4bac21992feb6e2aead9b87f1caf8dcbf31cdc3c2f73908`.
+
+The exact candidate was republished at `2026-09-09T08:20:00.742Z` to production
+group `efee7462-1560-4b8e-a0b3-01f3d162a64d`, iOS update
+`01a08540-a266-76ce-803a-00a561d2f60d`. EAS and the public production-channel
+manifest independently confirmed that group, platform, runtime, source commit
+`297624eeace6abc7042bd9711c6c83bf6de6981a`, and the identical bundle hash.
+The preceding rollback candidate is production group
+`a13ab118-255a-41c4-ab45-a0503aedd72b`.
+
+The release used an immutable `main` archive because the shared checkout
+contained other work. An initial staging group
+`58f5e536-1d6e-45a6-be44-6eafa3cd5902` was not promoted: its Git metadata followed
+a parallel checkout change. The corrected upload reused the identical bundle
+and pinned only EAS's source-commit metadata to the verified archive commit.
+Every archived tracked file was rechecked before upload; account, runtime,
+environment, production ancestry, immutable manifest and bundle-hash checks
+remained enforced. No clone, extra Git worktree or shared-workspace reset was used.
+
+Android uses the already built production artifact `1.1.0 (9)`, EAS build
+`e4441c75-68b0-49e4-963c-6e594c5fc441`, documented below. Its downloaded AAB hash
+and manifest were verified before upload to the existing internal-test track.
+Google Play reports `PlanLi 1.1.0 (9) – Destination fixes` as **Available to
+internal testers**, released at `2026-09-09T11:21+03:00`, with version code `9`.
+Release ID: `6`; track: `4701742858558783307`; app: `4975848568601147626`;
+developer: `5821955120973423060`.
+[Play release](https://play.google.com/console/u/0/developers/5821955120973423060/app/4975848568601147626/tracks/4701742858558783307/releases/6/details).
+Play reported no lost supported devices and the existing non-blocking missing
+deobfuscation-file warning. No Android OTA, public-store rollout, new native
+build or new iOS store submission accompanied this release. Installation and
+authenticated end-to-end behavior of these distributed artifacts on physical
+devices remain unverified.
+
+PlanLi has an external TestFlight beta and an active Google Play internal-testing
+track; it has not been publicly released to the App Store, Google Play, or a
+public mobile-store track. The production Web/Admin and public policy pages are
+available on `https://planli.cc`. Native development is performed with an installed, signed EAS
+Development Build connected to Metro. Expo Go is not supported.
+
+### Android internal-test release (2026-09-09)
+
+The user authorized a new production Android build for the existing Google Play
+internal-testing track. EAS accepted `1.1.0 (8)`, build
+`9276e973-33d2-4653-8d9f-39497d3a67e3`, at `2026-09-08T22:40:07.650Z`.
+EAS native fingerprint: `0cae3f6d1cbe67c9d0e20a4c880778ee357be39c`.
+Profile/environment/channel: `production`; distribution: store; package:
+`com.planli.planlitravels`. EAS completed the build at
+`2026-09-08T23:03:12.355Z`. Independent inspection of the downloaded AAB confirms
+version `1.1.0 (8)`, runtime `1.2.0`, target SDK 36, production OTA channel and
+the normal application ID, without local-emulator configuration. AAB size:
+89,797,854 bytes; SHA-256:
+`2a005e54f008146d4165d28826b91273d4e3006a3a974b028f843d7e2e262bf1`.
+
+Play Console reports 37.8 MB for a new installation, versus 39.3 MB for the
+first Play bundle (build 5). The approximately 89.8 MB AAB is the complete store
+upload, including symbols and multiple CPU architectures. See the
+[Android size investigation](../docs/android-build-size.md) for archive contents,
+historical comparison and the unavailable earlier development APK.
+
+The EAS submission attempt stopped before creating a submission because no
+Google service-account submission key is configured. After the user signed in,
+the same AAB was uploaded and published through Play Console. Google Play
+independently reports `PlanLi 1.1.0 (8) – Android refresh` as **Available to
+internal testers**, released at `2026-09-09T06:26+03:00`, with one version code:
+`8`. Developer account: `5821955120973423060`; app: `4975848568601147626`;
+internal track: `4701742858558783307`; release: `5`.
+[Play release](https://play.google.com/console/u/0/developers/5821955120973423060/app/4975848568601147626/tracks/4701742858558783307/releases/5/details).
+[Existing internal testers' installation link](https://play.google.com/apps/internaltest/4701742858558783307).
+There was one non-blocking warning about an absent deobfuscation mapping file,
+as with build 6. No device support was lost according to Play's comparison.
+Installation and physical-device testing of the store artifact remain unverified.
+No public or closed-track release was made, and no OTA group accompanies it.
+
+Source: `1c704dbaf351d7cbebe8cdcb8c08d92ac00c9b65` plus the uncommitted client
+and validation changes on `chore/focused-validation-and-android-e2e`. The exact
+local inspection signature is recorded in ignored
+`.codex_tmp/validation/android/production-source-inspection.json`. EAS uploaded
+28.6 MB in 44 seconds after archive inspection excluded local emulator/native
+outputs, environment files and backend workspaces. Production Firebase and
+Sentry configuration verification passed. No backend deployment or OTA update
+accompanies this Android build.
+
+Subsequent local device validation found SDK compatibility issues in the gallery:
+the removed `StyleSheet.absoluteFillObject` left images without their intended
+layout, the decorative Android gradient intercepted photo taps, and controls
+overlapped the system inset. Local fixes use `StyleSheet.absoluteFill`, separate
+the decorative gradient from the controls, and honor safe-area insets. These
+follow-up fixes are **not included in Play build 8**. A replacement store artifact
+has been built as the candidate below.
+
+### Android corrected candidate (2026-09-09)
+
+EAS accepted production Android `1.1.0 (9)` at
+`2026-09-09T07:37:35.832Z`, build
+`e4441c75-68b0-49e4-963c-6e594c5fc441`. Source:
+`aaee60eb58451003810c664e5e37687d7b33eac0` plus the reviewed local validation and
+SDK compatibility changes. Profile/environment/channel: `production`;
+package `com.planli.planlitravels`; configured runtime `1.2.0`.
+Production Firebase, App Check and Sentry environment verification passed.
+The inspected source excludes local emulator/native outputs and backend code;
+EAS uploaded 28.7 MB in 12 seconds and completed the build at
+`2026-09-09T07:53:42.362Z`. The downloaded AAB contains 89,802,440 bytes;
+SHA-256 `5c8bed43501a0b419452b3f788f177483e15e8c310c200cc3f7b616f4c6731d8`.
+Native fingerprint: `6241dbc43d80d437f04960df3eebf4dd5bec4b1d`.
+Independent manifest inspection confirms the production package, version
+`1.1.0 (9)`, SDK 36 and production OTA channel. The destination release above
+subsequently published this exact artifact as Play internal release `6`, replacing
+build 8. Physical-device installation remains unverified; no Android OTA applies.
+The pinned SDK 57 dependency map passed its local compatibility check and the
+debug build compiled successfully. Expo's online check still exits with a
+warning for twelve newer recommended patch releases (including Expo 57.0.21);
+it did not pass. This task did not upgrade the SDK packages or waive that result.
+
+Before distribution, the new destination-choice contract required
+the reviewed backend source from merged PR #348, commit
+`297624eeace6abc7042bd9711c6c83bf6de6981a`. The affected callable entry points are
+`resolveRecommendationDestination`, `resolvePlaceSelection`,
+`saveRecommendation`, `publishRecommendationDraft`, `saveRoute` and
+`publishRouteDraft`. Both direct saves and draft publication embed the changed
+resolver. The earlier readback found all six last updated on September 2. The
+authorized destination release above subsequently deployed and verified all six,
+plus four related admin functions, on September 9 before client distribution.
+
+An immutable source archive of reviewed `main` is prepared in ignored
+`.codex_tmp/validation/android/backend-main-297624e.tar`, SHA-256
+`684eaff962c1c5a4e3894f84841e43823f4c2257b93dea227593d51fe96dd0cc`.
+It excludes the unrelated uncommitted media patch. This archive preparation made
+no production changes. The separately authorized destination release above
+records the completed backend deployment; Rules and IAM remain unchanged.
+
+### Navigation refresh local validation (2026-09-10)
+
+Source baseline: `2130650`; implemented on `feat/integrated-create-navigation`
+and subsequently merged through PR #365. The authorized iOS OTA is recorded
+above. The Android limitations in this section remain current. [iPhone checks and Codex rollback checkpoint](../docs/navigation-refresh-iphone-checklist.md).
+
+The local Android prebuild completed, but debug compilation was stopped when
+free host memory fell below 0.5 GiB. Prebuild recreated the ignored Android
+directory; the previous cached APK is no longer available for reuse, and the
+old native-build receipt does not certify current inputs. No replacement APK
+was completed or installed. The user then requested continuing without emulator
+checks and will test on iPhone. The last installed tester state below is historical,
+not validation of this navigation change.
+
+### Local Android validation (2026-09-09)
+
+The current local debug APK was rebuilt at `2026-09-09T18:44:11.613Z`
+for route-composer validation, in 22m47s. Source: `b3562a1` plus the
+uncommitted working tree on `feat/route-composer`; existing recommendation
+changes were preserved. Application ID: `com.planli.planlitravels.e2e`,
+version `1.1.0`, version code `1`, runtime `1.3.0`; OTA is disabled.
+The latest successful reinstall was logged at `2026-09-09T20:17:16Z` on
+`PlanLi_E2E_API34` / `emulator-5580`. No EAS channel, remote build ID,
+submission or update group applies. Native-input signature:
+`08d0e2b20b1f26b3f35bcf26be5602201b21b75f8ccab870b3c2b9de94cd2fc5`.
+APK SHA-256:
+`7a83aa2fe7eb9918e90724c3555310c8ac3af209f5ea6776a454015f30ed5f93`.
+The route Android acceptance flow has not passed. The 540x960 / 240dpi profile
+reuses this APK with two cores, 30 Hz software rendering and the incompatible
+Pixel 6 cutout overlays disabled. A focused Maestro check verified closing the
+development menu and entering the app. Staged startup then reached the route
+editor and entered title, London, description and price level. The scenario
+failed on an incorrect transport selector, while the memory guard stopped the
+backend after two samples below 0.9 GiB. The selector was corrected to match the
+shared choice component; the corrected flow has syntax validation only, not a
+passing device receipt. Native route photos, three-day publication and enlarged
+text remain unverified. All owned Android/Metro/Firebase/Maestro helpers are
+stopped; Windows reported 5.66 GiB available after cleanup. No production,
+EAS/OTA or store state changed.
+
+Earlier on the same date, a separate local Development Build was installed on the Windows-hosted Android
+AVD `PlanLi_E2E_API34` (`emulator-5580`), using application ID
+`com.planli.planlitravels.e2e`, version `1.1.0`, Android version code `1`,
+and configured runtime `1.2.0`. OTA is disabled; no EAS channel, build ID,
+submission or update group applies to that local artifact. The earlier Atlas
+native build completed at `2026-09-09T13:18:06.872Z` in 23m54s and was
+installed at `2026-09-09T13:25:21Z` (Android package-manager readback).
+Source: `6133837efda7ce83d473e8f207926bbd6ba71eb5` plus the uncommitted Atlas
+and focused Android validation changes on the existing `docs/hoi-an-release`
+branch. It includes react-native-webview 13.16.1; no new branch or commit was
+created. Native-input signature:
+`3b3d5491930a575b8a7e936195e2c4da99725554f5b2cf8a09a1aaebffc94be1`.
+APK SHA-256:
+`da4ad54c34134a6ab5b9472d58faef33424a75642fae0a9c1369c9a22f67980d`.
+This debug APK is not a store artifact.
+
+Atlas acceptance passed on Android 14 at approximately `2026-09-09T13:36Z`:
+the focused Maestro flow passed in 432.7 seconds (508.3 seconds including CLI
+startup). It exercised initial region confirmation, native WebView globe drag,
+cancel without saving, global confirmation and restored global scope from the
+recommendation feed. A follow-up ADB hierarchy check verified that the actual
+`Local E2E Gallery` synthetic recommendation loaded with the global-scope label;
+its screenshot was inspected. An Android System UI ANR dialog required dismissal
+during initial startup; this is observed device evidence, not an unattended
+startup reliability or performance result. The authenticated local callable and
+persisted `users/{uid}.discoveryRegion` global/schema-2 readback also passed.
+
+Metro and the visible dedicated emulator were initially left on the Atlas for
+manual inspection, then stopped for the authorized release dependency alignment.
+The test session attached to the existing isolated
+`demo-planli-e2e` services; no reusable fresh-backend runtime receipt is claimed.
+Evidence: ignored `.codex_tmp/validation/android/atlas.xml`, the
+`2026-09-09_162755` screenshot directory and `atlas-feed-loaded.png`. Native
+images use the installed React Native `StyleSheet.absoluteFill` API. Three
+focused flow-routing tests and Git whitespace checks passed. Production,
+EAS/OTA and store state are unchanged; physical iPhone testing remains pending.
+
+The earlier 07:00 native build and its flow receipts below used the previous
+native-input signature `d20edda8dc53e22e60064a995ea5e30b4bc228e323d78add55923d8975fa0f9a`.
+Those results remain evidence for their recorded inputs only.
+
+The isolated project is `demo-planli-e2e`. Real local Auth, Storage Rules,
+Functions media processing/publication and rejection of unauthorized requests
+have passed with synthetic users and images. Autonomous guest navigation and
+verified email login have passed on Android 14. The complete gallery flow passed
+again on 2026-09-09 at 08:04 +03:00 (187 seconds including CLI startup), including
+a real photo swipe, caption and safe-area controls, return to the feed and the
+owner action menu. After the parallel task finished, verified email login passed
+in 290 seconds and guest navigation in 122 seconds. The auth flow exercised the
+real owned-draft discard action. The deliberately nonexistent screen assertion
+failed as intended, proving that Maestro detects a broken expectation. The
+receipt completed at `2026-09-09T07:10:47.732Z`.
+
+The latest photo publication and actual network disconnection/recovery passed
+in 328 and 281 seconds, respectively, reusing the native APK. Their receipt
+completed at `2026-09-09T07:28:58.665Z`; publication, Hebrew retry and recovered
+destination screenshots were inspected. Both receipts and short logs are in
+ignored `.codex_tmp/validation/android`. These are separate observed flow results,
+not a single all-flow receipt for the mixed working tree. Earlier concurrent
+source/dependency edits correctly invalidated runs; a deliberately hung child
+process also failed and was terminated. Owned emulator/Metro/Firebase helpers
+were stopped after acceptance.
+
+Destination PR #348 is merged into `main` at
+`297624eeace6abc7042bd9711c6c83bf6de6981a`. Its new destination-choice behavior
+required the corresponding production Functions before client distribution.
+The earlier production readback found the relevant Functions last updated on
+September 2; the completed September 9 destination release is recorded above.
+A pre-existing, uncommitted retained-media
+URL change in `functions/recommendationService.js` was excluded from PR #348;
+review found that it rejects claimed media on edits. Preserve it as unrelated
+work and exclude it from any release source based on reviewed `main`.
+See [local Android validation](../docs/local-android-e2e.md) for setup, focused
+scenarios, logs and the CI/release validation policy. Production and store
+release state is unchanged by this work.
+
+### Custom production domain rollout
+
+On `2026-09-01`, Firebase Hosting domain `planli.cc` was verified with managed
+TLS and independently returned the Hebrew Admin login at
+`https://planli.cc/admin/`. The legal, support, community-guidelines and
+account-deletion routes are also available on the custom domain. Firebase Auth's
+authorized-domain list now contains `planli.cc` plus the two Firebase-owned
+fallback domains. The Auth email sender domain was DNS-verified and applied:
+live Identity Platform read-back reports `customDomain: planli.cc`,
+`useCustomDomain: true`, and no pending custom domain. The required SPF and DKIM
+records resolve publicly.
+
+The production reCAPTCHA Enterprise key used by Web App Check now allows
+`planli.cc` alongside the two Firebase fallback hosts with domain enforcement
+still enabled. Production media-bucket CORS now allows the same custom origin;
+an independent `PUT` preflight returned HTTP 200 with
+`Access-Control-Allow-Origin: https://planli.cc`, the reviewed methods, and the
+existing 3,600-second max age. The EAS production environment's public Firebase
+Auth domain is now `planli.cc`; no EAS build or store submission was run.
+
+Repository source synchronization was prepared on
+`fix/custom-domain-hosting-rollout`, based on source commit
+`4c6063d8ed0152be0bf0153af046c6688af603c2`. The production Admin Web export was
+rebuilt with `authDomain: planli.cc` and the exact production reCAPTCHA
+Enterprise key, and its verifier resolved all 30 local asset references. A new
+static, RTL Hebrew landing page now serves the apex route without an additional
+hosting provider. Local desktop and 390px mobile browser checks found no
+horizontal overflow or console errors, and the rebuilt Admin login rendered
+without console errors.
+
+Firebase Hosting was deployed as the only Firebase target at
+`2026-09-01T19:10:28.108Z`. Release
+`sites/planli-f0b12/releases/1788289828108000` finalized version
+`sites/planli-f0b12/versions/f246bc8ada7478e9` with 48 files. Independent
+read-back against Firebase's expected `199.36.158.100` endpoint returned HTTP
+200 for the apex, Admin, Auth handler and every named public route. The live
+landing HTML, Admin HTML, Admin JavaScript bundle and brand image matched the
+local export byte-for-byte, and the reviewed CSP and other security headers
+remained present. The Firebase-owned fallback host rendered both the landing
+page and Hebrew Admin login without browser console errors.
+
+The approved “Stay in the Journey” landing design was then deployed from the
+same branch and source commit as the only Firebase target at
+`2026-09-01T19:33:10.478Z`. Release
+`sites/planli-f0b12/releases/1788291190478000` finalized Hosting version
+`sites/planli-f0b12/versions/d40a20b8e01e4bf1` with 54 files. The App Store
+badge is intentionally non-interactive until the public store URL is available;
+the concept-review label is absent. Independent read-back matched the local
+landing HTML, stylesheet, images, real app screens, Admin HTML and every named
+public route byte-for-byte. A direct TLS request for `planli.cc` against
+Firebase's expected address returned HTTP 200 with the reviewed security
+headers. The `/admin` export and named public routes remained available. No
+Functions, Rules, indexes, Storage, Auth, IAM, app build, store submission or
+OTA action accompanied this Hosting-only release.
+
+The iPhone safe-area and full-height landing fix from
+[PR #317](https://github.com/doric2000/PlanLi/pull/317), merge commit
+`2e9328ec9623dc09f2095beffb8e08667a9666e7`, was deployed as the only Firebase
+target at `2026-09-01T20:26:25.036Z`. Release
+`sites/planli-f0b12/releases/1788294385036000` finalized Hosting version
+`sites/planli-f0b12/versions/a83bcf8dcdd462ed` with 54 files. Direct TLS
+read-back of `planli.cc` against Firebase's expected `199.36.158.100` endpoint
+returned HTTP 200; the live landing HTML, stylesheet and Admin HTML matched the
+merged source byte-for-byte, and the reviewed security headers remained
+present. A 390-by-844 browser smoke check against the Firebase-owned fallback
+host loaded every image without console warnings, errors or horizontal
+overflow, and the background remained continuous through the document bottom.
+No Functions, Rules, indexes, Storage, Auth, IAM, app build/update, store
+submission or production-data action accompanied this Hosting-only release.
+
+Cloudflare now serves proxied `www` addresses and returns a permanent 301 to the
+apex while preserving the original path and query string. The authoritative
+zone contains DMARC policy `v=DMARC1; p=none; adkim=r; aspf=r; pct=100`, and both
+Firebase DKIM selectors resolve to their expected `firebasemail.com` aliases.
+This workstation's Cisco Umbrella DNS policy currently classifies the newly seen
+domain and substitutes block-page address `146.112.61.110`, so ordinary local
+resolution reports a certificate error even though direct Firebase TLS and
+content validation pass. The domain needs allowlisting or recategorization in
+that network policy for normal access from this network. The custom Auth email
+action URL remains the Firebase handler because Identity Platform rejects its
+update with `EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED`. No Functions, Rules, indexes,
+Storage, IAM, production data, EAS build/update, or mobile-store action was
+changed by this Hosting release.
+
+### Recommendation publication diagnostics and destination-hold reconciliation
+
+On `2026-09-02`, [PR #343](https://github.com/doric2000/PlanLi/pull/343) was
+squash-merged as `6a968f633fbdb605da80d2717e183592e1eaca93` and deployed from
+the same `main` source to production project `planli-f0b12`. The release keeps
+the existing publication and reconciliation paths, adds safe callable error
+metadata for Firestore/Storage failures, stops mapping backend `internal`
+errors to a Places-network outage in the client source, and reconciles
+orphaned destination approval holds without releasing unrelated safety holds.
+
+Exactly eight Node.js 22 v2 Functions were deployed to `europe-west1` with 100%
+traffic on the latest revision:
+`publishRecommendationDraft` (`publishrecommendationdraft-00023-zaq`),
+`saveRecommendation` (`saverecommendation-00057-guz`),
+`publishRouteDraft` (`publishroutedraft-00020-lin`),
+`saveRoute` (`saveroute-00054-dol`),
+`resolvePlaceSelection` (`resolveplaceselection-00035-kiw`), and
+`reconcileDestinationApprovalReleasesScheduled`
+(`reconciledestinationapprovalreleasesscheduled-00005-dah`),
+`searchPlaces` (`searchplaces-00030-qop`), and
+`resolveRecommendationDestination`
+(`resolverecommendationdestination-00051-vej`). The first six updates
+completed between `2026-09-02T13:23:50.750Z` and
+`2026-09-02T13:24:02.037Z`; the final two completed at
+`2026-09-02T13:29:14.408Z`. All eight read back `ACTIVE` with 100% traffic.
+
+The signed production policy repair was applied before this deployment with
+fingerprint
+`ec38b880138ef2143d72d89e21d25b968e1d8b4d46a023d12b3d9b2d73ed5488`.
+Independent read-back confirms Ella has a complete provider/system
+attestation and the train recommendation is `active` with
+`destinationApprovalVerified: true`; the repair reported zero remaining
+provisional upgrades, eligible holds, review repairs, or blockers. A post-
+deployment Cloud Logging query returned zero `ERROR` entries for all eight
+targets. No Hosting, EAS, App Check, iOS configuration, Rules, indexes,
+Storage, IAM, or dependency deployment accompanied this release; the client
+message change will take effect for mobile users with the next app build.
+
+### Destination locality publication Functions hotfix
+
+On `2026-09-02`, the destination-locality fix from
+[PR #329](https://github.com/doric2000/PlanLi/pull/329), implementation and
+merge commit `0aba4bcdea8c89d4cab57e9e8c6eb62b138fd6aa`, was deployed from clean
+`main` source commit `5a918e7324ea2955c00ec84868fb1c8ff07a408f`; the intervening commit was
+documentation-only and the deployed Functions tree matched `0aba4bc` exactly.
+The fix prevents a city hub from capturing an unrelated provider locality by
+geometry alone and allows exact, provider-verified legacy seed destinations to
+receive the current registry attestation atomically during publication.
+
+Exactly five Node.js 22 v2 Functions were deployed to `europe-west1`:
+`saveRecommendation`, `publishRecommendationDraft`,
+`resolveRecommendationDestination`, `saveRoute`, and `publishRouteDraft`.
+Independent read-back found all five `ACTIVE` with 100% traffic on revisions
+`saverecommendation-00053-jiy`,
+`publishrecommendationdraft-00019-ret`,
+`resolverecommendationdestination-00047-lak`, `saveroute-00052-bad`, and
+`publishroutedraft-00018-tic`; their updates completed between
+`2026-09-02T07:46:16.786Z` and `2026-09-02T07:46:21.685Z`.
+
+The affected 135 destination, recommendation, policy, and route tests passed
+under Node.js 22. PR validation, CodeQL, Semgrep, Gitleaks, dependency review,
+history scanning, and security-invariant checks also passed. A post-deploy log
+query returned zero `ERROR` entries for the five targets, and an
+unauthenticated publication probe returned the expected HTTP 401. No Hosting,
+Rules, indexes, Storage, Auth, IAM, EAS build/update, store submission, or
+production-document mutation accompanied this Functions-only release.
+
+### Stale destination-token and iOS App Check production repair
+
+On `2026-09-02`, the stale destination-token fix from
+[PR #332](https://github.com/doric2000/PlanLi/pull/332) was squash-merged as
+`a7a53ef5a330d5d5754b2457269eec3f2a135124`. A valid long-lived resolved-place
+token could retain a legacy geometry match whose destination was approved before
+registry attestations existed. Publication then reused that cache and failed the
+current destination referenceability gate before the verified-provider upgrade
+could run. The fix refreshes only an active legacy seed whose current and cached
+Place ID and registry ID still match, whose policy has no attestation or approval
+revision, and whose source was a reviewed geometry match. Claim conflicts,
+reassignment locks, merged destinations, inactive countries, natural-destination
+intent, and all other cache failures remain fail-closed. The refreshed verified
+place is resolved through the current policy and replaces the stale token cache.
+
+The independent deletion failure in Sentry was a native App Check configuration
+problem: TestFlight build `1.1.0 (28)` uses the repository's iOS Firebase API key,
+but that key allowed only the iOS Maps API. At `2026-09-02T08:21:36.947890Z`,
+`firebaseappcheck.googleapis.com` was appended to the same production key while
+retaining `maps-ios-backend.googleapis.com` and the exact iOS bundle restriction
+`com.planli.planlitravels`. Read-back returned only those two API targets and that
+bundle ID. The key in `client/GoogleService-Info.plist` still matches the restricted
+cloud key, and a direct App Attest challenge returned HTTP 200 instead of
+`API_KEY_SERVICE_BLOCKED`; no native rebuild was required.
+
+Exactly five Node.js 22 v2 Functions were deployed from the merged commit to
+`europe-west1`: `saveRecommendation`, `publishRecommendationDraft`,
+`resolveRecommendationDestination`, `saveRoute`, and `publishRouteDraft`.
+Independent read-back found all five `ACTIVE` with 100% traffic on revisions
+`saverecommendation-00054-yah`, `publishrecommendationdraft-00020-wib`,
+`resolverecommendationdestination-00048-maq`, `saveroute-00053-dim`, and
+`publishroutedraft-00019-xiq`; their updates completed between
+`2026-09-02T08:25:46.613589272Z` and `2026-09-02T08:25:47.965835908Z`.
+
+The affected recommendation, draft, route, destination-approval, identity,
+resolution, and reference suites passed 152/152 tests under Node.js 22;
+`validate:changed` and every PR check, including CodeQL, Semgrep, Gitleaks and the
+security invariants, passed. The new regression proves that the stale Ella cache
+for an Ambewela exact place is replaced by the current Nuwara Eliya resolution and
+provider attestation. An unauthenticated callable probe returned the expected HTTP
+401, and a post-deploy log query returned zero `ERROR` entries for the five
+services. Physical-device publication and deletion retries remain unverified until
+a tester repeats them. No Hosting, Rules, indexes, Firestore documents, Storage,
+EAS build/update, store submission, IAM role, secret, or dependency change
+accompanied this repair.
+
+### Destination policy, automatic locality approval, and production repair
+
+On `2026-09-01`, the destination-policy rollout from
+[PR #303](https://github.com/doric2000/PlanLi/pull/303) was squash-merged as
+`9ea660b7e64b8def7fb2f91be5e4f97a8aacd924`. It preserves the current
+recommendation composer, draft/publish receipts, destination identity claims,
+notifications, canonical registry, publication fence, and reassignment flow.
+The new policy maps verified Israeli localities, including Judea and Samaria,
+East Jerusalem and the Golan Heights, to `IL`; Gaza remains `PS`. A new Israeli
+locality is auto-approved only from an exact Google Place ID with locality type,
+Hebrew and English names, valid geometry, and no registry or identity-claim
+conflict. The system attestation is `verified-il-locality-v1` and explicitly
+records policy approval rather than administrator approval.
+
+The first production Functions rollout ran from `9ea660b7...` between
+`2026-09-01T14:59:10Z` and `2026-09-01T14:59:44Z`. The initial source-discovery
+attempt timed out locally before any live change; the documented
+`FUNCTIONS_DISCOVERY_TIMEOUT=60000` retry completed. The exact 20 targets were
+`saveRecommendation`, `publishRecommendationDraft`,
+`resolveRecommendationDestination`, `resolvePlaceSelection`, `saveRoute`,
+`publishRouteDraft`, `recheckDestination`, `approveDestination`,
+`selectDestinationImageCandidate`, `setDestinationUploadedImage`,
+`setDestinationAirport`, `updateDestinationPolicy`,
+`previewDestinationReassignment`, `startDestinationReassignment`,
+`onDestinationImageCreated`, `auditDestinationQualityScheduled`,
+`reconcileDestinationApprovalReleasesScheduled`, `onDestinationCatalogSync`,
+`onDestinationRenameJobWritten`, and `onDestinationReassignmentJobWritten`.
+Independent inventory read-back found 20/20 `ACTIVE` on Node.js 22 in
+`europe-west1`; unauthenticated callable probes returned HTTP 401.
+
+The live dry-run fingerprint
+`e478566cc9612d17a4a6ade9fd1eac01313b38e79ce19cae24b4b9a4f90d1e3a`
+found two protected locality upgrades, one cross-country reassignment, eight
+apparent release candidates, 39 stale review statuses, and no blockers. The
+fingerprint checks correctly rejected stale apply attempts. Those attempts also
+exposed two rollout defects without deleting a claim or releasing unapproved
+content: the reassignment preview included a manifest-only `path` field, and a
+new French destination had an `approved` flag without a valid registry
+attestation. The preview normalization was merged in
+[PR #304](https://github.com/doric2000/PlanLi/pull/304) as `4f32795acc80c5dac4515d26aa3b504ed4dd1834`;
+it changed only the local repair tool and required no deployment. Full-attestation
+review status and release eligibility were merged in
+[PR #305](https://github.com/doric2000/PlanLi/pull/305) as
+`4d65c0e77517dfa6b01197518be770d3ceb21c75`. Its ten affected destination
+review/quality Functions—`getDestinationReview`, `recheckDestination`,
+`approveDestination`, `updateDestinationPolicy`,
+`selectDestinationImageCandidate`, `setDestinationUploadedImage`,
+`setDestinationAirport`, `onDestinationImageCreated`,
+`auditDestinationQualityScheduled`, and `onDestinationRenameJobWritten`—were
+deployed between `2026-09-01T15:29:10Z` and `2026-09-01T15:29:18Z`, and read
+back 10/10 `ACTIVE` on Node.js 22.
+
+The final signed production apply used fingerprint
+`87a6eb3412db803df0dc39564657a0cd74d37d92459fd6351b288a385317b941`.
+Earlier idempotent stages had already completed both locality upgrades, the
+Rotem reassignment, and one valid release; the final manifest therefore applied
+the six remaining eligible releases and all 39 review-status repairs. Its
+built-in post-apply read-back returned zero eligible holds, provisional
+upgrades, review repairs, or blockers. Independent read-back confirmed seven
+repaired recommendations/routes are `active` with
+`publicationGate.destinationApprovalVerified: true`. Three destination-held
+recommendations remain, and all three reference destinations that fail the
+canonical attestation gate; no approved/referenceable destination remains held.
+No approved destination review remains `open` or `ready`.
+
+Kfar Tavor retained destination ID `dst_LPDnYOyMlAl0POvm8HEN` and Google Place
+ID `ChIJhxwIMMRFHBUR23jEjc5-JJA`; its registry and identity claim are unique and
+policy-attested. Rotem is now active at
+`IL/dst_PmRcewZPb4aIeQ63nw3z` with Place ID
+`ChIJbbnU5J7zHBURtvRb15h6nvc`. The former
+`PS/dst__ZTW4zAJUElr7Mw1vdTs` destination is inactive and redirects to the IL
+target. Its original PS claim
+`dstclaim_dj2K0NzaZbra7uiUZQfBGvyUOKHr` remains bound only to the inactive
+source, while the new IL claim `dstclaim_mr6PekrcRpiwTxhM8P0E1l99GuF3`
+belongs only to the IL target. The completed reassignment job reports one
+recommendation updated and no errors.
+
+The first scheduled reconciliation after rollout exposed a missing
+collection-group index for `publicationFence.state`. Rather than add an
+infrastructure index, [PR #307](https://github.com/doric2000/PlanLi/pull/307)
+changed the bounded fence scan to use each country's destination subcollection
+and merged as `7f93b6e498827a95ac746005590f4c20753d3dc2`.
+Only `reconcileDestinationApprovalReleasesScheduled` was redeployed, completing
+at `2026-09-01T15:40:45Z`. A manual run of the existing Scheduler job returned
+HTTP 200 at `2026-09-01T15:41:25Z`; its release and fence results both reported
+zero failures. The final production dry-run fingerprint
+`c9c6fe3600cea33c60386c65cf7501cf302a0cdca271821206628cab51ddcb8c`
+reports zero remaining rollout work and no blockers. No Hosting, EAS, client,
+App Check, iOS configuration, Rules, indexes, Storage, or IAM deployment was
+performed for this rollout.
+
+### Global destination auto-approval Functions and data release
+
+On `2026-09-01`, [PR #313](https://github.com/doric2000/PlanLi/pull/313)
+restored provider-verified automatic approval worldwide and merged to `main` as
+`7949e2147386606788231501ff98b05e759a4d15`. Cities, islands, provinces,
+tourism regions and explicitly selected natural destinations now use the same
+exact Google Place-ID, bilingual-name, geometry, registry and identity-claim
+gates. The existing Israel/Palestine policy remains unchanged. Exact-only
+entries cannot widen into alias or geometry matches, while an existing
+administrator-approved registry entry remains exact-matchable and retains an
+administrator attestation.
+
+Exactly 21 Node.js 22 v2 Functions were deployed from that merged commit to
+`europe-west1`: `saveRecommendation`, `publishRecommendationDraft`,
+`resolveRecommendationDestination`, `searchPlaces`, `resolvePlaceSelection`,
+`saveRoute`, `publishRouteDraft`, `recheckDestination`, `approveDestination`,
+`selectDestinationImageCandidate`, `setDestinationUploadedImage`,
+`setDestinationAirport`, `updateDestinationPolicy`,
+`previewDestinationReassignment`, `startDestinationReassignment`,
+`onDestinationImageCreated`, `auditDestinationQualityScheduled`,
+`reconcileDestinationApprovalReleasesScheduled`, `onDestinationCatalogSync`,
+`onDestinationRenameJobWritten`, and
+`onDestinationReassignmentJobWritten`. Independent inventory read-back found
+21/21 `ACTIVE` on `nodejs22`; their ready revisions were updated between
+`2026-09-01T18:29:18.540Z` and `2026-09-01T18:29:27.399Z`.
+
+The signed production repair applied fingerprint
+`acc8d668c112589d649bbf600c9a5cdb761d5dcb928c1924ac0a93cf8c9ab744`
+at `2026-09-01T18:31:09.480Z`. It upgraded Tirana and legacy Paris in place,
+released three destination-only recommendation holds, repaired both review
+statuses to `approved`, and reported no identity, registry, or country
+blockers. Independent read-back found both destinations active with one registry
+entry and one identity-claim owner each; all three recommendations are `active`
+with `publicationGate.destinationApprovalVerified: true`. The subsequent
+dry-run returned fingerprint
+`c9c6fe3600cea33c60386c65cf7501cf302a0cdca271821206628cab51ddcb8c`
+with zero upgrades, holds, review repairs, or blockers, and Cloud Run logging
+showed no `ERROR` entries after deployment.
+
+The affected 173 Functions tests, `validate:changed`, PR validation, CodeQL,
+Semgrep, Gitleaks, dependency review and security-invariant checks passed. No
+Hosting, EAS, client, App Check, iOS configuration, Rules, indexes, Storage,
+IAM, or dependency deployment accompanied this release.
+
+### Admin console layout and scrolling Hosting release
+
+Implementation commit `4be4b93b4530a474a953723852ebb68e11271abe` passed
+[PR #296](https://github.com/doric2000/PlanLi/pull/296) and merged to clean
+`main` as `891601123c679a50d486a7b46b6d5806ae75e522`. The Admin console now
+lets every standard section scroll vertically inside the Web navigation layout,
+and its wide moderation queue keeps a fixed 425px list pane instead of collapsing
+the Hebrew text into a one-character column under React Native Web's `flex: 0`
+shorthand.
+
+The focused Admin suite passed 25/25 tests, the production Admin Web export
+resolved all 30 local references, and every applicable PR validation, CodeQL,
+Semgrep, Gitleaks, dependency, history and security-invariant check passed. The
+merged export was built with the production reCAPTCHA Enterprise App Check
+configuration and deployed only to Firebase Hosting for `planli-f0b12` at
+`2026-08-31T20:43:09.766Z`. Firebase released Hosting version
+`sites/planli-f0b12/versions/eb7b98e0e197a234` after finding 43 files and
+uploading two new files.
+
+Independent CDN read-back returned HTTP 200 for the Admin entry and bundle. The
+live `index.html` SHA-256
+`d74bac96766d4b2ea7cb85bab34560982af71a00cd8a246e1648c1b12a026d9c` and
+bundle SHA-256
+`4356d6a5be9c07ea0b651d2b529be9daf05e9b4c773696bb4e0a69173e323cf6`
+matched the local merged export exactly. CSP, `X-Frame-Options`,
+`X-Content-Type-Options`, Referrer Policy, Permissions Policy and
+Cross-Origin Opener Policy remained present. A browser smoke test at 1832x1005
+rendered the live Hebrew login page with no root horizontal overflow; the
+authenticated console remains unverified in that browser because it had no
+active admin session. No Functions, Rules, indexes, Storage, IAM, production
+data, EAS build/update or store action accompanied this Hosting release.
+
+### Destination-held recommendation recovery
+
+At `2026-08-31T19:42:41Z`, the destination-review recovery from merged PR
+[#293](https://github.com/doric2000/PlanLi/pull/293) was deployed to production
+from source commit `e32e3082b44cd3454b5abe5dd849867053275c09`. The targeted Functions
+release updated `getAdminResource`, `listHeldContent`, `resolveModerationCase`,
+and `approveDestination` in `europe-west1`; Firebase Hosting then released the
+matching admin export at `https://planli-f0b12.web.app/admin/`. Independent
+read-back found all four Functions `ACTIVE` with the expected core/media service
+accounts, all four unauthenticated callable probes were rejected with HTTP 401
+before mutation, and the post-deploy Cloud Run error query returned zero entries.
+The live admin URL returned HTTP 200, its `index.html` SHA-256 matched the local
+export (`96833d17abde1ebf5b16ad6feebabcc6e345b66944fc3dac5e51493f7ed6a8f1`),
+and a browser smoke test rendered the Hebrew login screen with no runtime errors.
+
+The production repair tools were first exercised in dry-run mode. The destination
+release manifest found exactly one eligible held record,
+`recommendations/rec_eXIfDUNwRW6F5vuQdngL`, linked to active approved destination
+`IL/dst_Wd15YlgNlJoLR_fqIwxX`; the notification manifest scanned 41 rows and
+found 37 legacy schema-v2 rows with malformed `createdAt`, with no truncation.
+Under separate explicit production apply authorization on `2026-08-31`, the
+fingerprint-bound notification repair updated and verified all 37 rows. The
+destination repair then reconciled operation
+`SAbDRmK1XVsINS9H7isQWyDG79VZPJscphJcaosOfsI`, released only the one expected
+recommendation at `2026-08-31T19:53:02.635Z`, removed its moderation hold, set
+`publicationGate.destinationApprovalVerified` to `true`, and created a
+`content_restored` owner notification with a real Firestore Timestamp. Independent
+read-back confirmed the recommendation is `active`; repeated dry-runs returned
+zero eligible held records and zero malformed notification timestamps.
+
+### Rollback-bucket security containment
+
+At `2026-08-28T20:57:37Z`, the retired US bucket
+`planli-f0b12.firebasestorage.app` was contained under explicit production
+authorization. Firebase Storage rules target `rollback` now uses ruleset
+`dba2edd4-f50c-487e-9370-6d915f54ceec`, whose normalized SHA-256
+`1d282e40bdfd77623c0e1a0a088081e5e79d133ad75956db573142e836b97b92`
+matches the local deny-all source. Public Access Prevention is `enforced` and
+Uniform Bucket-Level Access is enabled. Independent read-back found 1,070
+objects and the unchanged inventory SHA-256
+`3a58aa5fd328603ea87e64c057b27af183fcb1df474058d5c690481832143173`;
+an anonymous object-read probe returned HTTP 403, and no object was deleted.
+The rules were deployed from the uncommitted security
+working tree on `codex/fix-security-launch-readiness`, based on commit
+`d1937d5217c1b615681942585b9a7473727ea82f`; this records infrastructure state,
+not a deployed application release.
+
+### Admin SDK key removal
+
+At `2026-08-28T22:28:12Z`, user-managed Admin SDK key
+`7a92aaaab2814bc03c1393ededa5bb8b53ef5452` was disabled under explicit
+production authorization. The older key
+`920c62f4eed89d24e0cd2037b3ea1b4819eac655` was already disabled. At that
+checkpoint both keys still existed and neither had been deleted. Live Functions use only
+`planli-core-functions@planli-f0b12.iam.gserviceaccount.com` and
+`planli-media-functions@planli-f0b12.iam.gserviceaccount.com`. Post-change smoke
+tests returned HTTP 200 from `searchDestinations` through the core account and
+the expected unauthenticated HTTP 401 from active `prepareMedia` through the
+media account, with no server error. A 20-minute Cloud Run error-log read found
+zero errors. At `2026-08-29T08:03:20Z`, after separate explicit irreversible
+authorization, both disabled keys were permanently deleted. Independent
+read-back reports zero user-managed keys for the Admin SDK service account;
+Google's four system-managed keys remain untouched. The same core/media smoke
+tests passed after deletion and the following 20-minute Cloud Run error window
+again contained zero errors. The deleted private keys cannot be recovered.
+
+### Secret IAM containment
+
+At `2026-08-29T08:10:15Z`, the stale default Compute Engine service account
+`633543026638-compute@developer.gserviceaccount.com` had
+`roles/secretmanager.secretAccessor` removed from `GOOGLE_MAPS_KEY` and
+`REST_COUNTRIES_KEY` under explicit production authorization. Independent IAM
+read-back confirms that each secret now has exactly one accessor:
+`planli-core-functions@planli-f0b12.iam.gserviceaccount.com`. A public core
+Function returned HTTP 200, the secret-bound `resolveRecommendationDestination`
+Function remained `ACTIVE` and returned its expected unauthenticated HTTP 401,
+and the following 20-minute Cloud Run error window contained zero errors. No
+secret value, version, or other IAM binding was changed.
+
+### Firestore and Auth protection
+
+At `2026-08-29T08:26:09Z`, under explicit production authorization, deletion
+protection was enabled on the Standard, Firestore Native `(default)` database in
+`eur3`; point-in-time recovery remained enabled. The Auth authorized-domain list
+was reduced from four entries to exactly `planli-f0b12.firebaseapp.com` and
+`planli-f0b12.web.app`. Only `localhost` and the expired
+`planli-f0b12--account-deletion-20260825-7zp3mzlh.web.app` preview domain were
+removed. Independent API read-back confirmed both controls, both retained Auth
+handler URLs returned HTTP 200, and the post-change Cloud Run error window
+contained zero errors. Three `onUserMediaCleanup` HTTP 500 entries at
+`2026-08-29T08:25:48Z` predated the Firestore update and were transient Storage
+metadata-precondition conflicts. Automatic retries for all three Firestore event
+IDs returned HTTP 204 by `2026-08-29T08:26:02Z`; no persistent cleanup failure
+was observed, and the errors were not caused by this configuration change.
+
+### Production media CORS containment
+
+At `2026-08-29T08:36:30Z`, under explicit production authorization, the CORS
+policy on `planli-f0b12-media-eu` was reduced from the two production origins
+plus four localhost/loopback origins to exactly
+`https://planli-f0b12.web.app` and
+`https://planli-f0b12.firebaseapp.com`. The approved methods remain `GET`,
+`HEAD`, `PUT`, `POST`, and `DELETE`; the existing response headers and
+3,600-second max age were preserved. Live preflight probes returned the expected
+CORS headers for both production origins and no CORS headers for
+`http://localhost:19006` or `http://127.0.0.1:8081`. Before/after inventory
+contained the same 1,583 object names with SHA-256
+`c58b1b76a4a5f96504c7ce996a47f4a7d132bfd1bf4b91d7b99231e14e8acb64`.
+Lifecycle, soft-delete, Uniform Bucket-Level Access and Public Access Prevention
+state were unchanged; the audit log contained no IAM mutation. An initial
+operator probe incorrectly used `GET` against a callable and produced the
+expected HTTP 400/`Invalid request` log at `2026-08-29T08:37:35Z`. The corrected
+callable `POST` returned HTTP 200 at `2026-08-29T08:38:17Z`, and the subsequent
+Cloud Run error window contained zero errors.
+
+### Production billing budget guard
+
+At `2026-08-29T08:47:18Z`, under explicit production authorization, the Cloud
+Billing Budget API was enabled for `planli-f0b12` and monthly budget
+`PlanLi production launch guard` was created for project number `633543026638`.
+The budget is ₪75, the rounded-up equivalent of the approved US$25 floor using
+the Bank of Israel representative USD/ILS rate of 2.9680 published on
+`2026-08-28`. Current-spend alerts are configured at 50%, 75%, 90%, and 100%.
+Default role-based notifications remain enabled; IAM read-back identifies
+`doric9@gmail.com` as the sole Billing Account Administrator and therefore the
+recipient. Existing budget `Firebase Project planli-f0b12` (₪3.50; thresholds
+50/90/100%) was preserved without modification. Budget ID
+`91fe404e-0c64-42ae-961b-f95bb67e088d` was independently read back with the
+exact amount, project scope, period, ownership scope, credit treatment, and four
+thresholds. Budgets alert only and do not cap or disable services. Alert delivery
+cannot be exercised safely without crossing a threshold and remains untested.
+
+### Production no-cost quota guardrails
+
+Between `2026-08-29T13:30:34Z` and `2026-08-29T13:32:34Z`, 22 production
+quota preferences were lowered under explicit authorization and independently
+read back from Cloud Quotas. A later adjustment on the same date lowered legacy
+Text Search and Identity Toolkit limits; the current reviewed manifest SHA-256 is
+`3feadf5a15a55175343956701aae2e81efc596ebb294445e3abfc6768645b337`.
+Places is capped at 300 autocomplete requests/day and 150 place-detail
+requests/day, with 30/minute burst ceilings; the manual canonical-registry Text
+Search command is currently blocked at zero unless a temporary administrative
+quota is separately approved. The production destination-cache scheduler is
+selected for retirement rather than quota expansion. The local candidate removes
+its daily provider traffic entirely; the live Function remains deployed until a
+separately authorized deletion.
+Unused Places photo, media, nearby and review endpoints are zero.
+Geocoding is capped at 300 reverse-geocoding requests/day and 30/minute, and its
+unused address/place/destination endpoints are zero. reCAPTCHA Enterprise
+assessment creation is capped at 300/day and 60 total API requests/minute.
+Identity Toolkit is capped at 60 general requests/minute. Custom-token sign-in
+and phone/SMS verification are zero because the current source has no
+custom-token flow and PlanLi uses TOTP rather than SMS MFA.
+
+These API quotas return HTTP 429 when exhausted; they do not silently buy more
+capacity. They can temporarily block new place selection, geocoding, Web App
+Check or login during an unusual spike. Play Integrity retains Google's 10,000
+requests/day standard allowance, Firebase App Check token exchange remains
+unchanged because the service itself is no-cost, and Firestore retains its
+existing 50,000 reads plus 20,000 writes/deletes per day. Storage, Identity
+Platform MAU and most Firebase resource charges do not expose a true monetary
+quota, so the preserved ₪3.50 and ₪75 budgets remain alerts rather than hard
+spending caps. `npm run security:cost-quotas` now reads all 22 controls as
+`reuse-quota-preference`.
+
+### Security monitoring and incident response
+
+At `2026-08-29`, production prerequisites were applied and read back under
+manifest `1cd991d764e338a2bab04a8a52b5815712dcec34d2c1f1072205000ddd21cfc7`:
+the five required APIs are enabled, the core runtime has Service Usage Consumer,
+the core/media runtimes have App Check Token Verifier, and the exact iOS Firebase
+app has Team ID `C22ZFVA6M6`. The verifier role is required because
+`issueGuestSession`, `deleteContent` and `requestAccountDeletion` consume
+limited-use tokens for replay protection.
+
+Cloud Monitoring manifest
+`5627e8d3aa0b69e1795391df18fc1170b3b9ec1e8709811065135e2293217731`
+is live with one same-email channel and four exact policies. Service Account key
+creation, sustained backend 5xx and Maps quota exhaustion are enabled. App Check
+rejection remains deliberately disabled until enforcement. The email channel is
+still `UNVERIFIED`; the owner must click Google's verification email and test
+delivery. No second email address is required. Follow the containment, evidence,
+rotation, recovery, and closure procedure in
+[the security incident-response runbook](../docs/security-incident-response.md).
+
+Identity Platform/TOTP manifest
+`a13cb12d49c152bbec05255319103dca515705d943238f2f2267b47e3b7117bb`
+is live: the project subtype is `IDENTITY_PLATFORM`, MFA is enabled, TOTP is the
+only second factor, and SMS MFA is disabled. Two separate human administrators
+now have individual TOTP enrollment, an active admin claim and an active private
+registry entry. A real second-admin mutation through the live console remains a
+manual release test after that browser session refreshes its ID token.
+
+App Check manifest
+`455b880ef5df37d583ebe1e8cc580f1cde64cd9af932685d3c7cc45364827b98`
+now reads back exact Play Integrity, App Attest, the production-only reCAPTCHA
+Enterprise key and the Web App Check configuration. DeviceCheck fallback is the
+only missing provider because Apple must issue its external `.p8` key. No App
+Check enforcement was changed, so there is currently no normal assessment
+traffic from a protected production build.
+Protected EAS builds require separate iOS and Android Google Services file
+variables. The config parser verifies each file's project number/ID, native App
+ID, bundle/package, and production-vs-staging boundary before assigning it to
+the native build. On `2026-08-30`, the exact Firebase Management API files were
+downloaded into ignored temporary storage, identity-checked, and uploaded to the
+EAS `production` environment as secret file variables
+`PLANLI_GOOGLE_SERVICES_IOS_FILE` and
+`PLANLI_GOOGLE_SERVICES_ANDROID_FILE`; the public
+`EXPO_PUBLIC_RECAPTCHA_ENTERPRISE_SITE_KEY` was added to that same environment.
+The respective EAS variable IDs are
+`680c4407-74e5-4c18-9dc6-b4efb99a6eca`,
+`9959690f-a65f-4770-bc30-a31a92d748be`, and
+`ad7ac563-1d58-4a89-89c2-29b951a606ac`. The downloaded Android and iOS files
+had SHA-256 values `123524be3427674b500c86e3f1e6008f4105cf12588e55cdf1498a946ddc30f6`
+and `5e9feeef38d9019927d2f99c8b46bef452e85871c048f2ee89ebd900959f26a1`.
+Read-back confirmed production-only association; the preview environment was
+unchanged. The protected config preflight passed, but no EAS build was started.
+Read-only EAS billing state showed account `doric2000` on the Free plan with
+3 Android and 13 iOS medium builds used in the current period. One security
+build per platform would remain within the no-overage Free limits, but still
+requires an exact build authorization and a clean committed source revision.
+The native-to-Firebase-JS bridge uses the normal cached App Check token. Only
+the three replay-protected callables request a consumable limited-use token;
+ordinary Firestore, Storage and callable traffic must never reuse a consumable
+token globally.
+PR `#265` was squash-merged to `main` commit
+`60399fbdbe38485d3a4087ef658cf96ed1bb4127` at `2026-08-30T12:49:05Z`.
+The production `refreshDestinationCachesScheduled` Function was then deleted
+from `europe-west1`; independent Function and Cloud Scheduler inventory confirms
+that both the Function and its daily job are absent. The first targeted deploy
+attempt stopped during local source discovery before any live Function update;
+the single documented retry with `FUNCTIONS_DISCOVERY_TIMEOUT=60000` deployed
+only `getDestinationOverview`, `searchDestinations`,
+`onCityFavoriteProjection`, `onDestinationCatalogSync`,
+`onCountryDestinationCatalogSync`, `approveDestination` and
+`updateDestinationPolicy`. Their active Node.js 22 Cloud Run revisions are
+`getdestinationoverview-00022-xun`, `searchdestinations-00021-qam`,
+`oncityfavoriteprojection-00027-xis`,
+`ondestinationcatalogsync-00021-vet`,
+`oncountrydestinationcatalogsync-00018-kos`,
+`approvedestination-00012-ruv` and
+`updatedestinationpolicy-00005-kad`; every target uses
+`planli-core-functions@planli-f0b12.iam.gserviceaccount.com`.
+
+Firestore Rules were released as ruleset
+`706a690a-4453-4d86-a0b7-1be62a3d568c`. Independent API read-back produced the
+same local and live SHA-256
+`7227514745ee03b3af92145b16c2097ba4204871842c0c0b2510d5042b9cfdb2`.
+Unauthenticated smoke requests returned the expected HTTP 401
+`APP_CHECK_REQUIRED` for the two public callables and `SIGN_IN_REQUIRED` for
+the two admin callables; no provider request or Firestore mutation was made.
+Cloud Run logging from `2026-08-30T12:55:00Z` returned zero `ERROR` entries for
+the seven deployed services. The read-only OAuth audit, manifest SHA-256
+`2ed68b04cd3f284ff2cb3fa51f80c07fbb31a696ce91a2999d39621f6e791165`,
+reports no missing services or Functions, no wrong service accounts, no legacy
+bindings, no deployed retired Function, and both readiness gates `true` before
+credential retirement. Under separate explicit production authorization on
+2026-08-30, API keys `1c999850-18fb-4b03-984e-ce90ed6dd872` (`Places API`) and
+`9fea6ed1-d5d6-4c9b-8205-48dd0da9cefb`
+(`PlanLi Places API New server`) and Secret Manager resources
+`GOOGLE_MAPS_KEY` and `GOOGLE_PLACES_NEW_KEY` were deleted. Independent
+pre-delete inventory found 123 deployed v2 Functions and zero references to
+either secret. Post-delete read-back found zero active target keys, zero target
+secrets, no legacy bindings or resources, and zero `ERROR` log entries for the
+seven OAuth Functions from `2026-08-30T15:03:00Z` through the verification
+window. Google reports both API keys as soft-deleted and inactive; recovery
+metadata remains for 30 days and the keys must not be undeleted or reused. No
+credential value is retained in this repository or release record.
+
+On 2026-08-30 the project owner explicitly accepted the Google Maps contractual
+retention risk of keeping the existing stored place snapshot after its historical
+28-day expiry. This acceptance does not represent Google policy compliance and is
+not classified as a security fix. The backend and Rules changes are now live:
+complete stored destination names remain usable after expiry and no daily Google
+cache refresh remains. The client favorite-preview change is merged but is not
+delivered to installed apps because no EAS build or OTA was authorized; app
+version, build numbers, runtime `1.1.0` and the latest production OTA group remain
+unchanged. No migration, data/object deletion, API-key or secret deletion, EAS
+build, OTA, TestFlight/App Store or Google Play action accompanied this rollout.
+
+### Credential scan and local rollback hygiene
+
+At `2026-08-29T10:22:21.612Z`, the read-only REST credential audit recursively
+scanned 2,149 production Firestore documents across 264 collection paths and
+found zero embedded GCP API keys, private keys, Firebase refresh tokens, GitHub
+tokens, AWS access keys, or OpenAI API keys. It returned only aggregate counts
+and never logged document IDs, field values, or access tokens. Run it with
+`cd functions; npm run audit-live-credentials`; it uses the signed-in `gcloud`
+account and does not require a local credential file.
+
+An ignored July Firestore rollback contained five copies of the still-live
+legacy Places key inside obsolete `countries/*/cities.imageUrl` values. They
+were redacted atomically under reviewed manifest SHA-256 `3b892679b7a02539439f758b5be9d731f4d3cbc8a4e200e75ba522ce2ac8a343`;
+all other rollback data was preserved. The key itself remains an explicit PL-16
+deletion target after the OAuth Functions rollout. `security:inputs` scan
+`inputs-2026-08-30T09-08-53-215Z-e6737a12-672b-4163-8197-334206fe42b8`
+then found zero input-rule findings and zero secrets in the 428 commits reported
+by Gitleaks, three ignored environment files, and the 939-file current working-tree
+inventory, with both scanner canaries detected.
+The subsequent full gate
+`full-2026-08-30T09-09-34-160Z-1dc9bd07-3f20-486a-9be7-490646be5df6`
+scanned 532 production JS/TS candidates in 11 non-empty batches and all three
+dependency trees. Both final scans used source snapshot SHA-256
+`b6c8ab19fc3755b83e7d423db2ca6b377146bc9dcb76473e24d8bc29e513a5b6`
+and completed with zero Semgrep findings, zero secret findings, zero blocking
+dependency advisories, and `gatePassed: true`.
+
+The same final pass also closed three defense-in-depth gaps found by manual
+source-to-sink review: every state-changing service-layer admin override now
+requires recent TOTP in addition to claim and registry checks; maintenance scripts
+pin Storage operations to the exact PlanLi active/rollback buckets and reject forged
+legacy URLs before object reads; and decoded JPEGs now have an independent 16,384
+pixel width/height ceiling in addition to byte and total-pixel limits. The complete
+Functions test command passed under Node 22; final focused evidence is 144/144
+authorization/service tests, 25/25 Storage-maintenance tests, and 11/11 media tests.
+After the final moderation, destination-fence, catalog and quota-boundary fixes,
+the complete Functions command passed 794 tests with 23 emulator-only skips and
+zero failures (817 total). The Rules emulator gate passed
+23/23, and the App Check token/session client suites passed 6/6. These results
+describe the local security candidate only; no Functions, Rules, migration or
+native build was deployed by this validation pass.
+
+Official Codex Security Diff Scan
+`cac587c8-0fc6-46cd-be44-bf91a63cfa21` completed on `2026-08-30` against the
+working-tree snapshot digest
+`codex-security-snapshot/v1:sha256:d6b162bdf8e5379031d2c4b227fa238e3d909b1e53d4f830ea74cbb6cc134ff8`.
+All 214 native review items were closed and no reportable finding survived.
+The report records partial coverage because the native inventory did not emit
+`firestore.rules`, `storage.rules`, or `storage.us-readonly.rules` as individual
+review items; those exact Rules are covered separately by the passing 23/23
+emulator suite. The scan also leaves live deployment, App Check enforcement,
+physical-device evidence, and two-human-admin TOTP enrollment as explicit
+release gates. The intentional Places Pro/`displayName` behavior and its existing
+field masks were reviewed and preserved; no paid provider request, deployment,
+migration, EAS build, or submission was performed by the scan.
+Immediately afterward, a focused release-order check found that
+`issueGuestSession` hard-coded App Check enforcement instead of honoring the
+documented `PLANLI_ENFORCE_APP_CHECK` rollout switch. The one-line binding was
+corrected without weakening the handler's own fresh limited-use App Check proof,
+and the focused static boundary suite passes 2/2. Because this edit postdates the
+sealed snapshot, the final committed revision still requires the local security
+gate and PR CodeQL before deployment; the sealed report is not misrepresented as
+covering the later line.
+
+On `2026-08-30`, after that correction passed the local security gate and PR
+CodeQL in merged `main` commit
+`3e2b166fde52bfc7847aa0443be301f5ebd2848b`, `issueGuestSession` was deployed
+alone to production. The first Firebase CLI attempt stopped during local source
+discovery at the default 10-second timeout and made no live change; the single
+documented retry with `FUNCTIONS_DISCOVERY_TIMEOUT=60000` created only the
+authorized Function. Independent read-back reports an active generation-2
+Node.js 22 Function in `europe-west1`, service account
+`planli-core-functions@planli-f0b12.iam.gserviceaccount.com`, 256 MiB memory,
+20-second timeout, zero minimum instances, one maximum instance, and only the
+`PUBLIC_RATE_LIMIT_KEY` secret binding. `PLANLI_ENFORCE_APP_CHECK` is unset, so
+product-wide enforcement remains off. The issuer still requires and consumes a
+fresh limited-use App Check token in its handler: an unauthenticated smoke
+request returned HTTP 401 `APP_CHECK_REQUIRED` before any Firestore write.
+Cloud Run revision `issueguestsession-00001-pab` receives 100% of traffic and
+the post-deploy error window contained zero errors. No other Function, Rules,
+Hosting, migration, native build or OTA was changed.
+
+The same merged `main` commit was then used for an explicitly authorized,
+security-only rollout of 26 moderation and admin targets. The rollout updated
+`submitReport`, the moderation dashboard/case callables, the three admin list
+paths whose cursors now use document-ID validation, the saved-view and held-
+content admin callables, all four user-administration mutations, the two
+moderation notification triggers, and the suspension expiry scheduler. It also
+created `reconcileStaleModerationDecisionsScheduled` for the first time. The
+new reconciler is enabled every 15 minutes in `Asia/Jerusalem`; it releases only
+stale, operation-bound moderation work so a retry cannot treat an unrelated
+missing target as a successful deletion. Independent read-back found all 26
+targets `ACTIVE`, generation 2, Node.js 22, `europe-west1`, zero minimum
+instances and maximum 20 instances, using only the existing core or media
+Functions service accounts. Their live update window is
+`2026-08-30T15:30:35.094450960Z` through
+`2026-08-30T15:31:27.918973750Z`.
+
+Before deployment, the focused callable-input, moderation, suspension, TOTP and
+admin-cursor suites passed 73/73. Live non-mutating smoke requests proved the
+shared input boundary with HTTP 400 `CALLABLE_INPUT_OBJECT_REQUIRED`, and proved
+the admin boundaries with HTTP 401 `SIGN_IN_REQUIRED`; Cloud Run returned zero
+`ERROR` entries for the 26 targets after the rollout. This makes the separated
+report/decision revisions, operation-scoped moderation retry, preservation of
+accounts that were disabled before a PlanLi suspension, and the three `cleanId`
+admin cursors live on their affected surfaces. No Rules, Hosting, indexes,
+migration, production data, IAM, secrets, native build or OTA was changed.
+
+To finish the same input-hardening gate without leaving older callable
+revisions behind, the remaining 52 callable Functions were then updated from
+that exact source. Independent inventory now reports all 86 locally declared
+callables `ACTIVE` on Node.js 22, with zero callables absent and zero callables
+predating the security source; every callable has zero minimum instances. The
+second live update window is `2026-08-30T15:37:04.462948980Z` through
+`2026-08-30T15:38:14.448697105Z`. Non-mutating invalid-object probes against a
+public read, account registration and media preparation each returned HTTP 400
+`CALLABLE_INPUT_OBJECT_REQUIRED`, proving the shared boundary runs before their
+business logic. Cloud Run returned zero `ERROR` entries for all 52 targets in
+the post-deploy window. This second batch also changed no Rules, Hosting,
+indexes, scheduler, data, IAM, secrets, build, or OTA state.
+Google Cloud reports six successful regional builds totaling 4.73 build-minutes
+for both rollouts. The existing `gcf-artifacts` repository is 586.916 MB and has
+an active Firebase cleanup policy that deletes artifacts older than 24 hours,
+so these builds do not accumulate indefinitely; billing reports can lag, so this
+is usage evidence rather than a promise of zero provider charge.
+
+On `2026-08-31`, the canonical destination provider-rebind fix passed all
+required checks in PR [#274](https://github.com/doric2000/PlanLi/pull/274) and
+was squash-merged as `0f7df66cb95a6121bda51a55588c37a008337463`. The
+README-only security evidence in PR
+[#275](https://github.com/doric2000/PlanLi/pull/275) merged as
+`44aeb3b81006e12a0f2d015f33c782beb234eeb9`, and the exact five-file native
+release-runtime isolation in PR
+[#276](https://github.com/doric2000/PlanLi/pull/276) merged as clean `main`
+commit `f97a0c447a16ca1900da76854a168d1a2aa3701b`. The source continues to use
+marketing version `1.1.0`; its next security binary is isolated on OTA runtime
+`1.2.0`. No EAS build or Update was created, so installed binaries and the live
+production OTA group remain unchanged.
+
+After a fresh Firebase CLI login, only `updateDestinationPolicy` was deployed
+from that exact clean `main` commit. Independent Firebase and Cloud Run
+read-back reported an active generation-2 Node.js 22 Function in
+`europe-west1`, ready revision `updatedestinationpolicy-00007-xud`, update time
+`2026-08-31T10:38:20.506108391Z`, 300-second timeout, zero configured minimum
+instances and maximum 20 instances. An empty unauthenticated callable request
+failed closed with HTTP 401 `UNAUTHENTICATED`, and the recent post-deploy error
+log count was zero. No other Function, Rules, Hosting, migration, production
+data, IAM, secret, EAS build or OTA was changed.
+
+A subsequent read-only production destination review inspected 53 destination
+records, 34 catalog records, 29 content records and 254 registry records. It
+found 22 active destinations already carrying non-legacy policy state, 13
+active destinations still missing a registry binding, and 18 inactive records.
+The review fingerprint is
+`e33cc3bb51b666031b276bb07e696377fd9768f1e8f36b5e93bcf53d6eee6b6f`.
+The separate fail-closed publication migration dry-run fingerprint is
+`fdec6615eeaf3c5f6a94b4b395ebb8f467c8fb8905a5d813c0f86a054ddd7484`; before
+the remaining approvals it proposes 47 actions: 12 catalog removals, six
+content holds, six recommendation-count corrections and 23 content-gate
+verifications. These results are evidence only. No destination approval or
+Firestore write was performed; a fresh protected-admin login with TOTP and a
+separate exact production data-write authorization remain required.
+
+Later on `2026-08-31`, live discovery logs identified a separate availability
+failure: the secure recommendation and route fallback queries required composite
+indexes combining the destination-approval gate with popularity ordering. PR
+[#277](https://github.com/doric2000/PlanLi/pull/277) added only those two exact
+indexes and their regression assertions, passed CI and CodeQL, and was
+squash-merged as `d75f397d0f99f64b0e9d08d6a46ac673625140af`. Only
+`firestore:indexes` was deployed from the matching merged index blob
+`ca713de755631e342613ccba5456195ade178384`; all five previously undeployed
+publication-gate indexes reached `READY`. Read-only production queries then
+executed successfully for both recommendations and routes, but returned zero
+public documents because the reviewed destination/content approval migration had
+not yet been applied. No Function, Rules, Hosting, EAS, OTA, IAM, secret or data
+write was part of this index deployment.
+
+The protected destination rollout then completed from six additional reviewed
+PRs. PRs [#278](https://github.com/doric2000/PlanLi/pull/278),
+[#279](https://github.com/doric2000/PlanLi/pull/279) and
+[#280](https://github.com/doric2000/PlanLi/pull/280) generated valid canonical
+fallback IDs, repaired invalid provisional registry IDs and allowed an existing
+kind-specific bounded radius only when a provider supplied a verified center but
+no usable viewport. The final focused `updateDestinationPolicy` deployment is
+Cloud Run revision `updatedestinationpolicy-00010-tuk`. A fingerprint-locked,
+one-time approval run approved all 13 remaining active reviewed destinations;
+the post-apply read-back found zero active unapproved destinations and zero
+active destinations missing a registry binding. All 18 inactive records stayed
+inactive and were neither approved nor reactivated.
+
+PRs [#281](https://github.com/doric2000/PlanLi/pull/281) and
+[#282](https://github.com/doric2000/PlanLi/pull/282) made the publication-gate
+migration fingerprint lossless at Firestore nanosecond precision and corrected
+the private receipt path. The signed production migration fingerprint was
+`94427fcc8a1c65c30aa1dbae855fccdf215aa471498f43a6570a58af72a75274`.
+It completed 29 writes: six recommendation-count corrections, 21 recommendation
+gate verifications and two route gate verifications. A fresh dry run reported
+zero remaining actions, zero held content and zero catalog removals. The applied
+receipt was independently read back from
+`system/migrations/destinationPublicationGate/94427fcc8a1c65c30aa1dbae855fccdf215aa471498f43a6570a58af72a75274`;
+the 18 inactive destinations remain visible only to the review workflow.
+
+Finally, PR [#283](https://github.com/doric2000/PlanLi/pull/283) added the two
+missing chronological publication-gated feed indexes and merged as
+`fc4dc2fe6405adcb36bf5b6be00890404bffd6a9` after affected validation, CodeQL,
+Semgrep, Gitleaks, dependency review and locked audits passed. Only
+`firestore:indexes` was deployed; both new indexes reached `READY`. Direct
+production-data service smoke tests returned 21 recommendations and two routes
+in normal `generic` mode with no `candidate-query-failed` fallback. The last
+production callable error entries for these feeds were at `2026-08-31T06:44Z`,
+before this repair; no later `ERROR` entry was present at verification time.
+Firebase CLI credentials used earlier in the session were revoked, and the
+final read-only verification used ADC restricted to Cloud data access. No Cloud
+SQL scope, new paid service, Function, Rules, Hosting, EAS build, OTA, IAM,
+secret deletion or additional production-content mutation accompanied this
+final index repair.
+
+The `2026-08-31` post-remediation audit rechecked all 22 original findings
+against source and live state. Eighteen are fixed and live: PL-01..04, PL-07..09,
+PL-11..16 and PL-18..22, excluding the separately listed PL-05, PL-06, PL-10
+and PL-17. The rollback bucket now has Public Access Prevention and uniform
+bucket-level access enabled, its Rules deny all access, and an anonymous object
+probe returned HTTP 401. The privileged Firebase Admin service account has zero
+user-managed keys. The legacy Google server secrets and API keys are absent.
+The remaining Maps keys are application- and API-restricted for Android and
+iOS. The public Firebase client key is restricted to Firebase-related API
+targets but intentionally has no referrer restriction because the native
+Firebase JS client shares it; its authorization boundary is Rules plus App
+Check, not key secrecy. The media bucket CORS contains only the two production
+origins, the default compute
+identity has no reviewed secret binding, Firestore deletion protection and PITR
+are enabled, and Auth authorized domains contain only the two production hosts.
+Identity Platform TOTP is enabled and two independent human admins are enrolled;
+the second-admin operational release gate is closed.
+
+App Check providers are configured with one-hour tokens for Android Play
+Integrity, iOS App Attest and Web reCAPTCHA Enterprise. DeviceCheck fallback
+still requires an Apple Developer key and remains an explicit release gate.
+Firebase service enforcement and the Functions rollout switch remain off until
+a signed runtime `1.2.0` client is installed and tested; therefore PL-17 is
+still open. PL-06 and PL-10 are fixed in source—SDK 57, device-only
+SecureStore migration, Android backup disabled and reverse-DNS URL scheme—but
+are not live in the installed runtime `1.1.0` binaries. PL-05 remains the sole
+accepted risk: EAS OTA is intentionally unsigned and must be re-reviewed by
+`2026-11-30`, at 1,000 MAU or after a suspicious event, whichever occurs first.
+
+The current billing controls include project budgets of ILS 3 and ILS 75 and
+hard API quota preferences. reCAPTCHA is capped at 300 assessments/day and
+60/minute, keeping this project's theoretical 31-day maximum below its 10,000
+assessment no-cost allowance. Identity Toolkit is capped at 60 broad requests
+per minute and SMS/custom-token paths are disabled. The Places launch caps are
+30/minute, 300 autocomplete requests/day and 150 details requests/day; these
+last two protect the 10,000 Essentials and 5,000 Pro monthly free caps but are
+too low for a 200-user availability target. They must not be raised until a
+separate monthly server-owned Essentials/Pro budget or explicit paid-overage
+policy is approved. The unused Places Legacy API remains enabled but has no key,
+secret or code consumer; disabling the service is still awaiting an explicit
+service-removal decision.
+
+The unchanged merged source then passed the full no-cost release validation:
+994/994 client tests across 178 suites, 818/818 Functions tests with 23 intended
+skips, and 23/23 Firestore/Storage Rules emulator tests. Admin Web exported and
+resolved all 30 local references; live Hosting serves the complete CSP, no
+`sourceMappingURL`, no JSON source map, and HTTP 404 for non-admin application
+routes. iOS release configuration retained marketing version `1.1.0` and runtime
+`1.2.0`, and a local iOS Expo export completed without EAS or upload. All three
+npm workspaces currently report zero audit vulnerabilities. These checks do not
+replace a signed TestFlight/Play Internal build, physical-device App Check and
+SecureStore tests, or gradual enforcement verification.
+
+The previous Android internal release was `1.1.0 (6)`, EAS build
+`6eb6a704-2546-4f4e-acaa-fff95ec38d7c`, built from clean `main` source commit
+`5bf89e69d90cf6c35da414b3bdac84ea1a5181f5` and completed at
+`2026-08-26T15:46:09.341Z`. Google Play reports release
+`PlanLi 1.1.0 (6) – RTL Navigation` as available to internal testers, released at
+`2026-08-26T18:58+03:00`. Download, installation, and physical Hebrew/Arabic RTL
+verification on Android remain pending.
+
+The current Android internal release is `1.1.0 (8)`, runtime `1.2.0`, available
+to internal testers since `2026-09-09T06:26+03:00`. Its exact EAS artifact was
+inspected and published through Play Console. See
+[Android internal-test release](#android-internal-test-release-2026-09-09).
+
+The current iOS production binary is `1.1.0 (15)`, EAS build
+`d9e78de5-6f97-4371-b223-245862ec4fbb`, built from the same source commit and
+completed at `2026-08-26T15:00:19.672Z`. EAS submission
+`c25a5130-e7fd-464c-a41c-ff62288b65df` finished at
+`2026-08-26T16:38:56.039Z` and uploaded the build to App Store Connect app
+`6801453067`. App Store Connect reports build 15 as in beta testing for internal
+and external TestFlight. Installation and physical Hebrew/Arabic RTL verification
+remain unverified.
+
+The `2026-09-01` iOS security-release candidate is `1.1.0 (26)`, EAS build
+`06a32a0f-1725-4dcb-b65a-04af34f466fc`, completed at
+`2026-09-01T14:01:41.447Z` from clean `main` commit
+`720c3983acc80bcf237729fad6726c98b65003fe`, runtime `1.2.0`, production
+profile/channel and App Store distribution. Before the successful build,
+builds `f5c150f0-7602-4c65-83f8-3c17c1292cf5` (24) and
+`27c37a13-9fb5-40e6-a3cc-b8100604e4bf` (25) failed because their App Store
+provisioning profiles did not contain App Attest. App Attest was then enabled
+for Apple App ID `com.planli.planlitravels`, and EAS generated replacement
+profile `NGZ4V8B72H`. Inspection of the resulting IPA verified marketing
+version `1.1.0`, build `26`, the exact bundle identifier, a signed production
+App Attest entitlement, and the absence of unused Face ID, always/background
+location and motion usage descriptions; foreground location, camera and photo
+library permissions remain. EAS logs confirm successful Sentry source-map and
+dSYM upload. The focused production Functions rollout from the same commit
+updated only `saveRecommendation` and `publishRecommendationDraft`; Cloud Run
+revisions `saverecommendation-00050-yel` and
+`publishrecommendationdraft-00016-gob` are ready with 100% traffic, no new
+error logs were found, and unauthenticated smoke requests returned HTTP 401.
+Build 26 has not been submitted, installed or tested on a physical iPhone, and
+no EAS Update was published. App Check service enforcement therefore remains
+off pending physical-device validation.
+
+The latest compatible Android and iOS production EAS Update is region-selector
+polish group `b363be1d-63b2-4ea9-86e2-67bf3923b01c`, Android update
+`01a04728-4cd2-7278-bf57-8d555e2e1c2d` and iOS update
+`01a04728-4cd2-7c6d-a464-3f0af1fe74b6`, published at
+`2026-08-28T06:56:58.578Z` from clean `main` merge commit
+`0c10dc73b4b7ad78b025acf321615f95d47b8277`. EAS read-back confirms runtime
+`1.1.0`, the exact merge commit, both platforms and the production branch.
+Download, application and end-to-end visual behavior on physical Android and
+iOS devices remain unverified.
+TestFlight build `1.1.0 (13)` remains installed and in use on the owner's physical
+iPhone. Builds 14 and 15 have not been confirmed as installed or exercised. An
+internal iOS EAS Development Build
+`1.1.0 (13)` completed at
+`2026-08-24T17:53:02.788Z` from recommendation/RoadTrip composer PR `#193`
+merge commit `8afdfb3`. Its EAS build ID is
+`ff0fc01a-890b-4668-b9a1-5d60891e9545`, runtime is `1.1.0`, and the
+development profile has no update channel. Download, installation, and physical
+iPhone behavior remain unverified; no EAS Update, App Store submission, or
+backend deployment was performed for this build. The production profile uses
+the `production` EAS Update channel and runtime `1.1.0`. The matching content-
+publication preview group is `50e55983-342e-48d0-9e9f-ceba7c77754d`; the
+immediately preceding compatible groups are preview
+`2be4404d-9bb4-48aa-b296-44df198deb1b` and production
+`a50b1502-5158-49e5-bb59-02933dac81f1`. PR `#231` merged the canonical-
+destination rollout to `main` as `9d70edad`. Nine affected Functions and the
+48-file admin Hosting bundle were then redeployed from that clean merge commit.
+The private registry now contains 252 validated entries. Fourteen reviewed
+legacy destinations are reassigned, 14 historical user personalization profiles
+were repaired with an audited production migration, and the location-resolution
+v3 release below added canonical Vlorë as the Hebrew city `ולורה`. The latest
+production audit at `2026-08-28T13:45:08.873Z` checked 869 Firestore documents
+and 124 active Node.js 22 v2 Functions in `europe-west1` and returned zero
+failures. Firestore
+Rules, indexes, Storage Rules, IAM, native builds, store submissions, and the
+rollback Storage bucket were unchanged.
+
+### Admin moderation reliability rollout
+
+PR [#255](https://github.com/doric2000/PlanLi/pull/255) merged the recoverable
+moderation-decision rollout to `main` as merge commit
+`4640888d1dadb5d88d0a83e3b758f5c7f5dced0c` at
+`2026-08-28T10:42:13Z`. The production rollout from that clean commit has the
+following verified state:
+
+- Firestore composite index `CICAgLiK4oIJ` for enforcement
+  `type + status + updatedAt` is `READY`. Firestore Rules were compiled during
+  validation but were not deployed.
+- Thirty-one targeted v2 Functions, including the moderation callables, report
+  handler, search-projection triggers, and the suspension scheduler, are 31/31
+  `ACTIVE` on Node.js 22 in `europe-west1`. Their live update window was
+  `2026-08-28T10:52:39.691931735Z` through
+  `2026-08-28T10:55:33.103381994Z`; 21 use the core Functions service account
+  and 10 use the media Functions service account. The current regional
+  inventory contains 124 Functions. The scheduler is enabled every 15 minutes
+  in the `Asia/Jerusalem` timezone.
+- The approved production enforcement repair used fingerprint
+  `77926dfd66f3ab868fa1d0b690f651c26d5b1f1edab6ad11cdd02ade3e1f1714`.
+  Its pre-apply dry run, apply, and post-apply dry run each scanned zero
+  `applying` records, applied zero writes, found zero safe repairs remaining,
+  and found zero accounts suspended beyond their end time. No ambiguous record
+  or personal data was returned.
+- Firebase Hosting release `sites/planli-f0b12/releases/1787914814724000`
+  serves version `sites/planli-f0b12/versions/e137f68c68fb6793`, released at
+  `2026-08-28T11:00:14.724Z`. `/admin/` and bundle
+  `index-7e30e6b3469b93c7b54eed2fabd8a054.js` returned HTTP 200. Browser checks at
+  1280x900 and 390x844 found no console errors or horizontal overflow. The
+  available browser was signed out, so authenticated production moderation was
+  not exercised and no real moderation decision was submitted.
+- Focused Functions tests passed 57/57 and focused client tests passed 22/22;
+  changed-scope validation, Admin Web export/verification, iOS release-config
+  verification, iOS and Android Expo exports, the final review, and the security
+  diff scan passed. Post-deploy error-log queries returned no entries.
+- Firestore and Storage Rules, IAM, production user data, and unrelated
+  Functions were unchanged. No EAS Update, EAS build, TestFlight submission,
+  App Store release, or Google Play release was performed; iOS and Android were
+  verified and merged at source/export level only.
+
+## Run the client
+
+PlanLi development and Firebase tooling use Node.js 22. From the repository
+root, switch to the version declared in `.nvmrc` before installing packages or
+running Expo, Functions, emulators, or Firebase CLI commands:
+
+```powershell
+nvm use 22
+node --version
+```
+
+If the Firebase MCP server reports an unsupported Node version, switch the
+Codex host to Node 22 and restart Codex so the MCP process inherits it.
+
+Run these commands from the `client` directory:
+
+```powershell
+cd C:\Users\doric\Documents\PlanLi\PlanLi\client
+npm install
+npx expo start --dev-client -c
+```
+
+Open the project from an installed PlanLi Development Build. Expo Go cannot load
+the native Google Sign-In module. For Web-only work, run `npm run web` in a
+separate terminal; Apple and Google buttons are intentionally hidden on Web.
+
+The local client must contain these bucket values in `client/.env`:
+
+```text
+EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET=planli-f0b12-media-eu
+EXPO_PUBLIC_FIREBASE_MEDIA_BUCKET=planli-f0b12-media-eu
+```
+
+### Notification Center and native push rollout
+
+The source tree contains the `1.1.0` Notification Center and the
+`expo-notifications` native plugin. This does not change the live `1.0.0`
+TestFlight binary or deployed Firebase backend. The Firestore inbox remains the
+authoritative record on iOS, Android and Web; Expo push is opt-in and is not used
+for browser notifications. Expo Go cannot exercise remote push, and the plugin
+requires a newly authorized EAS Development Build before device testing.
+
+Before an authorized push rollout:
+
+1. Configure APNs and FCM credentials for the existing EAS project, enable Expo
+   enhanced push security, and store its access token without committing it:
+
+```powershell
+firebase functions:secrets:set EXPO_PUSH_ACCESS_TOKEN --project planli-f0b12
+```
+
+2. Deploy the reviewed notification indexes, Rules and Functions in that order.
+   Do not distribute the `1.1.0` binary until all three deployed boundaries are
+   compatible with its `appVersion` runtime.
+3. Choose and record a UTC cutoff after the new producers are live. The cleanup
+   is resumable and dry-run-only unless both apply flags match exactly:
+
+```powershell
+cd C:\Users\doric\Documents\PlanLi\PlanLi\functions
+npm.cmd run cleanup-legacy-notifications -- --cutoff=REPLACE_WITH_REVIEWED_UTC_CUTOFF
+npm.cmd run cleanup-legacy-notifications -- --cutoff=REPLACE_WITH_REVIEWED_UTC_CUTOFF --apply --confirm-cutoff=REPLACE_WITH_REVIEWED_UTC_CUTOFF
+```
+
+The apply command performs production deletions and therefore requires separate
+migration authorization after its dry-run has been reviewed. It deletes only
+inbox rows at or before the immutable cutoff, preserves later schema-v2 events,
+and rebuilds per-channel unread counters. Never run it as part of an ordinary
+Functions or client deployment.
+
+4. Build and install an authorized `1.1.0` development binary on physical iOS
+   and Android devices. Verify denied, provisional and authorized permissions;
+   foreground/background/terminated delivery; cold-start taps; token rollover;
+   missing targets; and receipt processing. An Expo ticket is only acceptance by
+   Expo—the scheduled receipt worker is the delivery diagnostic boundary.
+
+The on-demand iOS simulator smoke test is defined in
+`client/.eas/workflows/e2e-test-ios.yml`. It runs only when a pull request is
+labeled `ios-e2e`; it is not a per-commit gate and must not be triggered without
+authorization for a remote EAS build. It checks the guest/authentication shell
+without credentials or destructive administrator actions.
+
+### Maps during development
+
+The iOS/Android maps use `react-native-maps` with OpenStreetMap tiles inside a
+Development Build. The Web maps continue to use MapLibre GL 5.24 with
+MapTiler's `Dataviz Light` style. A local Web session uses the testing key from
+the ignored `client/.env` file:
+
+```text
+EXPO_PUBLIC_MAPTILER_KEY=...
+```
+
+The mobile maps do not require a MapTiler key. A future public Web deployment
+can use a separate origin-restricted key:
+
+```text
+EXPO_PUBLIC_MAPTILER_WEB_KEY=...  # public web domain/origin restriction
+```
+
+Ordinary JavaScript changes only require Fast Refresh or restarting Metro:
+
+```powershell
+# Local Web on this Windows computer.
+npx expo start --web
+```
+
+Before release, repeat the native map and permission smoke tests in the active
+signed Development Build. The `development` and `preview` EAS profiles are
+configuration only; neither represents a production release.
+
+### Native authentication release gate
+
+The client keeps password authentication, supports native Google on iOS and
+Android, and shows the official Apple button on iOS. Facebook and the legacy
+Expo AuthSession proxy are not used. Before requesting a replacement
+Development Build or any release build:
+
+1. Enable Sign in with Apple for the primary App ID
+   `com.planli.planlitravels` and create a Sign in with Apple key.
+2. Enable Google and Apple in Firebase Authentication. Configure Apple's Team
+   ID, Key ID, private key and Services ID. Register
+   `https://planli.cc/__/auth/handler` as the return URL and
+   register Firebase's sending address with Apple Private Email Relay.
+3. Download the current `GoogleService-Info.plist` for the same bundle ID and
+   replace `client/GoogleService-Info.plist`. Confirm that Google Cloud contains
+   an iOS OAuth client, reversed URL scheme and a Web OAuth client.
+4. Set `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` in the EAS `development`, `preview`
+   and `production` environments. This is a public OAuth identifier, not a
+   private API secret. Also set the bundle-restricted `GOOGLE_MAPS_IOS_KEY` and
+   `GOOGLE_MAPS_ANDROID_KEY`; the current native config validates both during
+   every EAS build.
+5. Configure the server-side Apple key without committing it:
+
+```powershell
+firebase functions:secrets:set APPLE_SIGN_IN_PRIVATE_KEY --project planli-f0b12
+```
+
+The current legal drafts are available in-app and are configured for Firebase
+Hosting at `https://planli.cc/terms` and `https://planli.cc/privacy`. The Google
+Play account-deletion resource is configured at
+`https://planli.cc/account-deletion`.
+The legal, deletion and support pages must be reachable on Firebase Hosting,
+and their deployed versions must be compared with the release commit before
+every beta or store submission. They require legal review plus final contact
+details before a public release.
+
+The deletion resource offers the existing in-app flow and an external request
+through `planli.travel.il@gmail.com`. For an external request, reply only to the
+email address registered on the account and require explicit confirmation from
+that address. Never request a password, identity document or authentication
+code. After verification, use the protected `deleteUserAsAdmin` action with a
+recorded reason; do not create a direct public deletion endpoint or client-write
+path.
+
+Account-deletion Hosting release record:
+
+- Source: commit `be649bfb84d06b4de1eec5fd1ee419e2e25e5734` on
+  `docs/google-play-account-deletion`.
+- Firebase project/site: `planli-f0b12` / `planli-f0b12`.
+- Preview: channel `account-deletion-20260825`, version
+  `2fe856a38d6a03e6`, released at `2026-08-24T22:43:04.812Z` and expiring at
+  `2026-08-25T22:42:52.177351646Z`; URL
+  `https://planli-f0b12--account-deletion-20260825-7zp3mzlh.web.app`.
+- Live: version `1dcffdd8324af2cb`, released at
+  `2026-08-24T22:46:57.053Z`; public URL
+  `https://planli-f0b12.web.app/account-deletion`.
+- Live verification completed at `2026-08-24T22:47:16.9579432Z`. The deletion
+  page returned `200` after its canonical trailing-slash redirect, served UTF-8
+  Hebrew RTL content, exposed the expected fixed email pathway, contained no
+  scripts, forms, frames or third-party resources, and returned the committed
+  route-specific CSP, cache, frame, MIME, referrer, resource and permissions
+  headers. `/privacy`, `/support` and `/admin` each returned `200`.
+- The release command targeted Hosting only. Functions, Firestore Rules and
+  indexes, Storage Rules and buckets, IAM, migrations, Android builds, Play
+  submissions and production data were unchanged. Google Play review approval
+  remains unverified until Google processes the Data Safety submission.
+
+Before App Store submission, publish the privacy URL, expose it inside the app,
+complete App Store Connect's data-practice answers, and retain in-app account
+deletion and social-credential revocation. The registration checkbox is a
+PlanLi audit choice, not a separate Apple checkbox requirement. Recheck the
+current [App Review Guidelines](https://developer.apple.com/app-store/review/guidelines/)
+and [App Privacy instructions](https://developer.apple.com/help/app-store-connect/manage-app-information/manage-app-privacy/)
+as part of every release review.
+
+Brand icon, adaptive-icon, splash and favicon changes require a replacement EAS
+Development Build to appear in the installed native shell. JavaScript-only auth
+screen changes appear after reconnecting or refreshing Metro.
+
+At the next authorized Functions deployment, provide these parameter values
+when prompted:
+
+```text
+APPLE_SIGN_IN_TEAM_ID=<Apple Team ID>
+APPLE_SIGN_IN_KEY_ID=<Sign in with Apple Key ID>
+APPLE_SIGN_IN_CLIENT_ID=com.planli.planlitravels
+```
+
+The account-deletion callable exchanges and revokes a fresh Apple authorization
+code before deleting the user's data. Deploy the updated Functions before
+distributing a client build that exposes Apple sign-in. Build and submission
+remain explicit release operations; merging source code does not perform them.
+
+## Google Play internal beta release
+
+Current release: [1.1.0 (8), published on 2026-09-09](#android-internal-test-release-2026-09-09).
+The following is the previous `2026-08-26` Android release record:
+
+- App version/build: `1.1.0 (6)`, package `com.planli.planlitravels`, runtime
+  `1.1.0`.
+- EAS build: `6eb6a704-2546-4f4e-acaa-fff95ec38d7c`, completed at
+  `2026-08-26T15:46:09.341Z` from clean `main` commit
+  `5bf89e69d90cf6c35da414b3bdac84ea1a5181f5` with the `production` profile,
+  store distribution, and production update channel. The signed `.aab` is
+  available from EAS at
+  `https://expo.dev/artifacts/eas/oPxirTbUSZSoziOa2xLG7H-y4aAdKBKFo2uAEYdmIc8.aab`.
+- Verified local artifact: `.codex_tmp/validation/planli-1.1.0-6.aab`, 89,081,301
+  bytes, SHA-256
+  `84AE2043C191C4AE0D02B633B0027D085323F0796DFFC2B38DF4C9E7090B29C7`.
+- Native RTL root cause and fix: PlanLi already implements its Hebrew-first RTL
+  layout in JavaScript, while native OS RTL auto-mirroring mirrored navigation a
+  second time. PR `#217` disabled native auto-mirroring through the
+  `expo-localization` config plugin and added a regression test. The build source
+  contains PR `#217` merge commit `0511cf110642fb1811cb717b5a80fd9d11e19510`.
+- Release validation: all 161 client suites passed 841 tests; all 585 runnable
+  Functions tests passed with 22 intentional skips; all 22 Rules emulator tests
+  passed; iOS release configuration and both Android/iOS Expo exports passed. A
+  live read-only audit at `2026-08-26T14:45:26.864Z` returned `ok: true` with no
+  failures. The locked client dependency audit still reports eight high-severity
+  findings; dependencies were not upgraded during this release.
+- Build recovery: production build
+  `bc583e95-85d7-4e8b-a76e-91940c5f2d86` (`1.1.0 (3)`) failed before Gradle
+  because EAS CLI 18 preserved Windows read-only directory modes in the upload
+  archive. EAS CLI was updated locally to `22.3.0`, whose portable archive
+  handling resolved extraction. Version code `4` was reserved while diagnosing
+  the archive and no corresponding EAS build was queued.
+- EAS archived 111 MB from a workspace that also held unrelated pre-existing
+  untracked campaign and rendering-script files; exact archive inclusion was not
+  independently audited. The generated application bundle contained the
+  expected runtime asset set rather than the campaign source directory.
+- Google Play state: release `PlanLi 1.1.0 (6) – RTL Navigation`, containing only
+  version code 6, was published to the active internal-testing track at
+  `2026-08-26T18:58+03:00`. Play Console reports it as available to internal
+  testers with no supported-device changes. Play emitted one non-blocking warning
+  that no deobfuscation file is associated with the bundle. Installation and
+  physical RTL behavior remain unverified. On `2026-08-25`, exact-location
+  place resolution returned the selected place but its embedded preview remained
+  in a loading state. The Community map mounted and showed the Google watermark
+  plus the empty-area message, but no basemap tiles. PR `#206` added bounded
+  native map loading, retry states, and Community basemap/result separation.
+  Google Cloud project `planli-f0b12` was verified to have a paid billing account
+  and Maps SDK for Android enabled. At `2026-08-25T14:01:48+03:00`, the existing
+  `PlanLi Android Maps SDK` key remained restricted to Maps SDK for Android and
+  gained the Google Play App Signing SHA-1 for `com.planli.planlitravels`, while
+  retaining the EAS/upload signer restriction. Google Cloud confirmed the key was
+  restricted; propagation can take up to five minutes. No compatible Android
+  preview build was available, so preview-channel device validation was not
+  performed before the authorized internal-test production-channel update. The
+  post-fix tablet smoke test remains pending.
+- Android map-loading source validation on `2026-08-25`: seven focused client
+  suites passed 57 tests. Changed-scope validation passed its 17 selected tests,
+  admin Web export/verification, iOS release-config check, and iOS export. Expo
+  prebuild config confirmed that the Android package receives its native Maps
+  key, and a separate Android Expo export completed successfully. The Google
+  Cloud credential correction above does not require a replacement AAB. No new
+  EAS build or Play upload was performed.
+- Android map-loading EAS Update: group
+  `dd0b91d8-b5b7-4a73-94d4-d08d31a449f5`, Android update
+  `01a038a5-2f98-7305-bd82-6afe8dd12f9a`, production channel/branch, runtime
+  `1.1.0`, published at `2026-08-25T11:19:04.856Z` with message
+  `Fix Android location map loading (#206)`. The source is PR `#206` merge commit
+  `e954e3e11e511ddadbfc5bc0d15a3d1f7b948c26`. EAS uploaded one Android app
+  bundle, found 51 Android assets, and uploaded no new assets. The publishing
+  checkout preserved unrelated pre-existing untracked campaign/rendering files;
+  the update manifest reports the exact merge commit. This Android-only update
+  did not alter iOS, create an AAB, submit to Google Play, deploy Firebase, or
+  write production data. Download, application, exact-location confirmation,
+  Community tiles/empty state, manual-pin, and route-map behavior on the physical
+  tablet remain unverified. Roll back by republishing the preceding compatible
+  Android production group `b0112239-3ce4-46a8-8019-674338a8e409`.
+
+## Open-registration TestFlight beta release
+
+Current release record:
+
+- App version/build: `1.1.0 (15)`.
+- iOS Development Build: internal-distribution build
+  `ff0fc01a-890b-4668-b9a1-5d60891e9545`, runtime `1.1.0`, completed at
+  `2026-08-24T17:53:02.788Z` from PR `#193` merge commit `8afdfb3`. The
+  development profile has no update channel or Apple review/submission state;
+  the artifact expires on `2026-09-07T17:47:09.652Z`. Download, installation,
+  and physical-iPhone verification remain pending.
+- Installed state: build `1.1.0 (13)` is running on the owner's physical iPhone
+  through TestFlight. Builds `1.1.0 (14)` and `(15)` have not been confirmed as
+  installed or exercised on a physical iPhone.
+- EAS build: `d9e78de5-6f97-4371-b223-245862ec4fbb`, completed at
+  `2026-08-26T15:00:19.672Z` from clean `main` commit
+  `5bf89e69d90cf6c35da414b3bdac84ea1a5181f5` with the `production` profile,
+  store distribution, production channel, app/runtime version `1.1.0`, and iOS
+  build number `15`. The IPA artifact is
+  `https://expo.dev/artifacts/eas/2jQYWEvqtwhLx2V5wFAP4qGz3odwPGh0kac1AmqfMlo.ipa`.
+- Source release: the build contains the native RTL correction from PR `#217`
+  merge commit `0511cf110642fb1811cb717b5a80fd9d11e19510`; its exact source is
+  `5bf89e69d90cf6c35da414b3bdac84ea1a5181f5`.
+- Preview EAS Update: rebuilt admin-console group
+  `18ae0c59-1b46-49a7-89cf-941782743183`, runtime `1.1.0`, iOS update
+  `01a04321-6135-7f22-a823-6a41f8016ee3`, and Android update
+  `01a04321-6135-796f-adb0-b2f29c372bcd`, published at
+  `2026-08-27T12:10:56.181Z` from clean `main` commit
+  `cd458a7e33f23970926d1af3db05ef18c1cd57d6` with the production EAS
+  environment. EAS read-back confirmed both manifests, the `preview` branch,
+  runtime, and exact commit.
+- Production EAS Update: exact republish of those preview artifacts as group
+  `f91d01d2-42aa-436c-8774-98d9f85d09bd`, runtime `1.1.0`, iOS update
+  `01a04323-fa7c-77db-96bb-f59d49c3474e`, and Android update
+  `01a04323-fa7c-7dc9-b4ec-b5eaa4c31130`, published at
+  `2026-08-27T12:13:46.492Z`. EAS read-back confirmed the production branch,
+  both platforms, and exact commit `cd458a7e33f23970926d1af3db05ef18c1cd57d6`.
+  Roll back by republishing production group
+  `4947c1c8-6bae-4115-bc2f-b6c622d9230d`. Download and application on the
+  physical TestFlight iPhone and Android tablet remain unverified.
+- Firebase admin-console release: 34 targeted v2 Functions were deployed from
+  clean `main` and independently inventoried as 34/34 `ACTIVE` on Node.js 22 in
+  `europe-west1`. Firestore has 62/62 expected composite indexes after adding
+  the eight moderation queue, enforcement, and search indexes. The authorized
+  resumable backfill completed and its final dry run found zero remaining case,
+  held-content, or search-projection changes. Firestore and Storage Rules, IAM,
+  unrelated Functions, and native builds were unchanged.
+- Firebase Hosting now serves the rebuilt admin console at
+  `https://planli-f0b12.web.app/admin/`. The production HTML and expected bundle
+  returned HTTP 200; browser checks at 1280x900 and 390x844 found no console
+  errors or horizontal overflow. Authenticated admin behavior remains pending
+  because the available browser session was signed out.
+- RoadTrip validation: 16 focused client suites passed 108 tests and seven
+  focused Node.js 22 route/location Function suites passed 50 tests.
+  Changed-scope validation and PR `#181` plan, affected-client,
+  affected-Functions, and final checks passed. The iOS release configuration
+  check and iOS export also passed. The physical-iPhone create/resume,
+  switch, direct stop edit/add/insert/remove/reorder, autosave retry, and
+  order-only publish matrix remains unverified because no compatible signed
+  preview client exists.
+- Recommendation-draft validation: four focused client suites passed 44 tests;
+  PR `#183` plan, affected-client, and final checks passed. EAS exported and
+  published iOS, Android, and Web bundles successfully. Download, application,
+  and create/resume/discard/media-transfer behavior on the physical TestFlight
+  iPhone remain unverified.
+- Recommendation destination-search validation: three focused client suites
+  passed 26 tests, and PR `#187` plan, affected-client, and final checks passed.
+  EAS exported and published iOS, Android, and Web bundles successfully. Live
+  Google provider fallback and selection on the physical TestFlight iPhone
+  remain unverified.
+- Validation: four focused auth/navigation suites passed all 33 tests, the iOS
+  release configuration check and export passed, and PR `#169` passed its plan,
+  affected-client, and final PR checks. Both EAS exports, project fingerprints,
+  uploads, publications, and read-only metadata confirmations completed
+  successfully. Download/application and the live Google/Apple authentication
+  handshakes on a physical iPhone remain the runtime verification gates.
+- Release-candidate validation: all 153 client suites passed 773 tests, all 545
+  runnable Functions tests passed with 22 skipped, all 22 Rules emulator tests
+  passed, the iOS release configuration and export passed, and the final release
+  review found no actionable findings. The locked client dependency audit still
+  reports eight high-severity findings; dependencies were not upgraded during
+  this release. Physical-device behavior remains unverified.
+- OTA device state: Expo serves rebuilt admin-console preview group
+  `18ae0c59-1b46-49a7-89cf-941782743183` to matching preview requests and
+  production group `f91d01d2-42aa-436c-8774-98d9f85d09bd` to compatible
+  Android and iOS runtime `1.1.0` clients. Download, application, and signed-in
+  admin-console behavior remain unverified on physical devices. The immediate
+  production rollback group is `4947c1c8-6bae-4115-bc2f-b6c622d9230d`.
+- Production catalog migration: the separately authorized apply run at
+  `2026-08-24T19:49Z` scanned 14 recommendations and migrated exactly one
+  document (`recommendations/rec_CBCFGWNEcxN3Ov6ijXeI`) to category `nature`
+  and subcategory `viewpoint`; 13 were already migrated, with zero blocked
+  records and zero conflicts. The post-migration live audit completed at
+  `2026-08-24T19:50:08.573Z` with 477 documents checked and zero failures. No
+  Firebase deployment accompanied this migration.
+- Successful EAS submission ID: `c25a5130-e7fd-464c-a41c-ff62288b65df`, created
+  for build `d9e78de5-6f97-4371-b223-245862ec4fbb` and completed at
+  `2026-08-26T16:38:56.039Z`. The initial submission
+  `b67ba705-93eb-4438-86dd-5b058134000a` and its server-side retry
+  `fad0f28f-356b-44ef-bb4d-be3d689c633e` errored without upload logs during the
+  Expo incident `iOS submissions failing on upload to App Store Connect`. A fresh
+  submission of the same signed IPA succeeded without rebuilding.
+- App Store Connect app: `6801453067`; authenticated EAS status read-back reports
+  build `1.1.0 (15)` as in beta testing for both internal and external TestFlight.
+  Installation and physical-device behavior remain unverified.
+
+The current release target is an **external TestFlight beta with open PlanLi
+registration**, not an App Store listing. PlanLi does not maintain a Firebase
+tester allowlist: anyone who receives the TestFlight invitation or public link
+may create an account. External distribution still requires Apple's Beta App
+Review and App Store Connect configuration. Testers install Apple's TestFlight
+app and then install PlanLi from the invitation or public link; no provisioning
+profile is installed manually.
+
+The beta is iPhone-only because iPad has not been exercised. The production EAS
+profile is pinned to the SDK 54 Xcode 26 image, uses store distribution, takes
+values from the EAS `production` environment and auto-increments the remote iOS
+build number. A production EAS build is suitable for both TestFlight and a later
+App Store version, but uploading it to App Store Connect does not publish a
+public listing.
+
+### Release configuration
+
+Before requesting an authorized production build, configure these EAS
+production values without committing them:
+
+- Existing public Firebase client values, the Google Web OAuth client ID and
+  the bundle-restricted native Maps keys described above.
+- `EXPO_PUBLIC_SENTRY_DSN` as a public client identifier.
+- `SENTRY_ORG` and `SENTRY_PROJECT` for symbolication.
+- `SENTRY_AUTH_TOKEN` as a sensitive EAS secret. Never place it in `app.json`,
+  `.env.example`, a build log or App Store Connect notes.
+
+Sentry is configured for beta crash/error diagnostics with a bounded 10%
+performance sample, 50 allowlisted breadcrumbs, and an error-only mobile replay
+buffer. Regular session replay, profiles, screenshots, view hierarchy, failed
+request capture and default PII remain disabled. Error replays mask all text,
+images and vector graphics and use low quality. The client attaches only the
+Firebase UID as a pseudonymous user identifier, removes request/extra data,
+allowlists diagnostic tags and device contexts, and redacts common email and
+credential patterns before sending an event. The EAS production build fails
+early if any Sentry value is missing, so a release cannot silently ship without
+symbolicated diagnostics.
+
+The updated privacy version is `2026-08-18-beta-observability`. Publish the matching
+Hosting policy and deploy the matching Functions and Storage Rules immediately
+before distributing the new client. This coordinated release is required
+because old clients cannot accept the new server-owned privacy version.
+
+Before enabling the production Sentry DSN, also enable Sentry's server-side
+default data scrubbing, prevent IP-address storage, add sensitive-field rules,
+disable public issue sharing, source fetching and join requests, and create
+alerts for new fatal and regressed issues. Require organization-wide two-factor
+authentication only after every current member has enrolled, because Sentry
+removes unenrolled members when the requirement is enabled. Those account
+settings cannot be enforced by the repository and must be verified from the
+Sentry project before the build.
+
+For App Store Connect privacy answers, the Sentry integration adds Crash Data,
+Performance Data, Other Diagnostic Data and error-only Product Interaction for
+App Functionality. Because events carry a Firebase UID, treat those categories
+as linked to the user unless final event inspection establishes otherwise; they
+are not used for tracking. Reconcile the rest of the existing PlanLi answers
+against the final binary and deployed behavior, including name, email, user ID,
+photos/text, travel preferences, saved/liked activity, reports, support messages,
+and any location or place-search data transmitted off-device. Do not copy these
+notes into App Store Connect without inspecting a real production-mode Sentry
+event and replay from the signed beta build.
+
+### Manual release gates
+
+These full checks are for an explicitly authorized release candidate, not ordinary
+development, commits, pushes, or merges. Run them on Node.js 22 from the clean release
+commit; normal changes use `npm run validate:changed` from the repository root.
+
+```powershell
+cd C:\Users\doric\Documents\PlanLi\PlanLi\client
+npm.cmd ci
+npm.cmd run verify:ios-build-readiness
+eas.cmd env:exec production "npm.cmd run verify:eas-production-env" --non-interactive
+npm.cmd test -- --runInBand
+npx.cmd expo export --platform ios --output-dir .expo-validation\ios-release
+
+cd ..\functions
+npm.cmd ci
+npm.cmd test
+npm.cmd run test:rules:emulator
+npm.cmd run audit-live
+```
+
+`verify:ios-build-readiness` checks the bundle ID, Firebase plist, the dedicated
+React Native Firebase configuration, app icon, permissions, native plugins, EAS
+profile, SDK package alignment, Expo Doctor, Sentry privacy controls and known
+debug markers. The environment check then uses the production EAS environment
+without printing secret values and verifies the readable Firebase, App Check and
+Sentry values plus the Sentry build token. Secret Maps keys and EAS file variables
+are intentionally not readable through `env:exec`; verify their names through
+`eas env:list production` and retain the last successful EAS config-stage proof for
+their values and file contents.
+`audit-live` and the Rules emulator are read-only validation;
+they require the correct Firebase identity/project and do not authorize a
+deployment. Complete one release review against `main` after these checks.
+
+After local checks, manually exercise the signed build on a physical iPhone:
+
+- Email/password, Google and Apple sign-in, email verification, onboarding,
+  legal consent, sign-out and relaunch.
+- Location denied/allowed, photo library denied/limited/allowed and camera
+  denied/allowed.
+- Create, edit and delete a recommendation and route; like, comment, favorite,
+  report and block; verify held content is no longer public.
+- Account deletion for password, Google and Apple accounts, including a failed
+  recent-auth attempt and a successful retry.
+- Offline, slow-network, provider-limit and server-error states without raw
+  provider messages or permanent loading indicators.
+- One deliberate non-PII test exception in a release candidate, followed by
+  confirmation that its Sentry stack trace is symbolicated; remove the trigger
+  before the final build.
+
+Only after the gates pass and build authorization is given, create the EAS iOS
+production build. Only after separate submission authorization, upload that
+specific build to App Store Connect. First exercise it with the account owner,
+then submit the build and beta metadata for Apple's external Beta App Review.
+After approval, enable the external group and public link. Record the branch,
+commit, EAS build ID, iOS build number, review status and processing result. Do
+not use auto-submit for the first beta.
+
+The installed `1.1.0` production build can receive only EAS Updates compiled for
+its runtime. The SDK 57 security release uses the `production` channel and the
+explicitly isolated runtime `1.2.0`.
+Until the beta is explicitly closed, the Expo marketing version is locked to
+`1.1.0`; `verify:ios-release` rejects an accidental version change. This lock
+does not apply to the iOS build string: every newly uploaded binary must still
+use a unique, incremented build number, and the production EAS profile keeps
+`autoIncrement: true`. Prefer compatible EAS Updates for JavaScript, styling,
+and bundled assets so the installed `1.1.0` binary can receive beta changes
+without another binary upload. Keeping the marketing version does not guarantee
+that Apple will waive TestFlight review for a later build.
+Test an update on the `staging` channel with production variables before promoting
+the same artifact. Production releases must run from a tracked-clean `main` checkout that
+exactly matches `origin/main` and contains the Git commit recorded by the latest
+production update group. The preflight queries EAS and blocks the release if a
+newer update came from work that is not in the candidate. This prevents a later
+feature branch from silently replacing previously deployed JavaScript. Publish
+only JavaScript, styling, and bundled-asset changes that are compatible with the
+installed native runtime:
+
+On the Windows release workstation, use the globally installed `eas` CLI and
+verify it with `eas --version` and `eas whoami`. Do not fall back to the cached
+`npx eas-cli@latest` package when it fails with a missing-module error; the npm
+cache can contain an incomplete EAS installation even while the global CLI is
+healthy.
+
+```powershell
+cd C:\Users\doric\Documents\PlanLi\PlanLi
+npm run preflight:eas-native
+npm run release:eas-candidate -- --apply --message '<summary>'
+
+# Read back the staging group, then dry-run the guarded promotion wrapper.
+npm run release:eas-production -- --preview-group '<staging-group-id>' --message '<summary>'
+
+# Only after explicit production authorization, bind the confirmation to HEAD.
+npm run release:eas-production -- --preview-group '<staging-group-id>' --message '<summary>' --apply --confirm 'PUBLISH PRODUCTION <12-char-HEAD>'
+```
+
+The staging channel is a production-candidate lane, so it must use the same
+`production` EAS environment as the production channel. Never promote an
+artifact built with the empty `preview` environment or with staging Firebase
+values. The wrappers archive only tracked committed source, preserve unrelated
+local files, normalize verified native metadata bytes and check the actual native
+fingerprint against the installed-build baseline before upload and promotion.
+The narrow existing optional-module review is invalidated by changes to its
+fallback source. Unknown mismatches stop the release; see the compatibility
+document above. The wrapper pins EAS CLI `22.6.0`, account `doric2000`, project, owner,
+runtime, channel and environment; requires a clean synchronized `main`; verifies
+that the selected staging group contains only the exact candidate commit and
+runtime; downloads the immutable iOS Hermes launch asset; rejects dummy or
+missing Firebase production markers; verifies the manifest hash; repeats the
+same verification after promotion; and appends the resulting production group,
+commit, timestamp and bundle SHA-256 to this file.
+
+An EAS Update is a release action and requires explicit authorization. Native
+dependency, plugin, entitlement, permission, or incompatible app-config changes
+require an incremented app version and a new store build. After publishing an
+update, force-close and reopen the release app up to twice so it can download
+and apply the compatible update. Record the source commit, update group ID,
+channel, runtime version, environment, verification result, and rollback plan.
+
+### Beta operations and cost controls
+
+Provider-backed callables are limited to one instance each, four concurrent
+requests per instance, 30 weighted units per user/minute and 120 per user/day.
+The location budget is versioned so the beta increase immediately releases
+users previously blocked by an older bucket while retaining per-user spend
+protection. Public discovery
+callables are also limited to one instance and ten concurrent requests each, in
+addition to their per-user/network request budgets. Configure a US$10
+Google Cloud billing budget and alerts, but remember that budget alerts do not
+stop charges. During the beta, check Functions errors, Sentry crashes, reports
+and the support inbox twice daily; acknowledge urgent safety reports within
+24 hours.
+
+There is no per-tester Firebase configuration. Signed-in callables are open to
+all authenticated accounts; actions that publish or modify content still
+require the existing identity-verification, current legal-consent, completed
+profile/preferences and active moderation-status checks. Staging uploads apply
+the same active-account gates plus ownership, filename, MIME type, metadata and
+20 MB size validation.
+
+Before release, resolve every issue reported by `audit-live` and the canonical
+database dry-run. Do not apply a partial canonical migration while it still
+reports unmapped destinations, categories, tags, or media. Then preview and
+explicitly authorize the account moderation backfill and admin registry:
+
+```powershell
+npm.cmd run backfill-account-moderation
+npm.cmd run backfill-account-moderation -- --apply
+npm.cmd run bootstrap-admin -- owner@example.com
+npm.cmd run bootstrap-admin -- owner@example.com --apply
+```
+
+`bootstrap-admin` is dry-run by default. Review the resolved UID before using
+`--apply`; the account must refresh its ID token afterwards. Next run the media
+availability backfill for every canonical media collection. Account moderation
+must run first so existing user images are not incorrectly registered as held:
+
+```powershell
+npm.cmd run backfill-media-availability -- --collection recommendations
+npm.cmd run backfill-media-availability -- --collection recommendations --apply
+```
+
+Repeat the media command for `routes`, `trips`, and `users`; it replaces legacy
+one-year cache metadata, creates the required registry entries and revokes
+tokens for already-held media.
+
+Only after all supported documents use canonical EU media, quarantine every
+legacy user-media prefix so old download tokens and public cache metadata are
+revoked; repeat the command for `optimized`, `profilePicture`, `recommendations`,
+`routes`, and `trips`:
+
+Do not apply quarantine until `audit-live` and a dry-run of `migrate-database`
+confirm that no supported document still references a legacy object. If either
+check reports a reference, migrate that document first; quarantine would make
+the legacy URL intentionally unreadable.
+
+```powershell
+npm.cmd run quarantine-legacy-media -- --prefix recommendations
+npm.cmd run quarantine-legacy-media -- --prefix recommendations --apply
+```
+
+Storage Rules deny legacy and unregistered media, so the account, canonical
+media, registry and quarantine migrations must finish successfully before the
+updated rules are deployed. Rebuild public projections only after eligible
+users have accepted the current legal versions:
+
+```powershell
+node scripts/backfillPublicProfiles.js
+node scripts/backfillPublicProfiles.js --apply
+```
+
+Use every command's reported `nextAfter` value with `--after` whenever it returns
+a full page; this applies to both the account-state and media-availability
+backfills. Use `nextPageToken` with `--page-token` for legacy-media quarantine.
+Continue until the relevant cursor is `null` for every collection and prefix.
+These are live writes and require separate migration authorization; every
+command without `--apply` is a read-only preview. Do not distribute the beta
+client until all migration and projection checks pass.
+
+Server-side image classification is intentionally excluded from this beta.
+User-generated content is instead covered by upload constraints, report/block
+flows, admin hold/removal controls, public-visibility status checks and a support
+contact. Verify those moderation flows in the signed build and describe them in
+the Beta App Review notes. Enable App Check only after valid iOS tokens are
+observed; it must not be enabled speculatively for the first build.
+
+## Canonical data model
+
+The application has one database and media schema. There are no permanent
+v1/v2 branches.
+
+```text
+users/{uid}
+publicProfiles/{uid}
+
+recommendations/{id}
+recommendations/{id}/likes/{uid}
+recommendations/{id}/comments/{commentId}
+
+routes/{id}
+routes/{id}/days/{dayId}
+routes/{id}/days/{dayId}/stops/{stopId}
+routes/{id}/likes/{uid}
+routes/{id}/comments/{commentId}
+
+trips/{id}
+countries/{countryId}/destinations/{destinationId}
+
+users/{uid}/favorites/{sha256OfTargetPath}
+users/{uid}/notifications/{notificationId}
+system/**
+```
+
+Countries use stable `cty_...` IDs and cities use stable `city_...` IDs.
+Names and provider identifiers can change without breaking references.
+
+All business writes use callable Functions in `europe-west1`. The client does
+not directly write recommendations, routes, trips, favorites, reactions,
+comments, notifications, public profiles, or destination catalog documents.
+
+Favorites contain a server-generated preview. A favorite tab therefore needs
+one query and does not perform an extra read for every card. Source triggers
+refresh previews and remove favorites when their source is deleted; a bounded
+daily repair job handles rare missed events.
+
+### Travel preferences and recommendation facets
+
+Private travel preferences live only at `users/{uid}.smartProfile` and use
+stable IDs. The canonical fields are `setupRequired`, `completedAt`,
+`interests`, `budget`, `travelParties`, `vibe`, `travelerStyles`, `pace`,
+and `needs`. Only
+interests and vibes are copied to `publicProfiles`; budget, party,
+practical needs, and learned activity stay private.
+
+The source of truth for profile options, recommendation categories, and post
+tags is `shared/travelTaxonomy.json`. Generated client and Functions copies
+must pass `npm run test:travel-taxonomy` from the repository root. Post tags
+are stored as stable IDs; Hebrew labels are presentation only. Every selectable
+tag must either map explicitly to recommendation facets or be marked
+`displayOnly`. Generic accessibility and proximity to Chabad are never treated
+as wheelchair-accessible or Shabbat-friendly guarantees.
+
+Roll out taxonomy changes in this order: required Firestore indexes, Functions,
+the supported client, and only then the reviewed personalization migration.
+Never run the migration with `--apply` as part of an ordinary client/backend
+deployment.
+
+The recommendation catalog v1 migration moves existing recommendations to the
+short Noya classification flow. It is dry-run by default, accepts only direct
+legacy-tag mappings, refuses every ambiguous classification before any write,
+and writes an ignored rollback checkpoint. A provider result containing only
+broad locality types is migrated to a general destination and its misleading
+map point is removed. Apply is additionally guarded by the production project
+identifier:
+
+```powershell
+cd C:\Users\doric\Documents\PlanLi\PlanLi\functions
+npm.cmd run migrate-recommendation-catalog
+# Only after Functions and the supported 1.1.0 client are released and every row is reviewed:
+npm.cmd run migrate-recommendation-catalog -- --apply --confirm-project=planli-f0b12
+npm.cmd run migrate-recommendation-catalog -- --rollback .recommendation-catalog-v1\<checkpoint>.json --confirm-project=planli-f0b12
+npm.cmd run audit-live
+```
+
+The migration does not alter recommendation timestamps, ownership, media,
+engagement counters, comments, likes, or status. Routes retain taxonomy v5
+until their separate creation flow is redesigned.
+
+Recommendations and routes store server-derived `facets`. Interests are
+derived only from canonical categories and subcategories; they are not a
+second author-entered classification. `audienceScope` distinguishes content
+for everyone from content aimed at selected audiences. Practical needs use
+`needsScope: recommendation` for a single recommendation and
+`needsScope: entire_route` only after the author confirms the fact for every
+part of a route. Missing needs metadata never counts as a match.
+
+Recommendation facets may contain interests, audiences, vibes, needs,
+budget level, and environment. Traveler style and season are deliberately
+empty for recommendations because those describe a trip, not an individual
+place. Routes additionally store traveler styles and seasons plus canonical difficulty,
+experience, transport, pace, duration, distance, and destinations derived from
+verified stops. The server also builds bounded normalized search tokens and
+prefixes; clients never write `facets`, `search`, or route destinations
+directly.
+
+The generated relationship map is `docs/travel-taxonomy-map.md`. Categories
+and subcategories form the content tree; interests, audiences, vibes, traveler
+styles, practical needs, seasons, and environments remain cross-cutting axes.
+Do not edit generated taxonomy copies or the relationship map manually.
+
+Personalized discovery keeps only
+bounded aggregate scores and recent-open deduplication state inside the private
+user document. Do not add a raw behavioral-event collection.
+
+The personalization migration is dry-run by default and writes local reports
+under the ignored canonical migration state directory:
+
+```powershell
+cd C:\Users\doric\Documents\PlanLi\PlanLi\functions
+npm run migrate-personalization
+npm run migrate-personalization -- --resume
+# Only after reviewing the report and taking the required backup:
+npm run migrate-personalization -- --apply
+```
+
+The v4 migration also rebuilds recommendation/route search fields, maps legacy
+`attractions` entries only when their content is unambiguous, migrates legacy
+backpacker/digital-nomad values to traveler styles, seeds bounded route
+affinity, and marks empty broken routes inactive without deleting their media
+or interactions. Any ambiguous recommendation or route keeps the migration
+audit from passing and must be reviewed before `--apply`.
+
+The taxonomy-v5 budget migration separates `free` (חינם) from `economy` (₪).
+It is dry-run by default, refuses unclassified legacy `economy` content, and
+writes a private rollback checkpoint before applying changes:
+
+```powershell
+cd C:\Users\doric\Documents\PlanLi\PlanLi\functions
+npm run migrate-budget-taxonomy
+# Only after reviewing every classified record:
+npm run migrate-budget-taxonomy -- --apply
+# Restore the exact previous budget/version fields if a rollback is required:
+npm run migrate-budget-taxonomy -- --rollback .budget-taxonomy-v5\<checkpoint>.json
+npm run audit-live
+```
+
+Recommendation content curation is also dry-run by default. A dry run scans
+the live collection, applies canonical taxonomy rules plus an optional ignored
+override file, and writes a reviewable manifest containing each document's
+Firestore `updateTime` precondition. Only high-confidence entries are eligible
+for `--apply`; concurrent edits, ambiguous places, and engaged placeholders are
+reported instead of overwritten. Reports, checkpoints, manifests, and rollback
+data stay under the ignored `functions/.recommendation-curation/` directory.
+
+```powershell
+cd C:\Users\doric\Documents\PlanLi\PlanLi\functions
+npm run curate-recommendations -- --overrides .recommendation-curation\overrides.json
+npm run curate-recommendations -- --apply --manifest .recommendation-curation\manifests\<manifest>.json
+npm run curate-recommendations -- --apply --resume --manifest .recommendation-curation\manifests\<manifest>.json
+npm run curate-recommendations -- --apply --rollback .recommendation-curation\rollback-<timestamp>.jsonl
+```
+
+Exact-place changes require a verified Place ID, coordinates, a verification
+date, and a source URL. Broad activities remain city-level and must not be
+pinned to a city centre. Current prices or opening hours require a dated
+official source; otherwise the claim must be removed or softened before apply.
+
+## European image pipeline
+
+The active Firebase Storage bucket is:
+
+```text
+planli-f0b12-media-eu (europe-west1, STANDARD)
+```
+
+Each selected source photo is uploaded to a user-owned staging path.
+`prepareMedia` removes EXIF/GPS metadata and generates three immutable WebP
+files directly from the source:
+
+- `large` for details and hero views.
+- `feed` for full-width cards and editing previews.
+- `thumb` for grids, maps, favorites and avatars.
+
+The UI keeps at most three image components mounted in each carousel. Feed
+lists render in bounded batches and remote images use memory/disk caching.
+
+The former US bucket `planli-f0b12.firebasestorage.app` is client-inaccessible:
+its deployed Firebase Rules deny every read and write, Public Access Prevention
+is enforced, and Uniform Bucket-Level Access is enabled. It remains only as a
+30-day operator-controlled rollback snapshot. Do not remove it before 30 August
+2026 and before `npm run audit-live` reports zero US references. Deletion still
+requires separate explicit authorization.
+
+## Local Admin authentication
+
+Maintenance scripts do not use a local Service Account JSON key and never copy
+Firebase refresh tokens into `%TEMP%`. Firebase Admin and Google client
+libraries use standard Application Default Credentials (ADC) directly.
+Production-changing scripts still require their own dry-run, project, manifest,
+`--apply`, and typed-confirmation gates.
+
+The destination-publication dry-run is deliberately read-only and does not need
+ADC. It uses the account already signed in with `gcloud auth login`, obtains a
+short-lived token in memory, and reads seven pinned Firestore inventories through
+REST. The token is not printed or stored. Its `--apply` path still uses Firebase
+Admin/ADC and retains every production confirmation gate.
+
+Sign in once for local ADC (the browser sign-in is completed by the operator;
+never paste a token into a file or chat):
+
+```powershell
+gcloud auth application-default login
+```
+
+The Cloud Functions runtime uses two keyless, least-privilege accounts:
+
+- `planli-core-functions@planli-f0b12.iam.gserviceaccount.com`
+- `planli-media-functions@planli-f0b12.iam.gserviceaccount.com`
+
+IAM setup is dry-run by default:
+
+```powershell
+cd C:\Users\doric\Documents\PlanLi\PlanLi\functions
+npm run configure-function-iam
+npm run configure-function-iam -- --apply
+```
+
+## Manual full verification and troubleshooting
+
+Ordinary development uses the focused validation policy in `AGENTS.md` and
+`npm run validate:changed`. Use the commands below only for explicit release readiness
+or when troubleshooting requires the complete subsystem.
+
+Use `npm run validate:changed -- --plan-only` to inspect the selected checks without
+running them; `node scripts/validationPlan.js --help` lists exact-diff and scope options.
+
+Run the full Functions checks from `functions`:
+
+```powershell
+cd C:\Users\doric\Documents\PlanLi\PlanLi\functions
+npm install
+npm test
+npm run test:rules:emulator
+npm audit --omit=dev
+```
+
+Run the full client tests and exports from `client`:
+
+```powershell
+cd C:\Users\doric\Documents\PlanLi\PlanLi\client
+npm install
+npm test -- --runInBand
+npx expo export --platform web --output-dir .expo-validation\web
+npx expo export --platform android --output-dir .expo-validation\android
+```
+
+The read-only live audit checks every Firestore document, favorite target,
+interaction counter, destination ID, media URL and both bucket inventories:
+
+```powershell
+cd C:\Users\doric\Documents\PlanLi\PlanLi\functions
+npm run audit-live
+```
+
+It writes nothing to Firestore and creates no support collection.
+
+## Firebase backend deployment (not client distribution)
+
+These commands update the shared Firebase backend used by the local client.
+They do not publish the PlanLi client to users, an app store, TestFlight, or a
+website.
+
+The commands below are target examples, not a safe sequence for the current
+security candidate. In particular, do not deploy the new Firestore Rules before
+the destination publication migration, and do not deploy every Function with
+App Check enabled before the compatible native client is installed. Follow the
+staged order in "App Check before public launch" below.
+
+Run Firebase deployments from the repository root:
+
+```powershell
+cd C:\Users\doric\Documents\PlanLi\PlanLi
+firebase deploy --only firestore:indexes,firestore:rules --project planli-f0b12
+firebase deploy --only functions --project planli-f0b12
+firebase deploy --only storage --project planli-f0b12
+```
+
+## Admin moderation console
+
+The same responsive moderation console runs inside the iOS Development Build
+and as a Firebase Hosting web application at
+`https://planli.cc/admin/`. Access requires the Firebase `admin`
+custom claim; the server checks the claim again for every operation. Sensitive
+actions require a sign-in from the last ten minutes, a written reason, and are
+recorded in the append-only moderation audit log. Current sensitive actions are:
+
+- `resolveModerationCase` (idempotent dismiss / hold / restore / delete report decisions)
+- `setUserSuspension` (suspend / unsuspend a user)
+- `setUserEmailVerified` (force email verification state)
+- `setUserAdmin` (grant / remove admin access)
+- `deleteUserAsAdmin` (full irreversible account deletion)
+- `deactivateDestination` (deactivate a city and place linked content on moderation hold)
+- `setDestinationHebrewName` (rename a destination and propagate the canonical
+  Hebrew name through current content and projections)
+
+All other admin callables are defined as non-sensitive (no recent sign-in check)
+when they only read or apply non-destructive moderation workflows.
+The web console signs out after 30 minutes without activity.
+
+Build the generated, ignored Hosting bundle before a Hosting deployment:
+
+```powershell
+cd C:\Users\doric\Documents\PlanLi\PlanLi\client
+npm.cmd run export:admin-web
+```
+
+Bootstrap the first administrator from an authenticated Firebase CLI session.
+The script synchronizes both the Auth claim and the private admin registry:
+
+```powershell
+cd C:\Users\doric\Documents\PlanLi\PlanLi\functions
+npm.cmd run bootstrap-admin -- '<uid-or-email>'
+```
+
+Never commit administrator credentials or App Review demo credentials.
+
+## Store submission moderation checklist
+
+These settings are configured manually in App Store Connect or Google Play
+Console and are not changed by Firebase deployment:
+
+- Link the public privacy policy, terms, community guidelines, and support
+  pages in the listing and review notes.
+- Link `https://planli.cc/account-deletion` in Google Play's account
+  deletion field and verify that its email request pathway works without the
+  app being installed.
+- Complete the privacy questionnaire for account/profile data, user content,
+  location, identifiers, product interaction, diagnostics, and moderation data
+  according to the behavior of the submitted build.
+- Confirm the age-rating answers for user-generated content and unrestricted
+  web access based on the current app experience.
+- Give App Review a dedicated demo account that can reach reporting, blocking,
+  and in-app account deletion. Store its credentials only in App Store Connect.
+- Explain in review notes that reports are prioritized, three unique reports in
+  24 hours automatically hold posts, users can block other users, and account
+  deletion removes the account, content, interactions, and media.
+- Verify the support inbox `planli.travel.il@gmail.com` is monitored before
+  submission, especially for urgent child-safety and violence reports.
+
+## Destination quality control
+
+The admin console includes a destination-quality queue. New cities are added
+automatically and a daily scheduled audit continues scanning the existing
+catalog. Approval is blocked when bilingual identity, Google Place identity,
+country, or coordinates are missing or contradictory. The queue also surfaces
+stale cache data, missing or weak images, missing attribution, missing airports,
+and failed provider jobs.
+
+Administrators can request verified Unsplash/Wikimedia suggestions, upload a
+manually reviewed JPEG through the normal EXIF-stripping media pipeline, select
+only nearby scheduled airports returned by OurAirports, recheck a destination,
+set its canonical Hebrew name with an audited resumable propagation job,
+approve it with a recorded reason, or deactivate it. Renaming never approves a
+destination. Deactivation removes the public catalog entry and places linked
+recommendations, trips, and routes on moderation hold; it never silently
+republishes them later.
+
+The Storage deployment applies the normal rules to the EU bucket and the
+read-only rollback rules to the US bucket. `storage.cors.json` restricts web
+origins, and `storage.lifecycle.json` removes abandoned staging objects.
+
+The non-Google provider secrets are configured from the repository root:
+
+```powershell
+firebase functions:secrets:set REST_COUNTRIES_KEY --project planli-f0b12
+firebase functions:secrets:set OPENWEATHER_API_KEY --project planli-f0b12
+firebase functions:secrets:set UNSPLASH_ACCESS_KEY --project planli-f0b12
+```
+
+Places API (New) and Geocoding API v4 use Application Default Credentials from
+the dedicated Functions runtime identities. The server requests only the
+reviewed Places and Geocoding OAuth scopes, sends `X-Goog-User-Project`, caches
+short-lived access tokens, and retries once after a 401. There is no legacy
+Places path or server Google Maps API-key fallback. The optional Web map embed
+uses only `EXPO_PUBLIC_GOOGLE_MAPS_EMBED_KEY`; if configured, that browser key
+must be restricted to the production Hosting origins and Maps Embed API.
+`OPENWEATHER_API_KEY` is used only by the server-side destination overview;
+the client does not call the weather provider directly.
+`UNSPLASH_ACCESS_KEY` is used by the asynchronous destination-image selector.
+Unsplash images remain hotlinked and their photographer attribution is shown
+by the client.
+
+## Maintenance and recovery
+
+Migration commands are dry-run unless `--apply` is present. Their checkpoints
+and rollback reports live only in ignored local directories; they never create
+Firestore migration collections.
+
+```powershell
+cd C:\Users\doric\Documents\PlanLi\PlanLi\functions
+
+# Prepare and review the resumable destination-image manifest. These local
+# environment variables should contain the same non-Google provider credentials
+# as the deployed secrets. Google provider calls use ADC/impersonation.
+$env:UNSPLASH_ACCESS_KEY='<unsplash-access-key>'
+npm run backfill-destination-images
+npm run backfill-destination-images -- --apply
+
+# Preview or repair active destinations that still have no canonical image.
+# The resolver keeps the verified Unsplash/recommendation policy and uses a
+# licensed Wikimedia Commons landscape only after anchoring it to an exact
+# nearby Wikipedia city page. Repeat --city to target specific city IDs.
+npm run repair-missing-destination-images -- --city '<city-id>'
+npm run repair-missing-destination-images -- --apply --city '<city-id>'
+
+# Verify or resume US -> EU object copying.
+npm run migrate-storage-eu
+npm run migrate-storage-eu -- --apply --resume
+
+# Verify or restore the read-only US rollback snapshot from verified EU files.
+npm run migrate-storage-eu -- --restore-source
+npm run migrate-storage-eu -- --restore-source --apply --resume
+
+# Verify canonical Firestore data or resume an interrupted migration.
+npm run migrate-database
+
+# Preview and apply country language/calling-code enrichment.
+npm run sync-country-metadata
+npm run sync-country-metadata -- --apply
+
+# Preview and apply nearest-airport facts from OurAirports.
+npm run sync-airport-facts
+npm run sync-airport-facts -- --apply
+npm run migrate-database -- --apply --resume
+
+# Detect or remove orphan favorites.
+npm run cleanup-orphan-favorites
+npm run cleanup-orphan-favorites -- --apply
+
+# Recalculate canonical city recommendation counters (dry-run first).
+node scripts/recalculateCityRecommendationCounts.js
+node scripts/recalculateCityRecommendationCounts.js --apply
+```
+
+Firestore PITR and a seven-day daily backup schedule are enabled. Content and
+account deletion use resumable server jobs because deleting a Firestore parent
+document does not delete its subcollections.
+
+## App Check before public launch
+
+App Check enforcement remains intentionally disabled during the first private
+Development Build and preview validation. The security candidate must be rolled
+out in compatibility-safe stages; a single full Functions deploy is forbidden:
+
+```powershell
+# 1. Add only the session issuer. Existing clients do not call it and remain compatible.
+$env:PLANLI_ENFORCE_APP_CHECK="false"
+firebase deploy --only functions:issueGuestSession --project planli-f0b12
+Remove-Item Env:PLANLI_ENFORCE_APP_CHECK
+
+# 2. After the App Check-enabled native client passes physical-device testing,
+# deploy only the compatible destination writers and reconcilers.
+firebase deploy --only functions:saveRecommendation,functions:publishRecommendationDraft,functions:saveRoute,functions:publishRouteDraft,functions:saveTrip,functions:approveDestination,functions:updateDestinationPolicy,functions:deactivateDestination,functions:reconcileDestinationApprovalReleasesScheduled --project planli-f0b12
+
+# 3. Produce a no-write manifest, review it, and apply only that exact manifest.
+cd functions
+npm run migrate-destination-publication-gate -- --project planli-f0b12
+npm run migrate-destination-publication-gate -- --project planli-f0b12 --apply --fingerprint <reviewed-fingerprint> --confirm APPLY_DESTINATION_PUBLICATION_GATE
+cd ..
+
+# 4. Only after the migration reports zero unresolved legacy documents may the
+# publication-gated indexes and Rules be deployed.
+firebase deploy --only firestore:indexes,firestore:rules --project planli-f0b12
+
+# 5. Only after the compatible client is installed, deploy the six public readers
+# that require the guest envelope. The exact target list prevents an accidental
+# all-Functions cutover.
+$env:PLANLI_ENFORCE_APP_CHECK="true"
+firebase deploy --only functions:loadRouteDetails,functions:getPersonalizedRecommendations,functions:getMapRecommendations,functions:getPersonalizedRoutes,functions:getDestinationOverview,functions:searchDestinations --project planli-f0b12
+Remove-Item Env:PLANLI_ENFORCE_APP_CHECK
+```
+
+The 30 August read-only manifest `b1df32ab…` must not be applied: the legacy
+records do not yet carry the new approval proof, so it flags all 53 destinations,
+would remove all 35 catalog rows and hold all 29 content records. Complete real
+administrator attestation first, then generate and review a new fingerprint.
+The companion human-readable review `fe4683ab…` classifies those 53 records as
+20 exact identity/provider bindings needing protected admin attestation, 15 active
+records needing review, and 18 inactive records already absent from the catalog.
+Of the 15, thirteen are ordinary `locality/political` provider identities; Bastei
+and Humantay Lake are natural features and must not be approved as `city_hub`.
+
+Each stage requires its own inventory read-back, smoke test and error-log check.
+Do not continue when a stage fails. Product-level App Check enforcement for
+Firestore and Storage is enabled only after every Web, Android and iOS build can
+attach a valid token; otherwise requests from that client are rejected. The
+remaining Functions are deployed later in reviewed target batches, never by
+reusing the stage-five environment variable with `--only functions`.
+
+## iOS gallery recovery OTA release
+
+- Source: PR `#202`, merge commit
+  `32f32a75dc42f30563e5d5fea92b71183450fdff` on `main`.
+- App/runtime: `1.1.0`; production EAS channel and branch; iOS only.
+- EAS Update group: `1b08576e-26c9-4ffb-8566-e7dd845130e6`; iOS update
+  `01a03820-4f06-7d69-88ad-aaa771fe6499`, published at
+  `2026-08-25T08:53:56.614Z` with message
+  `Fix iOS gallery loading and permission recovery (#202)`.
+- The update replaced production group
+  `b0112239-3ce4-46a8-8019-674338a8e409` for compatible iOS runtime `1.1.0`
+  clients. The export uploaded one app bundle, found 52 iOS assets, and uploaded
+  no new assets.
+- The publishing checkout also contained unrelated uncommitted README and
+  campaign-rendering files; they were preserved, and the published manifest
+  reports the exact merge commit above. No native build, App Store submission,
+  Firebase deployment, backend change, migration, Android update, or production
+  data write was performed.
+- Download, application, gallery permission recovery, PhotoKit thumbnail loading,
+  and crop behavior on the physical iPhone remain unverified.
+
+## Mobile photo picker stability OTA release
+
+- Source: PR `#204`, merge commit
+  `0fbba80ddb5e324a1cc5f39e01cda050f7ce3c57` on `main`.
+- App/runtime: `1.1.0`; production EAS channel and branch; iOS only.
+- EAS Update group: `d98875c3-ccf5-4ea7-b91f-734a802e4602`; iOS update
+  `01a0384f-3b3b-7ccb-a51a-0b3828ceecf3`, published at
+  `2026-08-25T09:45:11.739Z` with message
+  `Stabilize mobile photo selection (#204)`.
+- The update replaced production group
+  `1b08576e-26c9-4ffb-8566-e7dd845130e6` for compatible iOS runtime `1.1.0`
+  clients. The export uploaded one app bundle, found 52 iOS assets, and uploaded
+  no new assets.
+- Validation passed 53 focused client tests, iOS and Android Expo exports, the
+  generated Android media-permission removal check, and all PR `#204` checks.
+  Android was validated but did not receive this update.
+- The publishing checkout preserved unrelated uncommitted README and campaign
+  files, and the published manifest reports the exact merge commit above. No
+  native build, App Store submission, Firebase deployment, backend change,
+  migration, Android update, or production data write was performed.
+- Download, application, system-picker presentation, photo loading, crop review,
+  and watchdog-memory behavior on the physical TestFlight iPhone remain
+  unverified.
+
+## Noya first-tour repair OTA release
+
+- Source: PR `#208`, merge commit
+  `313ebe320592a539b3c6a9771e17db85b09aabd1` on `main`.
+- Scope: the JavaScript-only Noya first tour now waits for visible tab navigation,
+  scene loading, and stable measurements; spotlights exact tabs and controls; and
+  covers search, filters, sorting, maps, recommendation/route creation, and
+  favorites in 11 Hebrew/RTL steps. Main-tour storage migrated to V2 while
+  preserving independent creator-guide progress.
+- App/runtime: `1.1.0`; `production` EAS environment; Android and iOS; no native
+  dependency, permission, entitlement, plugin, or app-config change.
+- Preview EAS Update: group `b63e0183-d8e8-41a0-9e16-d083b8bb2379`, Android
+  update `01a039c6-3ae2-7641-a854-c6873bfb4ac7`, iOS update
+  `01a039c6-3ae2-735c-8f4c-31b6d94efed3`, published at
+  `2026-08-25T16:34:47.650Z`. EAS read-back confirmed branch `preview`, runtime
+  `1.1.0`, and the exact source commit for both manifests.
+- Production EAS Update: group `b21002fa-5510-42bb-8c22-75ac24499260`, Android
+  update `01a039d6-3555-74e6-a679-2de282732daf`, iOS update
+  `01a039d6-3555-7cbe-922d-659d340fb457`, published at
+  `2026-08-25T16:52:14.805Z`. EAS read-back confirmed branch `production`,
+  runtime `1.1.0`, the exact source commit for both manifests, and this group as
+  the newest production update for both platforms.
+- Validation: 11 focused Noa/Home/Community/Routes/storage/control suites passed
+  66 tests. `npm run validate:changed` passed its related client tests, admin Web
+  export/verification, iOS release-config check, and iOS export. PR `#208` plan,
+  affected-client, and final validation checks passed. A guest Web smoke test
+  exercised all 11 steps before the final review fixes; regression tests cover
+  the reviewed map-mode, personalization-loading, and migration-write cases.
+- Both publishes exported matching Web, iOS, and Android bundle filenames, found
+  52 iOS and 51 Android assets, uploaded both native app bundles, and uploaded no
+  new assets. EAS marked the workspace dirty because unrelated pre-existing
+  untracked campaign/rendering files were preserved; both manifests report the
+  exact merge commit above.
+- No EAS build, App Store/TestFlight or Google Play submission, Firebase deploy,
+  migration, backend change, or production data write was performed. Download,
+  application, exact spotlight geometry, slow/failed-loading behavior, and the
+  complete guest/signed-in tour remain unverified on physical Android and iOS
+  devices.
+- Roll back preview by republishing group
+  `e2490214-0532-4777-b1a2-eca3519eac85`; roll back production by republishing
+  group `151b7748-1189-406e-8b7c-a10336fe4a9b`.
+
+## Photo editor restoration and For You v2 OTA release
+
+- Source: photo-editor integration PR `#211`, CityCard release-test isolation PR
+  `#212`, and Windows preflight repair PR `#213`; released from clean `main`
+  commit `4766903a1a40481a6b3019159d14934e9c41d551`. The release also contains
+  previously merged For You v2 PR `#210` and Noya first-tour PR `#208`.
+- Scope: restores independently editable multi-photo recommendation and RoadTrip
+  media, the photo-first four-stage recommendation flow and matching Noya guide,
+  the RoadTrip media limits, and the For You v2 client/backend behavior. The
+  authenticated media-processing minute allowance is 40; existing file-size,
+  pixel, ownership, staging, concurrency, bandwidth, and security controls remain.
+- Preview EAS Update: group `cde53874-e3f5-4a1b-b8ef-f7a52fa5a025`, Android
+  update `01a03ac7-6651-71cc-ba0e-7c5f6e52da60`, and iOS update
+  `01a03ac7-6651-70bf-8579-627e3e7f3364`, published at
+  `2026-08-25T21:15:41.521Z` on branch `preview`, runtime `1.1.0`.
+- Production EAS Update: exact republish group
+  `1184a492-317b-4a5a-be48-12374b98bc8a`, Android update
+  `01a03acb-43cc-7631-8bac-e7f9009a6c27`, and iOS update
+  `01a03acb-43cc-74d6-b5ad-c0056c688c3c`, published at
+  `2026-08-25T21:19:54.828Z` on branch `production`, runtime `1.1.0`. EAS
+  read-back confirmed the production branch's newest group contains both
+  platforms and exact commit `4766903` with a clean working tree.
+- Firebase deployment: the twelve affected Functions listed in the current
+  release record were deployed to `planli-f0b12` in `europe-west1`; inventory
+  reports 99 active v2 Node.js 22 Functions. No Rules, Hosting, migration,
+  production-document, IAM, native-build, or store-submission change accompanied
+  this release.
+- Validation: release-readiness run `32897877416` passed production lineage,
+  locked installs, all client and Functions tests, iOS release configuration and
+  export, Firestore/Storage Rules emulator tests, and release dependency audits.
+  The live EAS preflight passed immediately before production promotion, and EAS
+  uploaded two app bundles with no new assets.
+- Prevention: `scripts/easProductionPreflight.js` enforces clean `main`, exact
+  `origin/main`, and ancestry of the currently deployed production commit;
+  `scripts/easProductionPreflight.test.js` covers the policy and Windows launcher.
+  Root `package.json` exposes `preflight:eas-production`, PR tooling tests it in
+  `.github/workflows/pr-validation.yml`, and
+  `.github/workflows/release-readiness.yml` blocks client/Functions release gates
+  until the operator-provided live production commit passes lineage validation.
+- Physical download, application, gestures, photo add/delete/crop restoration,
+  recommendation/RoadTrip creation and editing, Noya guide behavior, and For You
+  v2 remain unverified on the TestFlight iPhone and Android tablet. Force-close
+  and reopen the production app up to twice to download and apply the update.
+  Roll back preview to `b63e0183-d8e8-41a0-9e16-d083b8bb2379` or production to
+  `b21002fa-5510-42bb-8c22-75ac24499260` if required.
+
+## Home planning hub OTA release
+
+- Source: PR `#215`, merge commit
+  `e1ba08d9255c90c1c22ed93b5d9da90c5d392d74` on clean `main`.
+- Scope: replaces unsupported popularity-metric Home content with a Hebrew/RTL
+  planning hub containing trip continuation, destination search and saved-only
+  filtering, quick planning actions, Noya onboarding, personalized-or-newest
+  routes, and community recommendations. Refresh failures preserve previously
+  loaded drafts and discovery cards and do not show false success feedback.
+- App/runtime: JavaScript-only `1.1.0`; `production` EAS environment; Android and
+  iOS; no native dependency, permission, entitlement, plugin, or app-config
+  change.
+- Preview EAS Update: group `48a9c9ef-4c32-4030-adb0-0ad7bcecb111`, Android
+  update `01a03b4e-b151-7faa-bde7-d23de24d37a1`, and iOS update
+  `01a03b4e-b151-7955-887a-b24f9ded8f1d`, published at
+  `2026-08-25T23:43:28.081Z` on branch `preview`, runtime `1.1.0`.
+- Production EAS Update: exact republish group
+  `43a873d8-282c-4e6a-986d-fcd014047c2c`, Android update
+  `01a03b51-cc08-7328-8f2d-71f26f5953b2`, and iOS update
+  `01a03b51-cc08-727f-88f1-93b17c27e092`, published at
+  `2026-08-25T23:46:51.528Z` on branch `production`, runtime `1.1.0`. EAS
+  read-back confirmed this as the newest production group, both platforms, the
+  exact merge commit, the production environment, and a clean working tree.
+- Validation: 4 focused Home/search/filter suites passed 42 tests; all 159
+  client suites passed 823 tests; Web rendering was checked at mobile and
+  desktop viewport sizes; PR `#215` validation passed; release-readiness run
+  `32910178977` passed production lineage, locked installs, client and Functions
+  tests, iOS release configuration/export, Firestore and Storage Rules emulator
+  tests, and dependency audits. The EAS production preflight passed immediately
+  before preview publication and again before production promotion.
+- The preview publish exported Web, iOS, and Android bundles, uploaded two app
+  bundles, found 52 iOS and 51 Android assets, and uploaded no new assets. The
+  production release republished those exact preview artifacts.
+- No EAS native build, App Store/TestFlight or Google Play submission, Firebase
+  deployment, migration, backend change, IAM change, or production-data write
+  was performed. Download, application, visual layout, navigation, refresh
+  recovery, and personalized/generic content on physical Android and iOS devices
+  remain unverified. Force-close and reopen the production app up to twice to
+  download and apply the update. Roll back preview to
+  `cde53874-e3f5-4a1b-b8ef-f7a52fa5a025` or production to
+  `1184a492-317b-4a5a-be48-12374b98bc8a` if required.
+
+## Noya component-geometry OTA release
+
+- Source: PR `#221`, merge commit
+  `408c8e94c97b6eaee83777170130972e4b5f6fda` on clean `main`.
+- Scope: converts all Noya guide targets from viewport coordinates to the live
+  overlay coordinate space, including nonzero overlay origins, Web scaling,
+  safe-area clipping, modal sheets, rotation, and layout changes. The overlay
+  waits for two stable complete component measurements before drawing; the main
+  tour storage migrated to V3 so everyone receives the repaired tour once while
+  recommendation and route creator-guide progress remains intact.
+- App/runtime: JavaScript-only `1.1.0`; `production` EAS environment; Android and
+  iOS; no native dependency, permission, entitlement, plugin, or app-config
+  change.
+- Preview EAS Update: group `31df8f49-77fb-4151-85fb-245e594a81d7`, Android
+  update `01a03e60-ab2c-71c0-8f71-4d214e86962b`, and iOS update
+  `01a03e60-ab2c-7f94-b4d1-9c43b538b785`, published at
+  `2026-08-26T14:01:57.804Z` on branch `preview`, runtime `1.1.0`.
+- Production EAS Update: exact republish group
+  `1a691933-e4b6-4003-9d3d-111315a88549`, Android update
+  `01a03e64-1c50-7500-bfe5-9e4fc2aea1e4`, and iOS update
+  `01a03e64-1c50-7709-96ac-f922c1842eae`, published at
+  `2026-08-26T14:05:43.376Z` on branch `production`, runtime `1.1.0`. EAS
+  read-back confirmed this as the newest production group, both platforms, and
+  the exact source commit.
+- Validation: 10 focused Noya/Home/Community/Routes/Favorites/control suites
+  passed 67 tests; `npm run validate:changed` passed; PR `#221` plan, affected
+  client, and final validation checks passed; and the requested final review
+  reported no findings. Web smoke testing exercised all 11 tour steps at
+  390-by-844 and 1280-by-720 viewports; every spotlight matched its live target
+  with the intended three-pixel padding, including simultaneous tab/control
+  spotlights and automatic tab navigation.
+- The preview publish exported Web, iOS, and Android bundles, uploaded two app
+  bundles, found 52 iOS and 51 Android assets, and uploaded no new assets. The
+  production release republished those exact preview artifacts. The production
+  preflight passed before preview publication and again before promotion.
+- No EAS native build, App Store/TestFlight or Google Play submission, Firebase
+  deployment, migration, backend change, IAM change, or production-data write
+  was performed. Download, application, exact spotlight geometry, slow/failed
+  loading, and the complete guest/signed-in tour remain unverified on physical
+  Android and iOS devices because no native device bridge was available. Force-
+  close and reopen the production app up to twice to download and apply the
+  update. Roll back preview to `48a9c9ef-4c32-4030-adb0-0ad7bcecb111` or
+  production to `43a873d8-282c-4e6a-986d-fcd014047c2c` if required.
+
+## Recommendation provider-destination publication release
+
+- Source: recommendation fix PR `#226`, merge commit
+  `92331f87a9600ce8ac59e19616573c826361c1a0`; released from clean `main`
+  commit `cbb6aa61afe4e41f66e1e0afd6dbf6d3ca372ec7`, which also includes the
+  approved Noya copy and campaign-ignore follow-ups in PRs `#227` and `#228`.
+- Scope: preserves Google provider identity through recommendation drafts,
+  materializes new city/region destinations during publication, validates the
+  canonical destination IDs, keeps destination/pin/exact semantics distinct,
+  repairs durable failed queues idempotently, adds destination-specific error
+  copy, and tags failures only with the privacy-safe content mode.
+- Firebase deployment: only `saveRecommendation`, `saveRecommendationDraft`,
+  and `publishRecommendationDraft` were deployed to `planli-f0b12` in
+  `europe-west1` at `2026-08-26T19:50:18Z`. All are active Node.js 22 v2
+  Functions. Their deployed source hashes/generations are respectively
+  `66d353305cc5bd0d3c181eb567c0ba69e7f34c89`/`1787773818476342`,
+  `2f759a7e3eccf844a050dd77cad92cacd06e55b6`/`1787773818505072`, and
+  `66d353305cc5bd0d3c181eb567c0ba69e7f34c89`/`1787773818504460`.
+- Preview EAS Update: group `1a3c69c6-fc05-4666-b3df-da528b00facf`, Android
+  update `01a03fb1-241f-7185-beb7-e5fbbd3b3b23`, and iOS update
+  `01a03fb1-241f-7241-afc2-51225a3ed294`, published at
+  `2026-08-26T20:09:28.863Z` on branch `preview`, runtime `1.1.0`.
+- Production EAS Update: exact republish group
+  `2b8fe998-103e-4d9f-8080-ad01301b6cb8`, Android update
+  `01a03fb3-eeb4-7379-9d28-4b48cf0aff7b`, and iOS update
+  `01a03fb3-eeb4-7718-ac45-7271f9864282`, published at
+  `2026-08-26T20:12:31.796Z` on branch `production`, runtime `1.1.0`. EAS
+  read-back confirmed both manifests use exact commit `cbb6aa61`; the production
+  release reused the preview bundles and uploaded no new assets.
+- Validation: focused Functions tests passed 63 tests, focused client tests
+  passed 39 tests, `npm run validate:changed` passed, PR `#226` checks passed,
+  and the final shared-contract review found no blocking issue. Both clean-main
+  EAS production-lineage preflights passed. The preview export found 52 iOS and
+  51 Android assets and uploaded two app bundles with no new assets.
+- Observability: Sentry issue `PLANLI-MOBILE-9` remains unresolved with 15
+  historical events; its last event was `2026-08-26T18:23:36Z`, before this
+  rollout, and no later event was returned. Firebase inventory reports all 99
+  Functions active. A Firebase MCP Cloud Logging query covering
+  `2026-08-26T19:50:18Z` through `2026-08-26T20:18:00Z` returned no `ERROR`
+  entries for the three deployed targets. Cloud Run revision names remain
+  unverified; deployed source hashes and generations are recorded above.
+- No native build, TestFlight/App Store or Google Play submission, Rules,
+  indexes, Hosting, migration, IAM, or production-document mutation accompanied
+  this release. Mykonos/Venice city-or-region and exact-place publication,
+  one-tap recovery of a failed queue, and banner dismissal remain unverified on
+  physical devices. Force-close and reopen the production app up to twice to
+  download and apply the update. Roll back preview to
+  `31df8f49-77fb-4151-85fb-245e594a81d7` or production to
+  `1a691933-e4b6-4003-9d3d-111315a88549` if required.
+
+## Canonical travel destination rollout
+
+- Source: feature commit `21ad5cf9fc18d231a55142efb8317e4b38a208dd`,
+  deterministic reassignment-counter fix `907ba32`, and live-audit compatibility
+  fix `baf1a08`, all on pushed branch `feat/canonical-travel-destinations`. No
+  merge to `main` was performed.
+- Scope: a private 251-entry traveler-facing registry; canonical place-ID,
+  alias, containment, parent/child and grouping resolution; India
+  `addressDescriptor` support; Pro `containingPlaces` only as a last-resort
+  match to an already approved destination; admin policy editing and resumable
+  reassignment; writer locks; and dry-run-first seed/audit/repair tooling.
+- Functions deployment: 17 affected Node.js 22 v2 Functions were created or
+  updated in `europe-west1`: `saveRecommendation`,
+  `publishRecommendationDraft`, `resolveRecommendationDestination`,
+  `resolvePlaceSelection`, `saveRoute`, `publishRouteDraft`, `saveTrip`,
+  `setFavorite`, `deleteContent`, `listDestinationReviews`,
+  `getDestinationReview`, `approveDestination`, `updateDestinationPolicy`,
+  `previewDestinationReassignment`, `startDestinationReassignment`,
+  `getDestinationReassignmentJob`, and
+  `onDestinationReassignmentJobWritten`. The worker was redeployed from
+  `907ba32` after runtime validation of deterministic counter finalization. The
+  exact CLI completion timestamps and Cloud Run revision names were not
+  returned; deployment completed before the independent audit at
+  `2026-08-26T22:37:37.021Z`. Firebase inventory confirms all five new targets
+  and 104 total active Functions.
+- Registry seed: `system/destinationRegistry` version 1 was written at
+  `2026-08-26T22:15:38.225Z` with 251 validated, unique entries: 101 Europe,
+  80 Asia, 30 Central America, and 40 South America. Enrichment returned zero
+  unresolved entries and the independent Firestore read-back returned exactly
+  251 child documents. The Google key was read from Secret Manager into process
+  memory only and was not logged or written to disk.
+- Production correction: 14 preview-bound reassignment jobs completed. They
+  moved 14 recommendations, one route and its active/prepared stops, and two
+  favorites; all source destinations are inactive with exact `mergedInto`
+  pointers and all targets/catalog projections are active. The reported cases
+  now resolve as Rivas/Ojo de Agua → Ometepe, Kannan Devan Hills/Rajamalai →
+  Munnar, and Perama → Corfu. Chiang Mai and Chiang Rai are canonical province
+  destinations. Bansko, Sapa, Mykonos, Da Nang, Budapest, Tyrol, Cusco, Venice,
+  and Bangkok were also canonicalized from unapproved legacy identities.
+- Runtime repair: one observed two-worker race moved the Munnar recommendation
+  correctly but left its diagnostic progress count at zero. The finalizer now
+  uses the immutable preview count; the Munnar statistic was transactionally
+  reconciled from 0 to 1 and recorded in the moderation audit. A read-back of
+  all 14 targets found zero recommendation-counter mismatches.
+- Remaining audit state: 29 active destinations comprise 14 canonical entries
+  and 15 manual-review entries, with zero active reassignment candidates and
+  zero ambiguities. Fourteen inactive merged sources and two unrelated inactive
+  review records remain preserved. `Nam Hoa Lu`, `Humantay Lake`, and `Rinas`
+  remain manual-review cases because no approved match was reliable enough to
+  mutate automatically.
+- Admin Hosting: the 48-file bundle was released to
+  `https://planli-f0b12.web.app/admin/`. HTML and JavaScript returned HTTP 200,
+  the live bundle contains the canonical-policy and reassignment controls, and
+  the configured CSP remained present. The Firebase CLI did not return a
+  Hosting release ID or exact release timestamp.
+- Validation: `npm run validate:changed` passed twice, including client checks,
+  admin Web export/verification, 16 related Functions groups, and the Functions
+  production audit. Focused post-race tests passed 14/14. The final
+  `audit-live` checked 835 Firestore documents, 104 Functions, both Storage
+  buckets, and public media, and returned `ok: true` with zero failures. Direct
+  propagation checks found no residual source references or stale Chiang Rai
+  stops, and verified the Budapest and Chiang Mai favorite moves. The final
+  Cloud Logging query returned no `ERROR` entries for affected Functions. The
+  32-file Codex Security diff review found no reportable vulnerabilities.
+- No Firestore Rules, indexes, Storage Rules, IAM, EAS Update, native build,
+  TestFlight/App Store or Google Play action accompanied this rollout. A new
+  destination selection was covered by resolver tests but was not submitted
+  through a physical signed-in mobile client after deployment.
+
+## Canonical destination integrity follow-up release
+
+- Source and Git: PR `#231` merged to `main` as
+  `9d70edadfd32f18a60a0784c74266313ebcd6a2b` at
+  `2026-08-27T05:57:07Z`. Final hardening commit `8fbd279` prevents reuse of an
+  inactive merged destination that shares a Google Place ID, enforces parent
+  grouping, validates registry graphs and provider identities, locks favorite
+  mutations during reassignment, and propagates merged destination affinity.
+- Firebase: `saveRecommendation`, `publishRecommendationDraft`,
+  `resolveRecommendationDestination`, `resolvePlaceSelection`, `saveRoute`,
+  `publishRouteDraft`, `setFavorite`, `updateDestinationPolicy`, and
+  `onDestinationReassignmentJobWritten` were successfully redeployed from the
+  clean merge commit. Firebase inventory confirms Node.js 22 v2 in
+  `europe-west1`; a post-deploy MCP query returned no `ERROR` entries for those
+  targets. Exact Cloud Run revision names and the CLI completion timestamp were
+  not returned.
+- Production data repair: the explicit apply run resolved 14 completed merge
+  mappings, scanned 23 users, and repaired 14 personalization profiles. It
+  required project confirmation and an active admin and wrote a moderation
+  audit record. The immediate follow-up dry-run reported `updatedUsers: 0`.
+- Hosting: the current 48-file admin bundle was released to
+  `https://planli-f0b12.web.app/admin/`. Browser verification loaded the Hebrew
+  authentication screen with title `AdminPanel` and no console warnings or
+  errors. Firebase CLI did not return a Hosting release ID or exact timestamp.
+- Preview EAS Update: group `65aad93c-c64b-4f13-a154-626f6909d333`, Android
+  update `01a041e5-a290-7bc3-92e4-7befabc8c036`, and iOS update
+  `01a041e5-a290-7969-ac3a-fc848b263c40`, published at
+  `2026-08-27T06:26:03.536Z` on branch `preview`, runtime `1.1.0`.
+- Production EAS Update: exact republish group
+  `57eed77a-9f71-4e56-89c7-2c85f3c82077`, Android update
+  `01a041e7-be3b-7ced-83d6-8243c9c5c93b`, and iOS update
+  `01a041e7-be3b-76f4-bc0f-f7e7540f8821`, published at
+  `2026-08-27T06:28:21.691Z` on branch `production`, runtime `1.1.0`. EAS
+  read-back confirmed both manifests use exact commit `9d70edad`; production
+  reused the preview bundles. The export found 52 iOS and 51 Android assets,
+  uploaded two app bundles, and uploaded no new assets.
+- Validation: final focused tests passed 89/89; `npm run validate:changed` and
+  GitHub PR validation passed; the 14-file Codex Security review completed with
+  no reportable findings. The final `audit-live` at
+  `2026-08-27T06:31:11.158Z` checked 839 Firestore documents, 104 Functions,
+  both Storage buckets and public media and returned `ok: true` with zero
+  failures.
+- No Firestore Rules, indexes, Storage Rules, IAM, native EAS build,
+  TestFlight/App Store submission, or Google Play release was changed. The OTA
+  is available to installed production-channel binaries, but download,
+  application and destination behavior remain unverified on physical iOS and
+  Android devices. Force-close and reopen the app up to twice to apply it. Roll
+  back preview to `1a3c69c6-fc05-4666-b3df-da528b00facf` or production to
+  `2b8fe998-103e-4d9f-8080-ad01301b6cb8` if required.
+
+## Recommendation draft recovery release
+
+- Source and Git: PR `#233` merged to clean `main` as
+  `f06f2f6b6aacb99cc9d76e99cb9ffb1d34f8c4ba` at
+  `2026-08-27T07:01:32Z`.
+- Root cause and scope: production logs showed repeated HTTP 409 responses from
+  `saveRecommendationDraft`, which maps uniquely to
+  `RECOMMENDATION_DRAFT_VERSION_CONFLICT`; the final save therefore failed
+  before the publication queue was reached. The client now refreshes and retries
+  a matching stale draft once without overwriting a different draft. Discard is
+  single-flight, shows immediate progress, treats an already-missing draft as
+  success, and leaves after server deletion even if local media cleanup fails.
+  Terminal save/discard failures use privacy-safe Sentry operation, code, reason,
+  and content-mode tags only.
+- Preview EAS Update: group `50b71fab-4cab-4a78-acf2-ef2ced0a22ff`, Android
+  update `01a04210-e502-77d6-9679-5098ff897ec1`, and iOS update
+  `01a04210-e502-70f2-9bb1-5f825c56fe48`, published at
+  `2026-08-27T07:13:18.594Z` on branch `preview`, runtime `1.1.0`.
+- Production EAS Update: exact republish group
+  `65e800f9-a1eb-4a6c-916e-4cf941ec3e10`, Android update
+  `01a04212-50c3-7b27-abbe-5ab757b1d1db`, and iOS update
+  `01a04212-50c3-721e-ac6e-60b97ce356f3`, published at
+  `2026-08-27T07:14:51.715Z` on branch `production`, runtime `1.1.0`. EAS
+  read-back confirmed both manifests use exact commit `f06f2f6b`; production
+  reused the preview artifacts.
+- Validation: all 32 focused recommendation-composer tests passed,
+  `npm run validate:changed` passed, and every PR `#233` check passed. Both
+  clean-main production-lineage preflights passed against the previously live
+  commit `9d70edad`. The preview export found 52 iOS and 51 Android assets,
+  uploaded two app bundles, and uploaded no new assets.
+- Observability: read-only Sentry queries returned no issues in the preceding
+  24 hours for the `prod` or `production` environments or without an environment
+  filter. No physical-device reproduction has been completed after rollout.
+- No Firebase deployment, Rules, indexes, Hosting, migration, IAM, native EAS
+  build, TestFlight/App Store submission, or Google Play release accompanied
+  this JavaScript-only update. Force-close and reopen the production app up to
+  twice to apply it. Roll back preview to
+  `65aad93c-c64b-4f13-a154-626f6909d333` or production to
+  `57eed77a-9f71-4e56-89c7-2c85f3c82077` if required.
+
+## Android Home startup-crash hotfix
+
+- Source and Git: PR `#235` merged to clean `main` as
+  `c53976369bf26bf7608a635c962b88e84b8eab4a` at
+  `2026-08-27T09:28:04Z`.
+- Root cause and scope: Sentry issue `PLANLI-MOBILE-M` showed React Native
+  throwing `IllegalArgumentException: Invalid accessibility role value: status`
+  while an authenticated user opened Home on Android 16. React Native `0.81.5`
+  accepts `status` in the JavaScript type but excludes it from the legacy
+  Android `AccessibilityRole` enum. Both cached Home refresh notices now use the
+  cross-platform `role="status"` prop and retain polite Android live-region
+  announcements without sending the crashing legacy prop.
+- Preview EAS Update: Android-only group
+  `15e726fc-c307-4939-96fb-519e6c5c4050`, update
+  `01a04298-0ef7-75ef-8187-72bf5df94c6e`, published at
+  `2026-08-27T09:40:56.695Z` on branch `preview`, runtime `1.1.0`.
+- Production EAS Update: exact Android artifact republish group
+  `25506ec2-6a03-46dd-99f4-7b26178e9205`, update
+  `01a0429b-1a4e-7018-bbd6-a8001df4f267`, published at
+  `2026-08-27T09:44:16.206Z` on branch `production`, runtime `1.1.0`. EAS
+  read-back confirmed the exact source commit and Android-only platform; iOS
+  remains on recommendation draft-recovery group
+  `65e800f9-a1eb-4a6c-916e-4cf941ec3e10`.
+- Validation: the focused Home suite passed 17/17 tests, changed-scope
+  validation passed, the Android Hermes export bundled 2,418 modules and 48
+  assets, and all applicable PR `#235` checks passed. Both clean-main
+  production-lineage preflights passed. The EAS preview export uploaded one app
+  bundle, found 51 Android assets, and uploaded no new assets.
+- Observability: Sentry still marks `PLANLI-MOBILE-M` unresolved with four fatal
+  events from one user. Its last event remains `2026-08-26T20:57:31Z`, before
+  this rollout; the post-release read-only query returned no later event.
+- No native EAS build, iOS update, TestFlight/App Store or Google Play
+  submission, Firebase deployment, Rules, indexes, Hosting, migration, IAM, or
+  production-data write accompanied this JavaScript-only hotfix. Download,
+  application, and launch verification on a physical Android device remain
+  pending. Force-close and reopen the production app up to twice to apply it.
+  Roll back Android preview to group
+  `50b71fab-4cab-4a78-acf2-ef2ced0a22ff` or Android production to group
+  `65e800f9-a1eb-4a6c-916e-4cf941ec3e10` if required.
+
+## Recommendation RTL-link publication recovery release
+
+- Source and Git: PR `#237` merged to clean `main` as
+  `ffde0470634d13f9e5c93656770cc16e85818171` at
+  `2026-08-27T10:14:34Z`.
+- Root cause and scope: production incident `loc_DiQNgtDzVtrp` reached
+  `publishRecommendationDraft` with a visually valid HTTPS link prefixed by an
+  invisible RTL formatting character. Draft and media saves had succeeded, but
+  final URL parsing rejected the link as `invalid_selection`. Client and server
+  boundaries now strip Unicode bidi formatting controls and trim external URLs,
+  while still rejecting non-HTTP(S), hostless, and non-string values. Existing
+  durable recommendation jobs that failed specifically for this legacy shape
+  are upgraded and requeued once without re-uploading remote media; unrelated
+  invalid selections remain failed. Genuine link errors now return
+  `invalid_external_url` with link-specific Hebrew copy.
+- Firebase deployment: only `saveRecommendation`, `saveRecommendationDraft`,
+  and `publishRecommendationDraft` were deployed from the clean merge commit to
+  `planli-f0b12` in `europe-west1`. Independent inventory confirms all 104
+  Functions active on Node.js 22. The resulting Cloud Run revisions are
+  `saverecommendation-00042-dis` (updated `2026-08-27T10:19:46Z`),
+  `saverecommendationdraft-00004-pax` (`2026-08-27T10:19:58Z`), and
+  `publishrecommendationdraft-00008-tuw` (`2026-08-27T10:19:52Z`). The first
+  CLI attempt stopped during local source discovery before any remote update;
+  the single retry with the documented discovery timeout completed successfully.
+- Preview EAS Update: group `98b2e69d-fabb-466a-88a8-abbc98510616`, Android
+  update `01a042cb-79bc-7440-928c-b13c1bc6be47`, and iOS update
+  `01a042cb-79bc-77b8-b482-2830fa2101be`, published at
+  `2026-08-27T10:37:06.364Z` on branch `preview`, runtime `1.1.0`.
+- Production EAS Update: exact preview-artifact republish group
+  `4947c1c8-6bae-4115-bc2f-b6c622d9230d`, Android update
+  `01a042ce-61b1-763e-aaf8-37e5379f0b43`, and iOS update
+  `01a042ce-61b1-7335-b9c8-c07e666cabbc`, published at
+  `2026-08-27T10:40:16.817Z` on branch `production`, runtime `1.1.0`. EAS
+  read-back confirmed both manifests use exact commit `ffde0470634d13f9e5c93656770cc16e85818171`.
+  The preview export bundled 2,419 modules for each native platform, found 52
+  iOS and 51 Android assets, uploaded two app bundles and no new assets; the
+  production release reused those exact artifacts.
+- Validation: 64 focused client tests and 68 focused Functions tests passed,
+  `npm run validate:changed` and `git diff --check` passed, every PR `#237`
+  check passed, and final review found no blocking issue. Both clean-main EAS
+  production-lineage preflights passed against the previously live production
+  source `c539763`.
+- Observability: a post-deploy read-only Cloud Logging response covering the
+  three deployed services from `2026-08-27T10:19:30Z` returned 15 entries with
+  zero `ERROR`/5xx entries and zero publication-failure signals. Subsequent
+  repeated queries reached the project read-request quota; the successful
+  response, deployed revision inventory, and EAS manifests were verified
+  independently.
+- No native EAS build, TestFlight/App Store or Google Play submission, Rules,
+  indexes, Hosting, migration, IAM, or production-document mutation accompanied
+  this release. OTA download/application and retry success remain unverified on
+  physical iOS and Android devices. Force-close and reopen the production app up
+  to twice to apply it. Roll back preview Android to
+  `15e726fc-c307-4939-96fb-519e6c5c4050`, preview iOS to
+  `50b71fab-4cab-4a78-acf2-ef2ced0a22ff`, production Android to
+  `25506ec2-6a03-46dd-99f4-7b26178e9205`, or production iOS to
+  `65e800f9-a1eb-4a6c-916e-4cf941ec3e10` if required.
+
+## Admin console rebuild and compatibility release
+
+- Source and Git: compatibility PR `#239` merged as
+  `7d71e3b8c41d` and search-projection repair PR `#240` merged as final release
+  commit `cd458a7e33f23970926d1af3db05ef18c1cd57d6` on clean `main`.
+- Root cause and scope: the rebuilt admin client could reach an older or
+  partially deployed callable/index surface and then expose raw Firebase
+  failures for every action. The console now bootstraps against an explicit
+  `consoleContractVersion`, blocks operational controls until the backend
+  contract is compatible, keeps saved views optional, and maps callable/index
+  failures to safe Hebrew recovery states. The moderation search backfill is
+  idempotent and no longer rewrites equivalent projections. A production dry
+  run also exposed an optional destination `countryName` being serialized as
+  `undefined`; PR `#240` omits the absent field and covers it with a regression
+  test.
+- Firestore indexes: the exact indexes target was deployed to the Standard
+  `(default)` database in `eur3`. Independent comparison reported 62 local and
+  62 live composite indexes with none missing; eight moderation-case,
+  enforcement, and search indexes were added. Firestore Rules were not
+  deployed or weakened.
+- Functions: the 34 admin, moderation, enforcement, notification, profile-sync,
+  deletion, and search-projection targets were deployed with the documented
+  extended source-discovery timeout and explicit retry-policy confirmation.
+  Independent inventory found all 34 `ACTIVE`, v2, Node.js 22, and
+  `europe-west1`; the seven repaired search triggers share deployed source hash
+  `a03346c8f761f7519163bc2f22737a06695cd0c1`. Two attempts to read recent
+  Function logs through Firebase CLI failed in the Google Cloud log-retrieval
+  layer, so post-release log contents are explicitly unverified rather than
+  reported as clean.
+- Moderation backfill: the initial dry run found nine case revisions, two held
+  content links, and 127 search projections. The approved apply wrote the nine
+  case and two held-content repairs. The first search apply stopped before its
+  batch commit when Firestore rejected the undefined destination field; after
+  PR `#240` and redeployment of the seven search triggers, the dry run found 74
+  and five changes across two resumable batches and the apply completed. The
+  final read-only audit inspected 11 cases, two held records, and 318 search
+  resources across two pages with zero remaining changes or writes.
+- Hosting: `export:admin-web` and `verify:admin-web` passed, resolving all 35
+  local references, before exact Hosting deployment. The live admin route at
+  `https://planli-f0b12.web.app/admin/` returned HTTP 200 with the expected
+  bundle. Browser checks at desktop 1280x900 and iPhone 390x844 loaded the
+  Hebrew sign-in state with no console errors or horizontal overflow. The
+  available browser profile had no signed-in admin session, so authenticated
+  policy bootstrap and real admin actions remain unverified in production.
+- EAS Update: two clean-main production-lineage preflights passed against the
+  preceding live source `ffde0470634d13f9e5c93656770cc16e85818171`. Preview
+  group `18ae0c59-1b46-49a7-89cf-941782743183` contains iOS update
+  `01a04321-6135-7f22-a823-6a41f8016ee3` and Android update
+  `01a04321-6135-796f-adb0-b2f29c372bcd`, published at
+  `2026-08-27T12:10:56.181Z`. Those exact artifacts were republished to
+  production group `f91d01d2-42aa-436c-8774-98d9f85d09bd`, iOS update
+  `01a04323-fa7c-77db-96bb-f59d49c3474e`, and Android update
+  `01a04323-fa7c-7dc9-b4ec-b5eaa4c31130` at
+  `2026-08-27T12:13:46.492Z`. EAS read-back confirmed both production
+  manifests, runtime `1.1.0`, branch `production`, and exact commit
+  `cd458a7e33f23970926d1af3db05ef18c1cd57d6`. The preview export bundled 2,419
+  modules for each native platform, found 52 iOS and 51 Android assets, uploaded
+  two app bundles, and uploaded no new assets.
+- Validation: focused Functions coverage passed 40/40 tests and transitive
+  moderation, notification, deletion, and public-profile coverage passed 75/75.
+  Client contract/error coverage passed 13/13, changed-scope validation passed,
+  and the single final review found and drove the error-priority regression fix
+  before merge. Regression coverage includes reporter document-ID anonymity,
+  filtered moderation datasets larger than one page, failure after suspension
+  reinstatement finalization, and route-revision projection cleanup.
+- No native EAS build, TestFlight/App Store or Google Play submission, Rules,
+  Storage, IAM, dependency upgrade, or destructive production deletion was
+  performed. The only production-document writes were the explicitly approved
+  moderation backfill. OTA download/application and authenticated admin actions
+  on a physical iPhone remain unverified. Force-close and reopen the production
+  app up to twice to apply the OTA; roll back by republishing production group
+  `4947c1c8-6bae-4115-bc2f-b6c622d9230d`.
+
+## Launch-safe destination resolution release
+
+- Source and Git: implementation commit `59dc63b19801cc9b596679dbe10f8066b9ac940d`
+  passed PR `#242` and merged to clean `main` as
+  `77096274e5b6f0efd6219d8500c94f4a5864a174` at
+  `2026-08-27T13:46:55Z`.
+- Root cause and scope: Google `locality` values were treated as traveler-facing
+  destinations even when they represented unfamiliar address components such
+  as Rivas or Kannan Devan Hills. Resolution now prefers a private reviewed
+  registry of 251 traveler destinations, supports explicit Hebrew naming and a
+  same-country fallback picker, preserves the exact-place publication token,
+  rejects cross-country attachment before any cache mutation, and ignores stale
+  asynchronous destination-search results. The client asks the user to choose
+  when no reliable destination can be inferred instead of activating a raw
+  provider name.
+- Validation: focused review-fix coverage passed 23 client and 49 recommendation
+  service tests. Changed-scope validation passed 79 client tests and 106
+  Functions tests, validated all 251 registry entries and reported zero
+  Functions dependency vulnerabilities. Every required PR `#242` check passed,
+  including affected client and Functions jobs and final PR validation.
+- Functions: only `resolvePlaceSelection` and
+  `resolveRecommendationDestination` were deployed from the merge source to
+  `planli-f0b12` in `europe-west1`. Independent inventory reports both `ACTIVE`,
+  v2, Node.js 22, and source hash
+  `2172059424f0ac2be3f4668238982121b37aa98a`. The uploaded source generations
+  correspond to `2026-08-27T14:13:31.722Z` and
+  `2026-08-27T14:12:43.311Z`, respectively. The Firebase log read-back failed in
+  the Google Cloud retrieval layer, so post-deploy log contents are unverified.
+- EAS Update: EAS CLI `22.6.0` was reinstalled after the cached `npx` package was
+  incomplete. The new `eas release` topic still exposed no executable
+  subcommands, so it was not added to the durable release instructions and the
+  established exact-artifact workflow remained in use. Two production-lineage
+  preflights passed against prior production commit
+  `cd458a7e33f23970926d1af3db05ef18c1cd57d6`. Preview group
+  `2be4404d-9bb4-48aa-b296-44df198deb1b`, Android update
+  `01a0438a-7b5f-7b6e-bb99-a93a49637c41` and iOS update
+  `01a0438a-7b5f-7038-9bf4-acd190311bf0` were published at
+  `2026-08-27T14:05:44.159Z`. Those exact artifacts were republished to
+  production group `a50b1502-5158-49e5-bb59-02933dac81f1`, Android update
+  `01a04394-64d8-76b2-8e63-e7c29c23f6df` and iOS update
+  `01a04394-64d8-72c5-b098-e4c0700e6544` at
+  `2026-08-27T14:16:33.752Z`. EAS read-back confirmed both platforms, runtime
+  `1.1.0`, production head, and exact merge commit `77096274`.
+- The preview export bundled 2,421 modules for each native platform, uploaded
+  two app bundles, found 52 iOS and 51 Android assets, and uploaded no new
+  assets. No native build, TestFlight/App Store or Google Play submission,
+  Hosting, Rules, indexes, IAM, migration, registry seed, or production-document
+  write accompanied this release. OTA download/application and authenticated
+  destination behavior remain unverified on physical devices. Force-close and
+  reopen the production app up to twice to apply it; roll back preview to group
+  `18ae0c59-1b46-49a7-89cf-941782743183` or production to group
+  `f91d01d2-42aa-436c-8774-98d9f85d09bd` if required.
+
+## Content publication contract release
+
+- Source and Git: implementation commit `5e2967838463` passed PR `#244` and
+  merged to clean `main` as `e7bc51d640adfd2cc45ea01a441bc554c0499591`
+  at `2026-08-27T15:08:41Z`.
+- Root cause and scope: safe recommendations using a labeled taxonomy “Other”
+  choice were persisted as `moderation_hold`, while save responses omitted the
+  stored publication status. The durable queue therefore reported success even
+  though public/profile queries correctly excluded the record. Recommendation
+  and route save/draft receipts now return an explicit `active` or
+  `moderation_hold` outcome, unknown legacy responses never claim public
+  visibility, safe labeled Other recommendations publish immediately, and held
+  route retries replay idempotently. The owner profile now has a read-only
+  **בבדיקה** tab backed by an owner-scoped callable. The acceptance matrix covers
+  exact, destination and pin locations, all 10 categories and 166
+  subcategories, route stop variants, drafts, edits, retries and moderation.
+- Functions: only `saveRecommendation`, `publishRecommendationDraft`,
+  `saveRoute`, `publishRouteDraft`, and `listMyPendingContent` were deployed to
+  `planli-f0b12` in `europe-west1`. Independent inventory confirms all five are
+  `ACTIVE`, v2 and Node.js 22. Revisions are
+  `saverecommendation-00043-mob`,
+  `publishrecommendationdraft-00009-bih`, `saveroute-00043-nul`,
+  `publishroutedraft-00009-zal`, and `listmypendingcontent-00001-vuj`; deployment
+  completed between `2026-08-27T15:13:08Z` and `2026-08-27T15:13:12Z`.
+- Production repair: a guarded dry run found exactly two legacy
+  `taxonomy_other` holds, both valid and none blocked. The fingerprint-locked
+  apply activated both at `2026-08-27T15:16:20Z`, removed their obsolete
+  moderation fields and wrote two audit records. Independent read-back found
+  both recommendations and all 10 media registry entries active, with zero
+  remaining taxonomy-Other holds. Direct Storage object checks were unavailable
+  to the CLI service identity; canonical descriptors and owner-bound active/held
+  registry records were verified before apply, and the media trigger's active
+  read-back was verified afterward.
+- EAS Update: two clean-main production-lineage preflights passed against prior
+  production commit `77096274e5b6f0efd6219d8500c94f4a5864a174`. Preview group
+  `50e55983-342e-48d0-9e9f-ceba7c77754d`, Android update
+  `01a043dd-a5c4-7b59-9ccd-c3e6e8f7b77d` and iOS update
+  `01a043dd-a5c4-7eca-8272-19218a684a56` were published at
+  `2026-08-27T15:36:34.500Z`. Those exact artifacts were republished to
+  production group `4c1fcb12-53c4-4696-90ff-3ad047597e40`, Android update
+  `01a043e2-3cf0-710b-a265-2c3b9ecfa9ca` and iOS update
+  `01a043e2-3cf0-7812-8872-12d045411a09` at
+  `2026-08-27T15:41:35.344Z`. EAS read-back confirmed both branches, platforms,
+  runtime `1.1.0` and exact source commit `e7bc51d`. The preview export bundled
+  2,422 modules for each native platform, uploaded two app bundles, found 52
+  iOS and 51 Android assets, and uploaded no new assets.
+- Validation and observability: focused client publication/profile/draft/route
+  coverage, 108 focused Functions tests, generated coverage for every taxonomy
+  selection, `npm run validate:changed`, `git diff --check`, secret review and
+  all four required PR checks passed. Firebase read-only logging found no
+  `ERROR` entries for the five deployed Functions from
+  `2026-08-27T15:08:00Z` through release verification. Sentry returned no
+  unresolved `prod`/`production` issue and no publication issue in the preceding
+  24 hours.
+- No native EAS build, TestFlight/App Store or Google Play submission, Rules,
+  indexes, Hosting, IAM or dependency change accompanied this release. The only
+  production-document writes were the two explicitly approved audited repairs.
+  OTA download/application and a physical end-to-end recommendation/route
+  matrix remain unverified. Force-close and reopen the production app up to
+  twice to apply it. Roll back preview to group
+  `2be4404d-9bb4-48aa-b296-44df198deb1b` or production to group
+  `a50b1502-5158-49e5-bb59-02933dac81f1` if required.
+
+## Location selection and RoadTrip stability release
+
+- Source and Git: implementation commit `ab94604` passed PR `#246` and merged
+  to clean `main` as `f5bfbff22f71f6a95d1b1e8bc56c968635fa52fd`. EAS
+  preflight repair commit `24fd4d3` passed PR `#247` and produced final release
+  source `b1314ba4bf10dee1e9fbb82548cfceab2aaf355d` at
+  `2026-08-27T18:00:47Z`.
+- Root cause and scope: directly selected Google cities outside the reviewed
+  catalog were rejected, successful destination confirmation was lost by two
+  recommendation screens, and exact places could disappear while reassignment
+  was required. Draft expiry and RoadTrip publication could also discard a
+  verified place-to-destination binding or consume Google verification quota
+  again. The release establishes one location-selection contract for
+  recommendations and RoadTrips, permits verified directly selected cities such
+  as Hod Hasharon as provisional destinations, keeps exact-place map state,
+  preserves server-owned draft bindings, trusts matching active PlanLi sources,
+  keeps PlanLi results usable during Google failures, and classifies recovery
+  actions instead of exposing a dead end.
+- Validation: changed-scope validation passed seven affected client groups and
+  eight affected Functions groups; focused Functions location coverage passed
+  106 tests. The final review reported no blocking, P1 or P2 finding, every check
+  on PRs `#246` and `#247` passed, and the repaired EAS preflight unit suite
+  passed 5/5. Physical end-to-end behavior remains unverified and is delegated
+  to the beta device matrix after rollout.
+- Functions: `searchPlaces`, `resolvePlaceSelection`,
+  `resolveRecommendationDestination`, `saveRecommendation`,
+  `saveRecommendationDraft`, `publishRecommendationDraft`,
+  `getCurrentRouteDraft`, `saveRoute`, `saveRouteDraft`, and
+  `publishRouteDraft` were deployed with exact targets to `planli-f0b12` in
+  `europe-west1`. The first attempt stopped before live changes because source
+  discovery exceeded ten seconds; the documented
+  `FUNCTIONS_DISCOVERY_TIMEOUT=60000` retry succeeded. Independent inventory
+  confirmed all ten `ACTIVE`, v2 and Node.js 22. No Rules, indexes, Storage,
+  Hosting, IAM or production-document writes accompanied the deployment.
+- Production audit: the post-release read-only audit at
+  `2026-08-27T18:25:41.293Z` inspected 848 Firestore documents and all 123
+  Functions. It found zero unexpected roots or Functions, invalid location
+  references or names, orphan location sources, invalid destination IDs,
+  missing European media objects or checksum mismatches; `failureCount` was
+  zero.
+- EAS Update: global EAS CLI `22.6.0` was used because the cached `npx eas-cli`
+  installation remained incomplete. The release preflight now deliberately uses
+  the installed EAS executable, and its durable setup and identity checks are
+  documented above. Preview group `e0db577e-4aa0-4e29-bc00-0ee0442e6671`, iOS
+  update `01a04472-8495-7bbe-a365-2f617a77b6b7` and Android update
+  `01a04472-8495-73ea-88dd-4057e2f458aa` were published at
+  `2026-08-27T18:19:10.869Z`. Those exact artifacts were republished to
+  production group `3016e5a7-5f03-4abd-8277-db1e43f48f4d`, iOS update
+  `01a04475-a5ba-7ff3-ae65-1fc08c9b7e40` and Android update
+  `01a04475-a5ba-7b18-bc16-191f2e63a5bf` at
+  `2026-08-27T18:22:35.962Z`. EAS read-back confirmed production head, both
+  platforms, runtime `1.1.0`, a clean tree and exact source commit `b1314ba`.
+- No native EAS build or store submission was needed because the installed iOS
+  and Android beta binaries already use compatible runtime `1.1.0`. OTA
+  download/application and the physical recommendation/RoadTrip matrix remain
+  unverified. Force-close and reopen the production app up to twice to apply the
+  OTA. Roll back by republishing production group
+  `4c1fcb12-53c4-4696-90ff-3ad047597e40` if required.
+
+## Regional discovery release
+
+- Source and Git: implementation commit
+  `3d897dea01f9af32565e3da69f4c573406a7aa35` passed PR `#249` and merged to
+  clean `main` as `4319c86a3f9dff786c5bf9489c14c194084695bc`.
+- Scope: the client now requires a persisted selection from eight travel regions,
+  exposes an accessible pixel-matched Hebrew atlas selector, and filters home,
+  search, community, routes, maps and destination discovery to the active region.
+  The server owns the region contract, persists authenticated selections and
+  rejects unsupported region identifiers. The final review also fixed map
+  refresh on region changes, cleared stale home rails after failed refreshes and
+  prevented unclassified local search history or favorites from crossing the
+  selected-region boundary.
+- Firestore and data: 48 required composite indexes were deployed to the
+  production `eur3` database and independently reached `READY`. The guarded
+  classification backfill first reported 121 eligible documents without writes,
+  then updated 121 documents after authorization: 15 countries, 48 destinations,
+  32 catalog records, 24 recommendations and two routes. A final dry run found
+  all 121 current and zero remaining changes.
+- Functions: exactly 15 Node.js 22 v2 Functions were deployed to
+  `europe-west1`: `saveRecommendation`, `publishRecommendationDraft`,
+  `saveRoute`, `publishRouteDraft`, `getPersonalizedRecommendations`,
+  `getMapRecommendations`, `getPersonalizedRoutes`, `searchDestinations`,
+  `setDiscoveryRegion`, `onDestinationCatalogSync`,
+  `onCountryDestinationCatalogSync`, `previewDestinationReassignment`,
+  `startDestinationReassignment`, `getDestinationReassignmentJob` and
+  `onDestinationReassignmentJobWritten`. Independent inventory confirmed all 15
+  `ACTIVE`; the post-deploy log query returned zero recent error lines.
+- EAS Update: the production project environment now contains
+  `EXPO_PUBLIC_REGION_DISCOVERY_ENABLED=true`. Preview group
+  `bb382a52-a7fb-4c30-b81c-14cb53a83e47`, Android update
+  `01a04561-f717-7897-b748-c8fdeb546f09` and iOS update
+  `01a04561-f717-7999-9948-52b982b02f7c` were built from the clean merge source.
+  Those exact artifacts were republished to production group
+  `13f33be0-9aba-4c24-8ad2-4ba93a431bd5`, Android update
+  `01a04563-9588-79ef-a6df-025b012318c3` and iOS update
+  `01a04563-9588-7296-b65e-99f238cbae6f` at
+  `2026-08-27T22:42:29.384Z`. EAS read-back confirmed branch `production`, both
+  platforms, runtime `1.1.0` and exact source commit `4319c86a`.
+- Validation: the full client suite passed 907 tests in 168 suites; the full
+  Functions suite passed 688 tests with 22 intentional skips and zero failures;
+  Firestore Rules emulator coverage passed 22/22. Changed-scope validation,
+  admin Web export/verification, iOS release configuration/export, Functions
+  production audit, final diff checks and every required PR check passed. Browser
+  smoke tests at 390x843 and 1440x1000 verified all eight buttons, selection,
+  replacement, reload persistence, centered desktop layout and zero console
+  errors.
+- No replacement native EAS build or App Store/Google Play submission was needed
+  because this release changes JavaScript, assets and compatible backend contracts
+  only; the installed beta binaries already target runtime `1.1.0`. OTA download,
+  application and regional end-to-end behavior on physical iOS and Android devices
+  remain unverified. Force-close and reopen the production app up to twice to
+  apply the OTA. Roll back by republishing production group
+  `3016e5a7-5f03-4abd-8277-db1e43f48f4d` if required.
+
+## Region selector polish release
+
+- Source and Git: implementation commit
+  `49318a4` passed PR `#251` and merged to clean `main` as
+  `0c10dc73b4b7ad78b025acf321615f95d47b8277`.
+- Scope: the native selector now extends edge-to-edge beneath transparent system
+  bars while keeping the skip action reachable below the top safe inset. Press
+  feedback follows each region image's alpha shape with a white outline instead
+  of showing a rectangular highlight. Community and Routes now expose the active
+  region through a compact accessible globe action beside the existing page title,
+  without adding header height; Home retains its full region preview control.
+- Validation: five focused client suites passed 51/51 tests, changed-scope
+  validation passed, `git diff --check` passed and every required check on PR
+  `#251` passed. Browser checks at 390x843 exercised the selector and both compact
+  header actions, confirmed the expected layout and navigation, and found no
+  console errors. Physical-device safe-area and press-effect behavior remain
+  unverified.
+- EAS Update: preview group `41776324-c1db-4c5d-832e-cb1ccc3d3b7d`, Android
+  update `01a04724-d7b4-741a-92d2-f23975db81f8` and iOS update
+  `01a04724-d7b4-7cb7-960a-4dcc4f7abbc9` were published at
+  `2026-08-28T06:53:11.988Z`. Those exact artifacts were republished to production
+  group `b363be1d-63b2-4ea9-86e2-67bf3923b01c`, Android update
+  `01a04728-4cd2-7278-bf57-8d555e2e1c2d` and iOS update
+  `01a04728-4cd2-7c6d-a464-3f0af1fe74b6` at
+  `2026-08-28T06:56:58.578Z`. EAS read-back confirmed branch `production`, both
+  platforms, runtime `1.1.0` and exact source commit `0c10dc73`.
+- No Functions, Firestore indexes or Rules, native EAS build, App Store submission
+  or Google Play submission changed in this release. The existing beta binaries
+  already use runtime `1.1.0`; force-close and reopen the production app up to
+  twice to apply the OTA. Roll back by republishing production group
+  `13f33be0-9aba-4c24-8ad2-4ba93a431bd5` if required.
+
+## Region selector contour correction release
+
+- Source and Git: implementation commit `414dadf` passed PR `#253` and merged
+  to clean `main` as `f5ba91fe5848fac31bff7eda36e9c19b0b2f9233`.
+- Scope: the selector uses a clean reference background without the baked-in
+  skip label, exposes cancellation only when changing an existing selection,
+  and renders independent alpha-aware white contour assets for all eight
+  regions. The Israel pin, Madagascar, Sri Lanka and the Australia/New Zealand
+  islands are included in their corresponding contour feedback.
+- Validation: 15 focused selector tests passed, changed-scope validation passed,
+  admin Web export/verification and iOS release configuration/export passed,
+  `git diff --check` passed and every required check on PR `#253` passed. Browser
+  validation at 390x843 exercised the selector flow. Automated image checks
+  confirmed transparent crop bounds and placed at least 95% of contour pixels
+  within 9px of a detected source edge. Physical-device safe-area and contour
+  rendering remain unverified.
+- EAS Update: preview group `dae40722-4fce-41cd-93a5-2f305d356ac4`, Android
+  update `01a04776-7fc1-7eb6-a4dc-794a458d6f02` and iOS update
+  `01a04776-7fc1-7064-918a-a12cc9f148bb` were published at
+  `2026-08-28T08:22:23.425Z`. Those exact artifacts were republished to
+  production group `a83997fb-1e7a-49be-8f4a-224892133b7d`, Android update
+  `01a04777-c1ca-7df1-9dab-d4ec52088da9` and iOS update
+  `01a04777-c1ca-79c1-8723-e755e1b386f9` at
+  `2026-08-28T08:23:45.866Z`. EAS read-back confirmed branch `production`, both
+  platforms, runtime `1.1.0` and exact source commit `f5ba91fe`.
+- No Functions, Firestore indexes or Rules, native EAS build, App Store
+  submission or Google Play submission changed in this release. The existing
+  beta binaries already use runtime `1.1.0`; force-close and reopen the
+  production app up to twice to apply the OTA. Roll back by republishing
+  production group `b363be1d-63b2-4ea9-86e2-67bf3923b01c` if required.
+
+## Destination resolution v3 backend release
+
+- Source and Git: implementation commit
+  `c91a2d0e60bd5016a0d117a18993f873fa6c0b15` passed PR
+  [#258](https://github.com/doric2000/PlanLi/pull/258) and merged to `main` as
+  `eaf9937f0214fbe894123096b8341006970173fc`. The idempotence, Hoi An and
+  Vlorë correction commit `df54d06` passed PR
+  [#259](https://github.com/doric2000/PlanLi/pull/259) and merged to clean
+  `main` as `404fa28782a6a01ea9cbf3780457f5df0888d459` at
+  `2026-08-28T13:37:30Z`.
+- Scope: recommendations and RoadTrips now use the same canonical destination
+  resolver, retain verified place-to-destination bindings through drafts and
+  publication, bias RoadTrip place search toward its selected destination, and
+  keep local PlanLi results usable when Google fails. Directly selected cities
+  can remain provisional instead of being rejected solely because they are not
+  yet in the reviewed registry. The researched registry contains 252 entries;
+  Vlorë is an approved `city_hub` named `ולורה`, distinct from the Albanian
+  Riviera, and its narrower city geometry wins for places inside the city.
+- Functions: exactly 11 Node.js 22 v2 Functions were deployed from clean merge
+  `404fa287` to `europe-west1`: `searchPlaces`, `resolvePlaceSelection`,
+  `resolveRecommendationDestination`, `saveRecommendation`,
+  `saveRecommendationDraft`, `publishRecommendationDraft`,
+  `getCurrentRouteDraft`, `saveRoute`, `saveRouteDraft`, `publishRouteDraft`
+  and `updateDestinationPolicy`. Independent Cloud Run read-back confirmed the
+  ready revisions `searchplaces-00026-gov`,
+  `resolveplaceselection-00030-sew`,
+  `resolverecommendationdestination-00042-hij`,
+  `saverecommendation-00047-fim`, `saverecommendationdraft-00007-gej`,
+  `publishrecommendationdraft-00013-vat`,
+  `getcurrentroutedraft-00005-loj`, `saveroute-00047-zuj`,
+  `saveroutedraft-00009-sar`, `publishroutedraft-00013-ger` and
+  `updatedestinationpolicy-00004-zop`. Their ready-transition window was
+  `2026-08-28T13:41:38.691887Z` through `2026-08-28T13:41:53.910531Z`.
+- Registry and data: the guarded registry readiness migration initially wrote
+  267 documents and its Vlorë-aware geometry follow-up wrote one document; the
+  final dry run reported 252 automatic profiles, zero blocked or incompatible
+  profiles, zero legacy patches and `totalWrites: 0`. `Nam Hoa Lu` was merged
+  into canonical Ninh Binh by completed job
+  `dra_nO05TymjP4IagjnZH55slCYxwTah`. Two exact Hoi An recommendations were
+  moved out of Da Nang under audit `location_repair_hoi_an_20260828_v1`.
+  The mistaken Vlorë-to-riviera job
+  `dra_YdpWKOLkobQkM_TiZgIxvLsvH3oj` was rolled back: Hotel Liro, one route and
+  four active stops now reference canonical Vlorë destination
+  `AL/dst_g99_bYzJWzH2iMhbwibL`; the stale provider claim was removed under
+  audits `location_repair_vlore_city_20260828_v1` and
+  `location_repair_vlore_claim_20260828_v1`. The unused materialized Albanian
+  Riviera catalog document was removed; its reviewed registry entry remains
+  available for legitimate future use.
+- Validation and observability: 36 focused registry/migration/repair tests,
+  direct recommendation and RoadTrip coverage, `npm run validate:changed`, the
+  review-agent pass and every required check on PRs #258 and #259 passed. The
+  final canonical audit found 252 trusted profiles, zero registry issues,
+  reassignment candidates or ambiguities. The live audit at
+  `2026-08-28T13:45:08.873Z` inspected 869 Firestore documents and all 124
+  Functions and found zero invalid location references, names, orphan sources,
+  counter mismatches or failures. Post-deploy Cloud Run logging returned zero
+  `ERROR` entries.
+- No EAS Update was published for iOS or Android by explicit release scope, so
+  the client-side search-bias and picker changes in PR #258 are merged but are
+  not yet delivered to installed beta apps. The compatible runtime remains
+  `1.1.0` and the latest production OTA group remains unchanged. No native EAS
+  build, TestFlight/App Store or Google Play submission, Hosting, Firestore
+  Rules/index, Storage, IAM or dependency change accompanied this release.
+
+## Admin preauthorization TOTP enrollment Hosting release
+
+- Source and Git: implementation commit `d92fe8c415fe667a3953197ed83e4ab4e057b081`
+  passed PR [#288](https://github.com/doric2000/PlanLi/pull/288) and merged to
+  clean `main` as `a69e613f0bc3ab0160113a0dc0b527db24868385` at
+  `2026-08-31T16:17:06Z`.
+- Scope: an authenticated user without an admin role can now reach only their
+  own Firebase TOTP enrollment screen. Enrollment does not grant an admin
+  claim, does not load admin policy data, and a TOTP-enrolled non-admin remains
+  denied until a separate trusted bootstrap grants the role.
+- Validation: the focused Admin suite passed 23/23 tests, the isolated Admin Web
+  export resolved all 30 local references, and a complete Codex Security diff
+  scan reported zero findings. All 11 applicable CI and CodeQL checks on PR
+  #288 passed with zero failures and no merge conflict.
+- Hosting: the Admin Web bundle was exported from the exact merged source with
+  the production reCAPTCHA Enterprise site key and deployed only to Firebase
+  Hosting for `planli-f0b12` at `2026-08-31T16:26Z`. Firebase uploaded two new
+  files within the 43-file Hosting release and reported `release complete`.
+  The live Admin route and its JavaScript returned HTTP 200, contained both new
+  TOTP enrollment guards, and exposed no source maps. Root and unknown
+  non-Admin routes returned HTTP 404.
+- Live verification: an existing TOTP-authenticated admin session loaded the
+  complete Hebrew console without browser warnings or errors. Live responses
+  retained CSP, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`,
+  Referrer Policy, Permissions Policy and Cross-Origin Opener Policy. The
+  `doric9@gmail.com` enrollment was completed without sharing a password or
+  TOTP code. Production bootstrap manifest
+  `d415d9229067289b59425d5206a10f9f014d25139d4c3e5c02f6f9b2853a8062`
+  then granted only `admin: true` and activated the matching private registry
+  entry. A fresh read-back found one TOTP factor, both controls active and
+  `changed: false`; the browser must sign out and back in to refresh its token.
+- No Functions, Rules, IAM, secrets, EAS build, EAS Update, store submit or paid
+  service action accompanied this Hosting release. The only production data
+  mutation after deployment was the explicitly authorized second-admin claim
+  and registry activation described above.
+
+## SDK 57 iOS release-candidate build recovery
+
+- The complete EAS iOS history inspected on `2026-09-01` contains 24 remote jobs:
+  11 finished and 13 failed. Eight older failures fall into dependency/prebuild,
+  early Sentry configuration and development provisioning categories; later builds
+  in each of those lines succeeded. The five consecutive SDK 57 release failures
+  are the current recovery chain below.
+- The repeated failures were serial blockers, not seven repetitions of one
+  unexplained error. Build `16` failed before compilation because the Maps
+  plugin requested the removed `react-native-google-maps` pod. Build `17`
+  reached CocoaPods and exposed RNFirebase's unsupported SPM/static-library
+  combination. Build `18` passed Pods and exposed the obsolete Xcode 26.0
+  image. The rejected build-number-19 request did not create a remote build.
+  Production builds `20` and `21` then reached the Xcode archive and exposed,
+  respectively, the Sentry credential visibility and RNFirebase JSON parsing
+  boundaries described below. Each prior blocker prevented the later build
+  phase from running, which is why the errors appeared one after another.
+- PR [#290](https://github.com/doric2000/PlanLi/pull/290) configured the official
+  RNFirebase Expo plugin with `ios.disableSPM: true`, keeping Firebase App Check
+  on CocoaPods and adding a fail-closed release check. Focused config, App Check,
+  iOS export and affected validation passed; Codex Security covered both changed
+  files with zero findings. All CI and CodeQL checks passed and the PR merged as
+  `e40c0bb3d237ce349fa1c174fff245d85fef54b9`.
+- iOS release-candidate build `deb92a17-0ea7-47af-8bba-366ecaac284c`, marketing
+  version `1.1.0`, build number `18`, runtime `1.2.0`, proved that CocoaPods now
+  installs successfully. It then failed during Xcode archive because the pinned
+  Xcode 26.0 image cannot compile SDK 57's `expo-modules-jsi`; no IPA or store
+  submission was created.
+- Expo's SDK reference requires Xcode 26.4 or newer for SDK 57. PR
+  [#291](https://github.com/doric2000/PlanLi/pull/291) replaced the obsolete
+  image with the exact current SDK 57 image
+  `macos-tahoe-26.5-xcode-26.6` for preview, staging, release-candidate and
+  production, and made the release verifier enforce all four profiles. EAS
+  resolved the intended image, affected validation and every CI, CodeQL,
+  Semgrep, Gitleaks, dependency and invariant check passed; it merged as
+  `c56e4054ba1fe5f30583851adec2d9972748dac0`.
+- A build-number-19 request from that clean merged source was rejected before an
+  EAS build was created because the account's Free iOS monthly quota was
+  exhausted. The account has no active paid plan, no subscription was added and
+  no automatic charge is possible. The quota reports a reset on `2026-09-01`;
+  an attached one-time continuation will rerun the same release-candidate after
+  the reset with frozen credentials, no auto-submit and no OTA.
+- Production build `f470ff50-bced-4349-9532-949b4b818330` (`1.1.0 (20)`, source
+  `f9e0a1abe6b19c7bde27af5dd6f53faa2f4e459a`) used Xcode 26.6, passed dependency
+  installation and reached the Xcode source-map phase, where Sentry returned HTTP
+  401. The token had been stored with server-only visibility. The
+  replacement organization token is limited to `org:ci`, the EAS production
+  variable now has readable-at-build `sensitive` visibility, and a production
+  `sentry-cli info` check resolves only organization `planli-t2` and project
+  `planli-mobile` without printing the token. Build 21 passed that former failure
+  point, proving the replacement credential reached the Xcode job. The old Sentry
+  token still requires account-side revocation after its exact identity is confirmed.
+- Production build `df7319b3-2556-4c10-bf93-67abf8f64a33` (`1.1.0 (21)`, same
+  source) then failed in RNFirebase's Xcode configuration phase. The repository
+  root `firebase.json` is valid Firebase infrastructure JSON, but its CSP strings
+  contain apostrophes. RNFirebase embeds the discovered file inside a single-quoted
+  Ruby JSON string, so its upward fallback search parsed the wrong file and reported
+  a misleading JSON syntax failure. The pending fix adds a dedicated
+  `client/firebase.json` containing only the React Native Firebase App Check setting;
+  both Node parsing and RNFirebase's exact lookup now select that file first.
+- The pending branch also removes three SDK 57 configuration/dependency remnants
+  reported by Expo Doctor (`newArchEnabled`, `edgeToEdgeEnabled`, the legacy splash
+  field, and direct use of Expo internal packages) while preserving the approved
+  splash image through the `expo-splash-screen` plugin. A new release gate runs the
+  release verifier, the native environment tests, pinned Expo Doctor and SDK package
+  alignment before a build. It separately checks readable production EAS values and
+  validates the Sentry token; secret Maps/file variables remain inventoried by name.
+- No further EAS build was started after build 21. The current no-quota evidence is:
+  locked Linux `npm ci`, real Linux iOS prebuild, RNFirebase/Maps autolinking, the
+  generated CocoaPods flags, a 979-file / 36 MB EAS archive with no `node_modules`,
+  Expo Doctor 21/21, `expo install --check`, iOS configuration checks, all ten
+  native environment tests, and all 179 client suites / 1,007 tests. The iOS
+  Hermes export completed with no source-map file or `sourceMappingURL`; bundle
+  SHA-256 is `3764092b2e2ee024d4bea4d05c15257ff5f018352fdcc0d96915f3dbb57259c1`.
+  The next remote build remains blocked until the pending diff is merged from a
+  clean `main`.
+- `npm audit` currently expands one indirect Moderate advisory into eight package
+  rows: React Navigation 7 depends on CommonJS `query-string@7`, which depends on
+  vulnerable `decode-uri-component@0.2.2`. The patched decoder `0.5.0` is ESM-only
+  and cannot be forced under the CommonJS caller safely, and the latest published
+  React Navigation packages retain the affected dependency. PlanLi does not pass a
+  `linking` configuration to either NavigationContainer and does not call
+  `getStateFromPath`, so untrusted URL/query input cannot reach the decoder in the
+  current app. The release verifier now rejects adding either path without a new
+  review and input bound. This invalidates the current source-to-sink path without
+  a risky dependency override; upgrade once React Navigation publishes a compatible
+  patched chain.
+
+## iOS 1.1.0 build 28 TestFlight submission
+
+- Apple rejected build `1.1.0 (26)` with `ITMS-90683` because its embedded
+  `Info.plist` did not contain `NSMotionUsageDescription`. Build
+  `4f265cac-d9d0-4dfb-bcc5-e007fe235eee` (`1.1.0 (27)`) completed, but direct
+  inspection of its IPA found the same missing key, so it was deliberately not
+  submitted. The root cause was the `expo-location` plugin value
+  `motionUsagePermission: false`, which removed a manually declared plist value
+  during native prebuild.
+- PR [#309](https://github.com/doric2000/PlanLi/pull/309) moved the reviewed Hebrew
+  purpose string into the owning Expo plugin and added a release guard that checks
+  Expo's final introspected iOS configuration. It passed CI and CodeQL and merged to
+  `main` as `8057bad53ac4331469ce6b23099e31d80f361324`.
+- Immediately before the replacement build, local `main` was clean and exactly
+  matched `origin/main`. The production lineage and EAS environment preflights
+  passed; the iOS configuration tests passed 11/11, Expo Doctor passed 21/21,
+  dependencies were aligned, and the complete client suite passed 181/181 suites
+  and 1,025/1,025 tests.
+- Production EAS build `9404f671-6dba-4e11-8ee8-3031269b1b1c`, marketing version
+  `1.1.0`, build number `28`, runtime `1.2.0`, production channel and store
+  distribution, completed at `2026-09-01T16:44:48.603Z` from exact source commit
+  `8057bad53ac4331469ce6b23099e31d80f361324`. The IPA is
+  `https://expo.dev/artifacts/eas/NharL90MHWLipaLbWD7y9D3WkMdnL8ZNSTuRwbdlIuM.ipa`.
+- The downloaded 42,974,277-byte IPA has SHA-256
+  `2FD1089273688EE39CD99B3F08F7413B3869B13B0610C502EEEEA9C59DAFFA14`.
+  Inspection of the embedded binary plist verified bundle identifier
+  `com.planli.planlitravels`, version/build `1.1.0 (28)`, the exact reviewed Motion,
+  foreground-location, camera and photo-library purpose strings, and
+  `ITSAppUsesNonExemptEncryption: false`. Face ID, always/background location and
+  microphone purpose strings are absent. Provisioning profile
+  `f5023bd4-a2ca-47a8-8f37-26e87e7c1ff4` contains the production App Attest
+  environment and expires on `2027-08-21`.
+- EAS submission `ae569cd6-d1a1-4765-8b56-2bb436ebdf4f` finished at
+  `2026-09-01T16:47:43.268Z` and uploaded exactly build 28 to App Store Connect app
+  `6801453067`. App Store Connect completed processing at `2026-09-01T19:47+03:00`:
+  the upload is `Complete`, and TestFlight lists build 28 as `Ready to Submit`,
+  expiring in 90 days. It is assigned to the `Internal friends` and `Team (Expo)`
+  internal groups with 15 invited testers and no recorded installs yet. It is not
+  assigned to the external `Friends Of PlanLi` group, and external Beta App Review
+  has not been submitted. Installation and physical-device behavior remain
+  unverified. No OTA, Firebase deployment, Rules, IAM, secret, migration or
+  production-data change accompanied this build and submission.
+
+## iOS tab-header production OTA
+
+- PR [#315](https://github.com/doric2000/PlanLi/pull/315) restored the fixed,
+  safe-area-aware hero-header height so page content no longer overlaps the top
+  menu and the menu again keeps its lower side margins and rounded corners. The
+  release-tool identity compatibility fix in PR
+  [#319](https://github.com/doric2000/PlanLi/pull/319) also merged before release.
+- The release source was clean, synchronized `main` commit
+  `dfb525a19ee00ac15d651a2d1db35f07379556af`. Focused header validation passed,
+  the final review reported no findings, the production-lineage preflight passed,
+  and all 13 release-tool tests plus every PR #319 CI and security check passed.
+- The final iOS preview update is group
+  `9e9ef200-7a9e-4bb6-8b3f-bf627299c7db`, update
+  `01a05eba-b488-70e0-a6ca-450be53151ad`, runtime `1.2.0`, published at
+  `2026-09-01T20:48:09.352Z` from the exact source commit above. Its export
+  processed 2,734 modules and 66 iOS assets with no new asset upload.
+- The exact iOS artifact was republished to production as group
+  `38be89a6-b9de-48ae-ade5-b91ca8c71ffe`, update
+  `01a05ebd-f047-79cf-89c1-59b49eca8aff`, runtime `1.2.0`, at
+  `2026-09-01T20:51:41.255Z` (`2026-09-01 23:51:41` Israel time). Independent
+  EAS readback confirms the `production` branch, iOS platform, source commit and
+  update ID. The immutable manifest is
+  `https://u.expo.dev/update/01a05ebd-f047-79cf-89c1-59b49eca8aff`.
+- TestFlight build 28 is compatible with this runtime. Physical iPhone download,
+  application and visual verification remain pending; force-close and reopen the
+  installed app up to twice before checking the header. Because this is the first
+  production OTA on runtime `1.2.0`, rollback must publish a rollback-to-embedded
+  update for iOS runtime `1.2.0`, not republish the older runtime `1.1.0` group.
+- No Android update, native build, TestFlight/App Store submission, Firebase
+  deployment, Rules, IAM, migration or production-data mutation accompanied this
+  OTA.
+
+## Firebase authentication recovery production OTA
+
+- The iOS tab-header OTA group `38be89a6-b9de-48ae-ade5-b91ca8c71ffe`
+  was built from the empty EAS `preview` environment. Its immutable
+  8,450,540-byte Hermes bundle contained the repository's former dummy Firebase
+  fallback values, so email/password, Google and Apple sign-in could not reach
+  the production Firebase project. The native binary remained valid, which is why
+  users who bypassed the OTA could still sign in.
+- An emergency rollback-to-embedded update was published for iOS runtime `1.2.0`
+  as group `2203a244-97de-436b-803a-030835134553`, update
+  `01a05efb-e78e-7923-ae47-14d0c3386d36`, at
+  `2026-09-01T21:59:22.254Z`. EAS readback confirmed it became the latest
+  production update before the corrected release.
+- PR [#324](https://github.com/doric2000/PlanLi/pull/324) removed every silent
+  Firebase fallback, made runtime configuration fail closed, kept `planli.cc`
+  only for Web Auth while native uses `planli-f0b12.firebaseapp.com`, and added
+  immutable EAS bundle verification before and after promotion. PR
+  [#325](https://github.com/doric2000/PlanLi/pull/325) bound republishing to iOS.
+  Both PR validation and security workflows passed.
+- The corrected production-candidate group
+  `0deb2cd2-a634-4a4a-ad1d-a70822fb8e4b`, update
+  `01a05f2a-324b-7129-8b40-e093434ee212`, was built with the EAS
+  `production` environment from clean synchronized `main` commit
+  `67f9cb8beb44572c605027cbea305224e6d18a18`. The export processed 2,734
+  modules and 65 source assets.
+- The exact candidate was republished to the `production` branch as group
+  `0729537b-294a-4190-a57f-2380097e6b22`, update
+  `01a05f2c-a70f-7fc8-981c-1368f7e84121`, runtime `1.2.0`, iOS, at
+  `2026-09-01T22:52:37.007Z` (`2026-09-02 01:52:37` Israel time).
+  Independent EAS readback confirms this is the latest production group and that
+  its Git commit, runtime, platform and update ID match the intended release.
+- The immutable production launch bundle is 8,418,692 bytes with SHA-256
+  `268535042D9243829AE60E4F2461B0CFB8C73F312B79867A2D5F44C319E66074`.
+  The verifier confirmed the EAS manifest hash, required production Firebase and
+  Google markers, absence of every former dummy fallback, and byte equality with
+  the staging candidate.
+- TestFlight build 28 is compatible with runtime `1.2.0`. Physical-device
+  Google, Apple and email/password sign-in after the corrected OTA remain pending;
+  force-close and reopen the installed app up to twice before testing. No Android
+  update, native build, Firebase deployment, Rules, IAM, migration or
+  production-data mutation accompanied this recovery OTA.
+
+## Recommendation media gestures production OTA
+
+- Source commit: `0aba4bcdea8c89d4cab57e9e8c6eb62b138fd6aa`.
+- The verified iOS production candidate was published to the `staging` branch as
+  group `44ac2b2a-baf5-4bb7-904b-52cf35e2cbc0`, update
+  `01a06104-db7f-7a72-b645-e594457055d8`, using the EAS `production`
+  environment.
+- The exact candidate was republished to the `production` branch as group
+  `1516af03-c8a5-4708-93e5-1d453a6e760d`, update
+  `01a06107-5f2d-725a-b8f9-34c4ba3a04df`, runtime `1.2.0`, iOS, at
+  `2026-09-02T07:31:08.205Z` (`2026-09-02 10:31:08` Israel time).
+- The immutable production launch bundle is 8,478,516 bytes with SHA-256
+  `39C654BD5C172725E946FD79DF03127CCAA530784C5517AD0AC566D7CB0482D1`.
+  Independent EAS readback verified the source commit, runtime, platform, update
+  ID, manifest hash, production configuration markers, and byte equality with
+  the staging candidate.
+- Message: Fix recommendation media RTL gestures and full-width pager.
+- TestFlight build 28 is compatible with runtime `1.2.0`. Physical-device media
+  ordering, swipe direction, full-width preview, numeric badges, and keyboard
+  positioning remain pending; force-close and reopen the installed app up to
+  twice before testing.
+- Rollback: republish the immediately preceding verified production group
+  `0729537b-294a-4190-a57f-2380097e6b22`; never change the runtime URL or channel
+  in-app. No Android update, native build, Firebase deployment, Hosting deploy,
+  Rules, IAM, migration, or production-data mutation accompanied this OTA.
+
+## Exact recommendation publication and owner deletion Functions release
+
+- PR [#334](https://github.com/doric2000/PlanLi/pull/334) passed affected
+  Functions validation, CodeQL, security invariants, dependency review, secret
+  scanning and a complete Codex Security diff scan with no findings. It squash
+  merged to `main` as source commit
+  `dffd3b92725c00d92489a2662c586a6e3bafd01b` at
+  `2026-09-02T08:55:38Z`.
+- Exactly four Node.js 22 v2 Functions in `europe-west1` were deployed to
+  production project `planli-f0b12`: `saveRecommendation`,
+  `publishRecommendationDraft`, `resolveRecommendationDestination` and
+  `deleteContent`. Their update times were `2026-09-02T09:04:21Z` through
+  `2026-09-02T09:04:51Z`.
+- Independent Cloud Functions read-back reported all four functions `ACTIVE`.
+  Cloud Run read-back reported their latest created and ready revisions equal,
+  healthy, and receiving 100% of traffic: `saverecommendation-00055-sas`,
+  `publishrecommendationdraft-00021-moz`,
+  `resolverecommendationdestination-00049-luf` and
+  `deletecontent-00031-fon`.
+- The release refreshes only the verified stale exact-place destination path
+  before reapplying the explicit destination identity checks. Owner deletion no
+  longer invokes privileged admin TOTP, while cross-owner admin deletion still
+  requires an active admin registry entry and recent TOTP and is rechecked in
+  the deletion transaction.
+- Post-deploy Cloud Run logging returned no Error-severity entries for the four
+  services from `2026-09-02T09:04:00Z` through the verification time. A new
+  physical-device publish and delete attempt remains pending. No Hosting, Rules,
+  IAM, Firestore data, EAS build, EAS Update or store action accompanied this
+  Functions release.
+
+## Explicit destination binding follow-up Functions release
+
+- PR [#336](https://github.com/doric2000/PlanLi/pull/336) was squash-merged to
+  `main` as source commit `0d45010dff37dbb7d0056a4bff58497a5a3ba234` after all
+  required CI and security checks passed. The follow-up preserves the user's
+  explicit canonical destination when a stale exact-place cache is refreshed;
+  it no longer re-selects a different locality from provider fallback data.
+- Exactly three Node.js 22 v2 Functions were deployed from that merged `main`
+  commit to production project `planli-f0b12` in `europe-west1`:
+  `saveRecommendation`, `publishRecommendationDraft`, and
+  `resolveRecommendationDestination`. Deployment completed on
+  `2026-09-02` at approximately `10:47:44Z`.
+- Independent read-back found all three `ACTIVE`, healthy, and serving 100% of
+  traffic on revisions `saverecommendation-00056-xeg`,
+  `publishrecommendationdraft-00022-vub`, and
+  `resolverecommendationdestination-00050-rim`. A post-deploy Cloud Run query
+  returned no `ERROR` entries for the three services, and unauthenticated
+  callable probes returned the expected HTTP 401.
+- Focused Functions tests passed 128/128 under Node.js 22, and
+  `npm run validate:changed` plus `git diff --check` passed. No Hosting, client,
+  EAS, App Check, iOS, Rules, IAM, migration, or production-data mutation was
+  part of this follow-up. A physical-device publish/delete retry is still
+  required to confirm the end-to-end user flow after propagation.
+
+## Firestore query indexes and media cleanup reliability release
+
+- PR [#338](https://github.com/doric2000/PlanLi/pull/338) passed the affected
+  Functions, security, CodeQL, dependency and secret checks, then squash-merged
+  to `main` as source commit `a5eecc67843d3b2f23a3bed0b37302c8387eefee` at
+  `2026-09-02T11:27:22Z`.
+- Ten Firestore composite indexes were applied to the Standard `(default)`
+  database in `eur3` in project `planli-f0b12`: nine canonical-approved
+  `destinationCatalog` search variants and the `trips` owner/status/createdAt
+  pending-content index. All ten reached `READY` by approximately
+  `2026-09-02T11:33:40Z`.
+- `onUserMediaCleanup` was deployed from that commit to Node.js 22 in
+  `europe-west1` at `2026-09-02T11:40:05Z`. The active revision is
+  `onusermediacleanup-00029-keq`, serving 100% of traffic with the existing
+  media service account. It now retries bounded Storage metadata writes after a
+  metageneration precondition conflict.
+- A post-deploy Cloud Run read-back from `2026-09-02T11:40:05Z` returned no
+  Error-severity entries for `onUserMediaCleanup`. No Hosting, client, EAS,
+  Rules, IAM, migration or production-data mutation accompanied this release;
+  an authenticated media-cleanup event remains the end-to-end runtime proof.
+- Focused Functions tests passed 31/31 under Node.js 22, the full Functions
+  suite passed 123/123, `npm run validate:changed` passed, and `git diff --check`
+  passed. The validation planner noted one pre-existing uncovered client source
+  warning caused by unrelated working-tree UI changes; those changes were not
+  included in PR #338.
+
+### Media cleanup conflict convergence follow-up
+
+- PR [#341](https://github.com/doric2000/PlanLi/pull/341) passed the affected
+  Functions, security, CodeQL, dependency and secret checks, then squash-merged
+  to `main` as source commit `0b54ef78094b4e8133e2f81a5ceabef41fe811ea` at
+  `2026-09-02T11:56:14Z`.
+- `onUserMediaCleanup` was redeployed from that commit to Node.js 22 in
+  `europe-west1` at `2026-09-02T12:12:37Z`. The active revision is
+  `onusermediacleanup-00030-jos`, serving 100% of traffic with the existing
+  media service account. After bounded guarded retries, a final fresh-metadata
+  write now converges concurrent Eventarc deliveries.
+- Independent read-back reports `ACTIVE`, Node.js 22, revision
+  `onusermediacleanup-00030-jos`, and the original Firestore trigger with retry
+  policy intact. Cloud Run returned no `ERROR` or `stderr` entries from
+  `2026-09-02T12:12:34Z` onward; no synthetic production media event was created,
+  so a fresh authenticated end-to-end cleanup event remains unverified.
+- The previously applied ten Firestore indexes remain `READY`; live read-only
+  catalog and pending-trip query probes succeeded. Focused regression tests
+  passed 19/19, `npm run validate:changed` and `git diff --check` passed. No
+  Hosting, client, EAS, Rules, IAM, migration or production-data mutation was
+part of this follow-up.
+
+## Recommendation publication diagnostics OTA release
+
+- PR [#343](https://github.com/doric2000/PlanLi/pull/343) was squash-merged as
+  `6a968f633fbdb605da80d2717e183592e1eaca93`; the published iOS bundle records
+  candidate source commit `03b5b53f6895c7e4613392ea2286646aec358c3e` (the later
+  commits on `main` changed documentation only). The change is JavaScript-only
+  and uses the existing marketing version `1.1.0` and OTA runtime `1.2.0`.
+- The production candidate was published on the `staging` branch with the
+  `production` EAS environment as group
+  `bc965a3c-fd80-4eaa-ba0b-54f62b4b9011`, iOS update
+  `01a062f8-490e-7f50-8f63-2a1679e6bb5c`, at
+  `2026-09-02T16:33:53.934Z`. Its immutable launch bundle was independently
+  verified at 8,487,252 bytes with SHA-256
+  `72FAECD270F05D864D3D432BB8E957CEA259CAB44493E209DEEC47A2B7937FDB`.
+- That exact verified bundle was republished to the `production` channel as
+  group `a13ab118-255a-41c4-ab45-a0503aedd72b`, iOS update
+  `01a062f9-4d8d-7146-a5ff-4e6f25d5708d`, at
+  `2026-09-02T16:35:00.621Z`. EAS read-back confirmed environment `production`,
+  runtime `1.2.0`, source commit `03b5b53`, and the identical bundle SHA.
+- An earlier staging group `23fff53f-9258-42a7-ad01-958c1657ad93` was created
+  with the empty `preview` environment and was intentionally not promoted
+  because its bundle lacked production Firebase markers. The existing guarded
+  wrapper also stopped on the unrelated untracked root `app.json`; that file
+  was preserved, and the equivalent account, branch, commit, runtime, marker,
+  manifest and hash checks were completed manually before promotion.
+- The update contains no native changes and needs no new store build. Physical
+  device download, restart and the final authenticated publish retry remain
+  unverified; the existing Functions deployment and production data repair are
+  documented in the preceding release entries.
+
+### iOS navigation OTA release record (2026-09-10)
+
+- Source: `193f98b77f128068ecb27d580757243997765ca0` (PR #365).
+- Group: `ed896780-d9d1-47b8-bf26-848a035f0616`; update: `01a08ae3-98f5-7932-85cd-4ccbd7b8e3e6`.
+- Published: `2026-09-10T10:36:06.773Z`; channel/environment `production`; runtime `1.3.0`.
+- Existing TestFlight: 1.1.1 (30), build `b16eca67-6291-4520-82b6-10cb1af190f5`. No new binary or Apple review.
+- Immutable artifact and delivery verified at `2026-09-10T10:36:24.673Z`; physical iPhone testing pending.
+- Rollback: republish prior group `7950ae31-5993-4795-aabf-39506c72939c` for iOS only.
+
+## iOS production OTA release
+
+- Source commit: `2a26b5521c042d4e0763deda8d5c31125cd0ee4e`.
+- EAS Update group: `5829a5e8-1041-4ab2-9b91-f75784f0d297`; channel `production`; runtime `1.3.0`.
+- EAS environment: `production`; published at `2026-09-10T11:14:13.069Z`.
+- Immutable iOS launch bundle: update `01a08b06-7bcd-78ec-8fb2-e41b12af0063`; 10677040 bytes; SHA-256 `50C4A413863C7B57DFFD422FB7ED53A77DA2BB4C92715283A631CEDED4F3AD38`.
+- Message: Profile unread notification count and aligned Home header avatar
+- Device application, visual alignment and live notification-count checks: pending.
+- Rollback: republish verified group `ed896780-d9d1-47b8-bf26-848a035f0616` for iOS only.
+
+## iOS production OTA release
+
+- Source commit: `c6ea08e063e3f5365de598c0b2138df3316ff1d1`.
+- EAS Update group: `05fe7bdd-4153-43b3-a24b-14d49b3fd5c7`; channel `production`; runtime `1.3.0`.
+- EAS environment: `production`; published at `2026-09-10T12:22:18.594Z`.
+- Immutable iOS launch bundle: update `01a08b44-d2e2-7e0b-ae93-e402fb1a6895`; 10622340 bytes; SHA-256 `FF1444BFF1EE25F7DB63D1B95132622E4585364775C31160C6E5F29AFFE9F5CC`.
+- Message: Consistent profile transitions and drawer-close sequencing
+- Device application, native transitions and interrupted swipe-back checks: pending.
+- Rollback: republish verified group `5829a5e8-1041-4ab2-9b91-f75784f0d297` for iOS only.
+
+## iOS production OTA release
+
+- Source commit: `0940c79062e9fdf099a3ddeb2af2f14690ba4281`.
+- EAS Update group: `5df5a17d-d574-415f-968d-7d8a747b55db`; channel `production`; runtime `1.3.0`.
+- EAS environment: `production`; published at `2026-09-12T23:36:31.039Z`.
+- Immutable iOS launch bundle: update `01a097fa-cc3f-7589-9d5b-7b2bdcbb82c6`; 10768320 bytes; SHA-256 `88DF83F7717EEA5D9ECCF0996A847EE9DCB8D0DB914BDADE658F7F38EAA4CE6D`.
+- Message: Fix Profile entry crash while user data loads (0940c79)
+- Target: TestFlight 1.1.1 (30), build `b16eca67-6291-4520-82b6-10cb1af190f5`; no new native build or Apple review/submission.
+- Device application and physical iPhone Profile entry/re-entry checks: pending.
+- Rollback: emergency iOS group `05fe7bdd-4153-43b3-a24b-14d49b3fd5c7`; the immediately preceding `638d125b-fa3a-47c7-9d78-c8c3d767229f` contains the Profile crash. See the scope and verification limits in Current environment status.
+
+## iOS production OTA release
+
+- Source commit: `9e499bbc2a31aacd7ebec836fa5bc56817c05e77`.
+- EAS Update group: `61dfaa40-3579-4bde-b875-ff23081f3953`; channel `production`; runtime `1.3.0`.
+- EAS environment: `production`; published at `2026-09-14T18:27:51.010Z`.
+- Immutable iOS launch bundle: update `01a0a12c-ec62-7466-a6dc-81384ed40a79`; 10710412 bytes; SHA-256 `D4F073F56AAFDF7780FE466F83AB7BB44588CAE13342699FC4021E500FF4FC45`.
+- Message: Fix destination resolution and activate reviewed destination catalog
+- Target: TestFlight 1.1.1 (30), build `b16eca67-6291-4520-82b6-10cb1af190f5`; no new native production build or Apple review/submission.
+- Public channel delivery and immutable bundle verified at `2026-09-14T18:29:29.294Z`; physical iPhone application and map checks remain unverified.
+- Backend/catalog rollout and the separate airport-memory fix are recorded in Current environment status above.
+- Rollback: iOS group `5df5a17d-d574-415f-968d-7d8a747b55db`; OTA rollback does not revert Functions or catalog data.
+
+## iOS production OTA release
+
+- Source commit: `ef8ecccd1793d75e2fcc6da611aae380f28d2ad8`.
+- EAS Update group: `8a22bdda-c841-43a8-8d8b-4bf73725cac9`; channel `production`; runtime `1.3.0`.
+- EAS environment: `production`; published at `2026-09-15T02:10:08.598Z`.
+- Immutable iOS launch bundle: update `01a0a2d4-2a56-7760-9856-6ff65b8a8e67`; 10898884 bytes; SHA-256 `D052DECFB1E1D3E7899723A885BEEE3CFE03D2EE50A82C1321D147657D2A7983`.
+- Message: PlanLi private live trip planner
+- Device application and post-update security smoke tests: pending.
+- Rollback: republish the immediately preceding verified production group; never change the runtime URL or channel in-app.
+
+## iOS production OTA release
+
+- Source commit: `afcaf386f54f06dda61c3808e1966f1841f4032d`.
+- EAS Update group: `cab8b637-1885-4130-9e74-41a2de1934d4`; channel `production`; runtime `1.3.0`.
+- EAS environment: `production`; published at `2026-09-18T13:57:54.801Z`.
+- Immutable iOS launch bundle: update `01a0b4cf-39f1-7d57-8701-a2c1f5ea35bd`; 10900968 bytes; SHA-256 `907C97545FFB3EC0A4E485BDA166475E58C349A6AACBBD49C8BEB24903C41E05`.
+- Message: Fix immediate map opening and recommendation retries
+- Target: TestFlight `1.1.1 (30)`, build `b16eca67-6291-4520-82b6-10cb1af190f5`; no new binary or store submission.
+- Public production-channel delivery and immutable bundle independently verified at `2026-09-18T13:59:19.468Z`.
+- At OTA publication, Firestore indexes were declared but not deployed; the subsequent deployment is recorded below.
+- Device application and post-update security smoke tests: pending.
+- Rollback: republish the immediately preceding verified production group; never change the runtime URL or channel in-app.
+
+## Firestore map index deployment (2026-09-18)
+
+- Source: `ee963f8be1a74039eb25d626d1d6923d707013a9` on synchronized `main`; map changes from PR #387 / `afcaf386f54f06dda61c3808e1966f1841f4032d`.
+- Target: only `firestore:indexes`, Firebase project `planli-f0b12`, `(default)` Standard database in `eur3`, Firebase CLI `15.30.2`.
+- CLI completed at `2026-09-18T16:22:50Z`; global `CICAgLjohJMK` and regional `CICAgLiKqYoK` independently READY at `2026-09-18T16:27:59.806Z`.
+- Inventory: 136 existing composite indexes preserved, two added, all 138 matching source; field overrides and TTL unchanged.
+- Live verification: 22 bounded, read-only geohash queries passed at `2026-09-18T16:28:15Z`, including global, regional and empty-result cases.
+- Post-READY logs through `2026-09-18T16:29:29Z`: no new index errors; no new callable requests observed in that window. The user subsequently confirmed restored loading and shared an iPhone screenshot with markers; the exact installed OTA remains unverified.
+- At this index deployment, the client release was iOS production group `cab8b637-1885-4130-9e74-41a2de1934d4`, TestFlight `1.1.1 (30)`, runtime `1.3.0`; no new client build/update or store submission.
+
+## iOS production OTA release
+
+- Source commit: `1af4bcde8586c04b7d5a26cc7da274ff7ba9fb7c`.
+- EAS Update group: `11aee9ca-cb5a-4f15-baf3-7cc962150a71`; channel `production`; runtime `1.3.0`.
+- EAS environment: `production`; published at `2026-09-18T17:19:49.114Z`.
+- Immutable iOS launch bundle: update `01a0b588-137a-79d6-90f7-c31192bc6f41`; 10901636 bytes; SHA-256 `DDF93AF87F972F1E566E27DE629449F936935A98CB5410470D23C1C33583CEBA`.
+- Message: Distinct PlanLi recommendation markers and cleaner map
+- Target: TestFlight `1.1.1 (30)`, build `b16eca67-6291-4520-82b6-10cb1af190f5`; no new binary or store submission.
+- Public production-channel delivery and immutable bundle independently verified at `2026-09-18T17:20:37.815Z`.
+- Previous verified production group: `cab8b637-1885-4130-9e74-41a2de1934d4`.
+- Device application and post-update security smoke tests: pending.
+- Rollback: republish the immediately preceding verified production group; never change the runtime URL or channel in-app.
+
+## iOS production OTA release
+
+- Source commit: `d6a628de07d4a037c62c5848338749de58da68a4`.
+- EAS Update group: `5bcc513c-93de-4c26-83f2-afb4c59df47c`; channel `production`; runtime `1.3.0`.
+- EAS environment: `production`; published at `2026-09-18T17:44:56.312Z`.
+- Immutable iOS launch bundle: update `01a0b59f-12f8-780f-93a7-e9b6e53e777d`; 10901832 bytes; SHA-256 `2D61E6EABC1F4286221D24D6E1F647AFA89D27E8896A714C8507EFBA19FF6353`.
+- Message: Preserve profile scroll position when switching content categories
+- Target: TestFlight 1.1.1 (30), build `b16eca67-6291-4520-82b6-10cb1af190f5`; no new native build or Apple submission/review.
+- Verified staging candidate: `2d5c7234-186f-4f7c-811a-f0985734b924`; identical production bundle.
+- Public production-channel delivery and immutable bundle independently verified at `2026-09-18T17:45:35.380Z`.
+- Previous verified production group: `11aee9ca-cb5a-4f15-baf3-7cc962150a71`.
+- Device application and post-update security smoke tests: pending.
+- Rollback: republish the immediately preceding verified production group; never change the runtime URL or channel in-app.
+
+## iOS production OTA release
+
+- Source commit: `e9a911a3c292d92b8cf3dc6ebde059fb2543815c`.
+- EAS Update group: `55bfcf70-1b1a-4320-aabd-a1939c83bbcb`; channel `production`; runtime `1.3.0`.
+- EAS environment: `production`; published at `2026-09-18T18:42:31.889Z`.
+- Immutable iOS launch bundle: update `01a0b5d3-cd51-728a-9fa0-9827047c0953`; 10843748 bytes; SHA-256 `64E76F79FC7D4B829BC85558E67A49CC209E8350A9AEB38ABB77A9C9B44DF4F3`.
+- Message: Fix safe-area boundaries and close controls in photo gallery and location map
+- Target: TestFlight `1.1.1 (30)`, build `b16eca67-6291-4520-82b6-10cb1af190f5`; no new native build or Apple submission/review.
+- Verified staging candidate: `b2981700-a3a4-4d29-a092-8de645c433d2`; identical production bundle.
+- Public production-channel delivery and immutable bundle independently verified at `2026-09-18T18:43:24.572Z`.
+- Previous verified production group: `5bcc513c-93de-4c26-83f2-afb4c59df47c`.
+- Device application and post-update security smoke tests: pending.
+- Rollback: republish the immediately preceding verified production group; never change the runtime URL or channel in-app.
+
+## Android production OTA release
+
+- Source commit: `0c2a1013b9d22ac7ba7a654b81a470c3f4bcc3c4`.
+- EAS Update group: `e7a9dcf4-074b-4ed5-9d6d-3ba983ec2f20`; channel `production`; runtime `1.3.0`.
+- EAS environment: `production`; published at `2026-09-18T19:17:21.715Z`.
+- Immutable Android launch bundle: update `01a0b5f3-b0b3-7996-9164-2f879ce9795f`; 10845096 bytes; SHA-256 `E4DAD6359D3FCD70AE3B703B5BF86ABBF747525EA23045BC3F44DF7239E23916`.
+- Message: Android: sync current app improvements and fix photo and map safe-area controls
+- Target: Google Play internal-test Android `1.1.0 (10)`, build `b0648036-61d6-4af6-b659-442a22b603dc`; no new native build or store submission/review.
+- Verified staging candidate: `59d68146-a933-4673-ba65-72ad22f9ffbc`; identical production bundle.
+- Public Android-channel delivery and immutable bundle independently verified at `2026-09-18T19:18:09.435Z`; iOS group `55bfcf70-1b1a-4320-aabd-a1939c83bbcb` unchanged.
+- Device application and post-update security smoke tests: pending.
+- Rollback: no previous android OTA; an authorized rollback must target the embedded build for runtime 1.3.0.
+
+## iOS production OTA release
+
+- Source commit: `48b683489f6aa7ab05afa6bba91885f5b98a587d`.
+- EAS Update group: `68ed932b-5146-43c8-a97f-2b3511d5eb9d`; channel `production`; runtime `1.3.0`.
+- EAS environment: `production`; published at `2026-09-19T10:01:10.726Z`.
+- Immutable iOS launch bundle: update `01a0b91c-d946-73d7-a4c5-5d678df89f71`; 10946036 bytes; SHA-256 `53800755F19EF526C6985A0BC35283B4DF0B9B3402627361D2BB889AAB7A3906`.
+- Message: Reliable list-first personal trip planning
+- Target: TestFlight `1.1.1 (30)`, build `b16eca67-6291-4520-82b6-10cb1af190f5`; no new native build or Apple submission/review.
+- Verified staging candidate: `802bd485-3ec4-4794-8dfb-213661f775a2`; identical production bundle.
+- EAS update readback and guarded immutable-bundle verification passed at `2026-09-19T10:01:55Z`.
+- Previous verified production group: `55bfcf70-1b1a-4320-aabd-a1939c83bbcb`.
+- Device application and post-update security smoke tests: pending.
+- Rollback: republish the immediately preceding verified production group; never change the runtime URL or channel in-app.
+
+## Android production OTA release
+
+- Source commit: `280039f5618dd9647a26e49755aec027b78c7578`.
+- EAS Update group: `37a0acef-ad5b-4b0a-b744-9df4c02c951d`; channel `production`; runtime `1.3.0`.
+- EAS environment: `production`; published at `2026-09-19T10:13:12.032Z`.
+- Immutable Android launch bundle: update `01a0b927-dae0-7c85-ba08-6b0bd8c16f2b`; 10946988 bytes; SHA-256 `6CC3A52EF4B842446FBE6CE2DCDEF1AAB382D005C5CD5E82BB0F0F11FFC07AED`.
+- Message: Android: reliable list-first personal trip planning
+- Target: Google Play internal-test Android `1.1.0 (10)`, build `b0648036-61d6-4af6-b659-442a22b603dc`; no new native build or store submission/review.
+- Verified staging candidate: `d398bda3-7ac5-477e-96f3-33fe0e9ebdac`; identical production bundle.
+- EAS update readback and guarded immutable-bundle verification passed at `2026-09-19T10:13:39Z`.
+- Previous verified production group: `e7a9dcf4-074b-4ed5-9d6d-3ba983ec2f20`.
+- Device application and post-update security smoke tests: pending.
+- Rollback: republish the immediately preceding verified production group; never change the runtime URL or channel in-app.
+
+## iOS production OTA release
+
+- Source commit: `64f88c15d04e89cfe90c04105c57a418bf1c7a45`.
+- EAS Update group: `86ae251a-3751-4950-a2da-e3247e22add2`; channel `production`; runtime `1.3.0`.
+- EAS environment: `production`; published at `2026-09-19T11:30:25.211Z`.
+- Immutable iOS launch bundle: update `01a0b96e-8d3b-70e3-a609-bdb83a3a3a6c`; 10970300 bytes; SHA-256 `28D840C8119AD12B19864D3C5AE253B97D128C5AA7675FE078F1BEC2323CCC09`.
+- Message: Fix trip planner map and place search stability
+- Device application and post-update security smoke tests: pending.
+- Rollback: republish the immediately preceding verified production group; never change the runtime URL or channel in-app.
+
+## Android production OTA release
+
+- Source commit: `015c085115ef10fda71727c02e3b7b3cdbda30c4`.
+- EAS Update group: `55ec4021-f017-4d00-9470-f65c301f7d16`; channel `production`; runtime `1.3.0`.
+- EAS environment: `production`; published at `2026-09-19T11:44:09.875Z`.
+- Immutable Android launch bundle: update `01a0b97b-2293-758b-8043-2f8f4612cc24`; 10888088 bytes; SHA-256 `59D5A2AD33A00DB22CF8A15291E2587EFA9880B7A42A87065BB198D7D5F6EFCC`.
+- Message: Fix trip planner map and place search stability
+- Device application and post-update security smoke tests: pending.
+- Rollback: republish the immediately preceding verified production group; never change the runtime URL or channel in-app.
+
+## iOS production OTA release
+
+- Source commit: `101327917ebc680e942271814fb0bfa32bd1c5fe`.
+- EAS Update group: `e81e1c26-e9b5-4b3d-b331-b77c3e74e349`; channel `production`; runtime `1.3.0`.
+- EAS environment: `production`; published at `2026-09-19T13:51:07.259Z`.
+- Immutable iOS launch bundle: update `01a0b9ef-5dfb-7e50-82f3-967832ff0df6`; 10947020 bytes; SHA-256 `817F10DB73D4F4E3048AAA9FFC2C887812AA99E264E483A2872E0C39BDEE3B8B`.
+- Message: Restore trip stops and defer iPhone map fitting
+- Device application and post-update security smoke tests: pending.
+- Rollback: republish the immediately preceding verified production group; never change the runtime URL or channel in-app.
+
+## Android production OTA release
+
+- Source commit: `5a30b3ccf4332f60e00b6e4473304a52b2a03b4f`.
+- EAS Update group: `fb38f97f-d7ba-460b-92d3-d0e90450951a`; channel `production`; runtime `1.3.0`.
+- EAS environment: `production`; published at `2026-09-19T14:02:21.420Z`.
+- Immutable Android launch bundle: update `01a0b9f9-a76c-70b8-a09a-df76310d3173`; 10948120 bytes; SHA-256 `50C2D90BFEECE0366183091B0A43E899031A898AB564D559D8FB29FBFF5DD9F5`.
+- Message: Restore trip stops and stabilize planner map readiness
+- Device application and post-update security smoke tests: pending.
+- Rollback: republish the immediately preceding verified production group; never change the runtime URL or channel in-app.
+
+## iOS production OTA release
+
+- Source commit: `9459ecaf5262d031ccd603eaed7decfa1c22dd53`.
+- EAS Update group: `2936ac5c-4570-46cb-87ae-3934385cc215`; channel `production`; runtime `1.3.0`.
+- EAS environment: `production`; published at `2026-09-19T14:49:15.981Z`.
+- Immutable iOS launch bundle: update `01a0ba24-99cd-78b1-aa7c-88f78af7f78c`; 10947820 bytes; SHA-256 `41797F009110FF8E2D2B8185B341CF94299B4EF037CAAFF468AD9E60435F470D`.
+- Message: Fix trip map loading, stop numbering, and editor spacing
+- Device application and post-update security smoke tests: pending.
+- Rollback: republish the immediately preceding verified production group; never change the runtime URL or channel in-app.
+
+## Android production OTA release
+
+- Source commit: `6d99be09f6cee218ac67385115a14896cefdd48b`.
+- EAS Update group: `482b54f6-c7a7-4144-83fa-b8d7f9ee6d48`; channel `production`; runtime `1.3.0`.
+- EAS environment: `production`; published at `2026-09-19T14:57:58.407Z`.
+- Immutable Android launch bundle: update `01a0ba2c-9287-7f95-941a-90e07715966c`; 10949308 bytes; SHA-256 `B87D6B726B5590AF26C66843A2C2EEA30121BF182A7892959BAF2E1B085BA5E7`.
+- Message: Fix trip map loading, stop numbering, and editor spacing
+- Device application and post-update security smoke tests: pending.
+- Rollback: republish the immediately preceding verified production group; never change the runtime URL or channel in-app.
+
+## iOS production OTA release
+
+- Source commit: `dd72177d4739b2b84987c3f2ef68cfe80fa8b292`.
+- EAS Update group: `586f1ad9-7715-450a-8e12-9720d9b789e3`; channel `production`; runtime `1.3.0`.
+- EAS environment: `production`; published at `2026-09-19T16:09:37.656Z`.
+- Immutable iOS launch bundle: update `01a0ba6e-2c78-7889-91f7-4acdbb94eb6f`; 10947820 bytes; SHA-256 `C6DE6B7751AC519CAB3F99ADE7EC75ECEADE5A06D89075D6345E4DD06823EA59`.
+- Message: Fix trip planner map loading on iPhone
+- Device application and post-update security smoke tests: pending.
+- Rollback: republish the immediately preceding verified production group; never change the runtime URL or channel in-app.
+
+## iOS production OTA release
+
+- Source commit: `5edb740372b6e9c031aec39f22510bc9451e1b6c`.
+- EAS Update group: `24b4da73-475d-40cb-856b-e361b90bcb13`; channel `production`; runtime `1.3.0`.
+- EAS environment: `production`; published at `2026-09-20T12:16:54.855Z`.
+- Immutable iOS launch bundle: update `01a0bebf-7a47-7a0c-81bb-8bb3a0336461`; 10910800 bytes; SHA-256 `E3DDF983EA05A4CE3EA29DE169C6081F45F5966C82546C086B5F9D7A09D92D17`.
+- Message: Fix trip map initialization and isolated loading
+- Device application and post-update security smoke tests: pending.
+- Target installed binary: TestFlight `1.1.2 (32)`, EAS build `6ae60b3a-b0a6-4659-a054-68a044004a35`; no new binary or submission.
+- Verified staging candidate: `f5613811-b540-4fbf-9e87-17cb85891c6f`; identical production bundle. Public-channel delivery verified at `2026-09-20T12:17:22.959Z`.
+- Validation: 55 focused tests, 91 affected client suites / 635 tests, applicable PR checks and corrected release-review finding. Physical map rendering remains unverified.
+- Rollback: republish iOS group `586f1ad9-7715-450a-8e12-9720d9b789e3`; never change the runtime URL or channel in-app.
+
+## iOS production OTA release
+
+- Source commit: `e799e8aef756e0246afa81b8ed16dd103d8b85d9`.
+- EAS Update group: `6bf13a9e-24c0-46ae-a7b0-e34cc752fe91`; channel `production`; runtime `1.3.0`.
+- EAS environment: `production`; published at `2026-09-21T18:39:07.804Z`.
+- Immutable iOS launch bundle: update `01a0c543-c41c-70f6-a1d7-5205374a6c48`; 10912684 bytes; SHA-256 `87E03667A766EB98883BE991E1B5ABC52A06C8E530DF3AA38AE957906B090995`.
+- Message: Fix trip map zero-height layout and fullscreen retry (PR 425)
+- Target binary: last confirmed TestFlight `1.1.2 (32)`, build `6ae60b3a-b0a6-4659-a054-68a044004a35`; no new binary/submission.
+- Device application and visible native streets/markers: pending.
+- Verified staging candidate: `3e6d504d-70e0-41f4-b4da-204261658fba`; identical local/staging/production bundle. Public-channel delivery verified at `2026-09-21T18:39:38.714Z`.
+- Validation/review: 940 related client tests, 21 helper/config checks, 42 guard tests, final 41 focused tests, Web layout/marker proof and passing PR checks. Expo Doctor patch recommendations remain unresolved; see current status.
+- Rollback: republish iOS group `24b4da73-475d-40cb-856b-e361b90bcb13`.
+
+## iOS production OTA release
+
+- Source commit: `2aab25fe0b685a2a13871f95f82bc66859372f7a`.
+- EAS Update group: `f54aca26-f3fa-4015-afc6-b733f179cff3`; channel `production`; runtime `1.4.0`.
+- EAS environment: `production`; published at `2026-09-26T12:26:59.989Z`.
+- Immutable iOS launch bundle: update `01a0ddae-de15-73dc-ad57-85554e7713ad`; 10983256 bytes; SHA-256 `0ACA2AB7EDDE0E4F760E1C06CA9BBF01E723D290AC7F984A58B69D5F48F48CCF`.
+- Message: Fix shared trip first-open recovery and iPhone safe areas
+- Target binary: owner-confirmed TestFlight `1.1.3 (34)`, EAS build `1ff27c70-6a66-4daf-b58d-bb8a3d092091`; no new binary/submission.
+- Verified staging candidate: `2a90c1c7-69f4-4677-b587-80bd85732579`; identical production bundle and exact installed native fingerprint.
+- Public production endpoint verified at `2026-09-26T12:27:40.177Z`.
+- Device application and post-update security smoke tests: pending.
+- Rollback: no previous ios OTA; an authorized rollback must target the embedded build for runtime 1.4.0.
+
+## iOS production OTA release
+
+- Source commit: `859f313571761d740fed85b7070d0f64ebd25fda`.
+- EAS Update group: `f1a97566-0195-4955-87b9-eb6b6a728757`; channel `production`; runtime `1.4.0`.
+- EAS environment: `production`; published at `2026-09-26T13:35:44.730Z`.
+- Immutable iOS launch bundle: update `01a0dded-ce5a-788c-8bda-d2a54d8a78cb`; 10925052 bytes; SHA-256 `223051368DEE28391D8A9F0B1E97F87385BFAECFBF7F7A842EA6A247DDE34319`.
+- Message: Preserve shared trips after sign-in
+- Target binary: owner-confirmed TestFlight `1.1.3 (34)`, EAS build `1ff27c70-6a66-4daf-b58d-bb8a3d092091`; no new binary/submission.
+- Verified staging candidate: `bdccabb0-4896-4264-b029-81a3a0e54dac`; identical production bundle and exact installed native fingerprint.
+- Public production endpoint verified at `2026-09-26T13:36:40.200Z`.
+- Validation: 49 related client suites / 460 tests, 46 release guard tests, isolated auth/navigation browser proof, final reviews and applicable PR checks passed.
+- Device application and post-update security smoke tests: pending.
+- Rollback: republish verified iOS group `f54aca26-f3fa-4015-afc6-b733f179cff3`; never change the runtime URL or channel in-app.
+
+## Android production OTA release
+
+- Source commit: `1cb218a2756850d9da22b71f7d856d9602dfa696`.
+- EAS Update group: `879f6607-3360-4523-9c46-eb7184e231c6`; channel `production`; runtime `1.4.0`.
+- EAS environment: `production`; published at `2026-09-26T15:47:22.114Z`.
+- Immutable Android launch bundle: update `01a0de66-4f82-799f-89e6-0afc72a2c2f1`; 10925992 bytes; SHA-256 `54C2FF5D0B23D687151D839B498CF6997702FDDE4CDE4BC7FEC1911D187A823E`.
+- Message: Preserve shared trips after sign-in on Android
+- Target: Google Play Production `1.1.0 (12)`, EAS build `597752db-0fd4-4861-a8d7-a530ccf85ca7`; Google confirmed published at 100% rollout.
+- Verified candidate: `0649ca52-2555-4f10-ab15-1be72a519358`, update `01a0de63-36d3-7013-a70e-03bbcde7280c`; the production launch-asset hash is identical.
+- Native compatibility: reviewed submission-only fingerprint `a288be2d72f7efe12ed7ecd2e82040eb464ac3a0`, bound to build fingerprint `64d77fc362e400f5754e05a9886052a2e88eeb45`.
+- Public production endpoint verified at `2026-09-26T15:47:27.204Z`; iOS publication was skipped as already current.
+- Manual Android emulator auth/return/back scenario passed on the existing development APK (`E1E8E0CBED783618CB95A5EF1F97DCB06429B50D8E2E5EA4F3C58ED5328797B3`). This does not validate the native inputs or physical installation of the store binary.
+- Physical store-device application and post-OTA acceptance: pending. Local test services and the task-owned emulator were stopped.
+- Rollback: no previous android OTA; an authorized rollback must target the embedded build for runtime 1.4.0.
+
+## Android production OTA release
+
+- Source commit: `30d88e01159b183f9f7bc8119e3a7cdd48f2c776`.
+- EAS Update group: `5a6a57cf-79d3-41ca-b609-354a57cfb4af`; channel `production`; runtime `1.4.0`.
+- EAS environment: `production`; published at `2026-09-26T18:41:37.137Z`.
+- Immutable Android launch bundle: update `01a0df05-d771-7479-aa47-b4c432c45abc`; 10959148 bytes; SHA-256 `42FDB13391580CCA515BF064BC983B507553A03DE42F68475C938E741FF5F31A`.
+- Message: Community recommendation and route sharing
+- Device application and post-update security smoke tests: pending.
+- Rollback: republish the immediately preceding verified production group; never change the runtime URL or channel in-app.
+
+## iOS production OTA release
+
+- Source commit: `30d88e01159b183f9f7bc8119e3a7cdd48f2c776`.
+- EAS Update group: `5a6a57cf-79d3-41ca-b609-354a57cfb4af`; channel `production`; runtime `1.4.0`.
+- EAS environment: `production`; published at `2026-09-26T18:41:37.137Z`.
+- Immutable iOS launch bundle: update `01a0df05-d771-714d-8c0b-0e8b3725a8f7`; 10956472 bytes; SHA-256 `EA49A4206ED7D96E154EF19EC57B0006438ACF0C710223DB755594AEAAB20A76`.
+- Message: Community recommendation and route sharing
+- Device application and post-update security smoke tests: pending.
+- Rollback: republish the immediately preceding verified production group; never change the runtime URL or channel in-app.
+
+## Android production OTA release
+
+- Source commit: `175625b10989c14702ba08a8438a66d8a298ea44`.
+- EAS Update group: `45fde4ae-12bf-40e6-bc3a-eb9efe3251d1`; channel `production`; runtime `1.4.0`.
+- EAS environment: `production`; published at `2026-09-26T23:52:12.854Z`.
+- Immutable Android launch bundle: update `01a0e022-3336-7fa2-bdfc-c19c09e535c3`; 10957836 bytes; SHA-256 `A916F2360EEF18E98B8E9B4E5E32B633D22FE0EF02E9CC39A18E9A91DFBBA368`.
+- Message: Fix trip day removal and map marker badges
+- Target: Google Play Production `1.1.0 (12)`, EAS build `597752db-0fd4-4861-a8d7-a530ccf85ca7`; no new native build or store submission.
+- Verified staging candidate: group `69b28733-c312-401e-8733-877c79ccc383`, update `01a0e020-5df5-795d-a312-cf054e87b2a7`; identical launch bundle promoted without another export.
+- Native compatibility used the reviewed submission-metadata fingerprint bound to Android build 12. Public production delivery was verified at `2026-09-26T23:52:13.959Z`.
+- Validation: 99 affected client suites, PR validation/security checks, native compatibility, immutable candidate inspection and production delivery verification passed.
+- Device application and post-update security smoke tests: pending.
+- Rollback: republish verified production group `5a6a57cf-79d3-41ca-b609-354a57cfb4af`; never change the runtime URL or channel in-app.
+
+## iOS production OTA release
+
+- Source commit: `175625b10989c14702ba08a8438a66d8a298ea44`.
+- EAS Update group: `45fde4ae-12bf-40e6-bc3a-eb9efe3251d1`; channel `production`; runtime `1.4.0`.
+- EAS environment: `production`; published at `2026-09-26T23:52:12.854Z`.
+- Immutable iOS launch bundle: update `01a0e022-3336-7367-a849-0ce120350c1b`; 10947548 bytes; SHA-256 `9596160E4383F311E635099DE1A19B3F2415644EB7CA67CF7C1611CCAD6EB9FF`.
+- Message: Fix trip day removal and map marker badges
+- Target: owner-confirmed TestFlight `1.1.3 (34)`, EAS build `1ff27c70-6a66-4daf-b58d-bb8a3d092091`; no new native build or Apple submission.
+- Verified staging candidate: group `69b28733-c312-401e-8733-877c79ccc383`, update `01a0e020-5df5-7cd5-8847-1bd0fc5f1c8b`; identical launch bundle promoted without another export.
+- Native compatibility used the reviewed submission-metadata fingerprint bound to iOS build 34. Public production delivery was verified at `2026-09-26T23:52:13.959Z`.
+- Validation: 99 affected client suites, PR validation/security checks, native compatibility, immutable candidate inspection and production delivery verification passed.
+- Device application and post-update security smoke tests: pending.
+- Rollback: republish verified production group `5a6a57cf-79d3-41ca-b609-354a57cfb4af`; never change the runtime URL or channel in-app.
+
+## Android production OTA release
+
+- Source commit: `e4337bd23d9486a2c4037a34159c8a4a79579762`.
+- EAS Update group: `7811a506-b37d-422a-b25c-04fddde45686`; channel `production`; runtime `1.4.0`.
+- EAS environment: `production`; published at `2026-09-27T08:09:18.663Z`.
+- Immutable Android launch bundle: update `01a0e1e9-4e47-7e6e-aa1f-21a1e751ad64`; 10981240 bytes; SHA-256 `905B4777E8ED4D18200BCE70A964D04DD98896357F692A70B7E781311E99040E`.
+- Message: Redesign city guide with inline facts and recommendation map
+- Validation: 325 affected client tests, PR checks, native compatibility, immutable candidate inspection and public delivery checks passed.
+- Verified candidate: `852e4612-68d9-45e0-aaaf-ee446e6631e4`; promoted without a second export.
+- Installed-target versions are Android `1.1.0 (12)` and iOS `1.1.3 (34)`, runtime `1.4.0`; no build or store submission.
+- Device application and post-update security smoke tests: pending.
+- Rollback: republish verified production group `45fde4ae-12bf-40e6-bc3a-eb9efe3251d1`; never change the runtime URL or channel in-app.
+
+## iOS production OTA release
+
+- Source commit: `e4337bd23d9486a2c4037a34159c8a4a79579762`.
+- EAS Update group: `7811a506-b37d-422a-b25c-04fddde45686`; channel `production`; runtime `1.4.0`.
+- EAS environment: `production`; published at `2026-09-27T08:09:18.663Z`.
+- Immutable iOS launch bundle: update `01a0e1e9-4e47-7ce2-91da-987c1d02d2f6`; 10971220 bytes; SHA-256 `5750BB19CBDD65D7A2CB654F2EB5FB11E0C64A1C1072DC2952946A0D2529DD83`.
+- Message: Redesign city guide with inline facts and recommendation map
+- Validation: 325 affected client tests, PR checks, native compatibility, immutable candidate inspection and public delivery checks passed.
+- Verified candidate: `852e4612-68d9-45e0-aaaf-ee446e6631e4`; promoted without a second export.
+- Installed-target versions are Android `1.1.0 (12)` and iOS `1.1.3 (34)`, runtime `1.4.0`; no build or store submission.
+- Device application and post-update security smoke tests: pending.
+- Rollback: republish verified production group `45fde4ae-12bf-40e6-bc3a-eb9efe3251d1`; never change the runtime URL or channel in-app.
+
+## Android production OTA release
+
+- Source commit: `58cfbb4066d62b76140a4e1e4a214810b8362ca3`.
+- EAS Update group: `545d5795-a7e6-43ab-98ab-4534b9dd547f`; channel `production`; runtime `1.4.0`.
+- EAS environment: `production`; published at `2026-09-27T09:35:14.185Z`.
+- Immutable Android launch bundle: update `01a0e237-f909-7f93-a09a-8267a63ace54`; 10982932 bytes; SHA-256 `2BB721BA7173EAF1026CD74588ED6308472C9C3E2BD69884B4F9DCF69C7ADCC2`.
+- Message: Fix city hero, map safe areas and category markers
+- Validation: 288 tests / 28 suites, PR checks, native compatibility, candidate inspection and public delivery passed.
+- Candidate: `e503ddd3-5641-4e4d-8ee8-9a9dd7eea5fa`; native targets Android `1.1.0 (12)` and iOS `1.1.3 (34)` unchanged.
+- Device application and post-update security smoke tests: pending.
+- Rollback: republish verified group `7811a506-b37d-422a-b25c-04fddde45686`; never change the runtime URL or channel in-app.
+
+## iOS production OTA release
+
+- Source commit: `58cfbb4066d62b76140a4e1e4a214810b8362ca3`.
+- EAS Update group: `545d5795-a7e6-43ab-98ab-4534b9dd547f`; channel `production`; runtime `1.4.0`.
+- EAS environment: `production`; published at `2026-09-27T09:35:14.185Z`.
+- Immutable iOS launch bundle: update `01a0e237-f909-7a0e-a725-209288a6920e`; 10979996 bytes; SHA-256 `6129D552CE3D752BC82CB41454E36FB5651C618B2F9B227E0F1ECA928004694D`.
+- Message: Fix city hero, map safe areas and category markers
+- Validation: 288 tests / 28 suites, PR checks, native compatibility, candidate inspection and public delivery passed.
+- Candidate: `e503ddd3-5641-4e4d-8ee8-9a9dd7eea5fa`; native targets Android `1.1.0 (12)` and iOS `1.1.3 (34)` unchanged.
+- Device application and post-update security smoke tests: pending.
+- Rollback: republish verified group `7811a506-b37d-422a-b25c-04fddde45686`; never change the runtime URL or channel in-app.
+
+## Android production OTA release
+
+- Source commit: `9290939390ea3502e3307bf65904da37cfa46aac`.
+- EAS Update group: `84716ba6-7100-4277-bb6e-87f29fcabc1e`; channel `production`; runtime `1.4.0`.
+- EAS environment: `production`; published at `2026-09-30T16:58:18.167Z`.
+- Immutable Android launch bundle: update `01a0f340-b0b7-7c06-b2be-980441c3a97f`; 10983756 bytes; SHA-256 `474CCB30765492844FF990E34C94710D443787A4829BA11FAAEEC05A7E881FDD`.
+- Message: Stage 4 provider monthly budget messages
+- Device application and post-update security smoke tests: pending.
+- Rollback: republish the immediately preceding verified production group; never change the runtime URL or channel in-app.
+
+## iOS production OTA release
+
+- Source commit: `9290939390ea3502e3307bf65904da37cfa46aac`.
+- EAS Update group: `84716ba6-7100-4277-bb6e-87f29fcabc1e`; channel `production`; runtime `1.4.0`.
+- EAS environment: `production`; published at `2026-09-30T16:58:18.167Z`.
+- Immutable iOS launch bundle: update `01a0f340-b0b7-75f9-9898-dd61ed85da79`; 10981340 bytes; SHA-256 `947704D3F052743A7A30E0182C52413C190DDDD9E43AB102ADFED7198EAEFE1C`.
+- Message: Stage 4 provider monthly budget messages
+- Device application and post-update security smoke tests: pending.
+- Rollback: republish the immediately preceding verified production group; never change the runtime URL or channel in-app.
