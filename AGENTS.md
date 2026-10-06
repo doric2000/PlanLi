@@ -2,7 +2,7 @@
 
 Repository-wide guidance for PlanLi. A closer `AGENTS.md` supplements and
 overrides this file for its subtree. Keep temporary incidents, deployment state,
-and release notes in `README.md` or the current task—not in agent guidance.
+and release notes in `docs/OPERATIONS.md` or the current task—not in agent guidance.
 
 ## Project and scope
 
@@ -12,7 +12,8 @@ PlanLi is a Hebrew-first, RTL-first, photo-centric travel application.
 - `functions/`: Firebase Functions, scheduled jobs, scripts, and backend tests.
 - `server/`: local Google Places proxy for Web development.
 - Root Firebase files: Firestore/Storage rules, indexes, CORS, and lifecycle data.
-- `README.md`: operational source of truth for setup, deployment, and release state.
+- `README.md`: product overview and current maintenance summary.
+- `docs/OPERATIONS.md`: operational source of truth for setup, deployment, and release state.
 
 Read `client/AGENTS.md` for client work and `functions/AGENTS.md` for backend
 work. Prefer existing feature boundaries, services, helpers, and style tokens.
@@ -172,17 +173,18 @@ one comparison of the explicit fingerprints and correction of the differing inpu
 not repeated exports, blanket test reruns, or a new build just to silence it.
 
 Repository state is not deployment state. Before an authorized release, read
-`README.md`, verify project/branch/commit/live state, and use the safe dependency
+`README.md` and `docs/OPERATIONS.md`, verify project/branch/commit/live state, and use the safe dependency
 order. Deploy backend or Hosting only from the appropriately updated target branch.
 
-Treat the `README.md` current environment status and release record as mandatory
+Treat the `docs/OPERATIONS.md` current environment status and release record as mandatory
 release outputs. Without waiting for a separate reminder, update them whenever an
 authorized workflow changes the app version, native build, EAS build/submission,
 EAS Update, TestFlight/App Store status, deployed backend, or installed tester
 state. Record the source commit, app version and build number, runtime/channel,
 provider IDs, timestamps, review state, installed/tested state, and OTA group when
 known. Mark unverified values explicitly instead of retaining a stale value. A
-release task is not complete until this record reflects the resulting live state;
+release task is not complete until this record reflects the resulting live state
+and the `README.md` maintenance summary is consistent with it;
 this documentation requirement does not itself authorize a build, submission,
 deployment, migration, or other release action.
 
