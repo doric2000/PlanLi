@@ -35,7 +35,7 @@ The client authenticates users and calls server-authorized business operations. 
 | Delivery and security gates | [Workflows](.github/workflows/) and [Semgrep rules](.semgrep/) |
 | Architecture and maintenance | [Documentation](docs/) |
 
-## Current maintenance status
+## Current environment status
 
 This summary reflects the existing operations record at the repository checkpoint reviewed on **6 October 2026**; it is not a fresh deployment verification.
 
